@@ -1,0 +1,11 @@
+.git
+.next
+.vinext
+.wrangler
+dist
+node_modules
+.pnpm-store
+work
+outputs
+npm-debug.log*
+.DS_Store
