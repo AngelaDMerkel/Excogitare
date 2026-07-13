@@ -21,6 +21,7 @@ import {
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
 const MAP_MARGIN = 16;
+const APP_VERSION = "0.1.2";
 
 type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
@@ -396,12 +397,10 @@ export function Civ5MapViewer() {
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">V</span>
           <div>
-            <p className="eyebrow">Civ V Cartography</p>
             <h1>Excogitare</h1>
           </div>
         </div>
         <div className="topbar-actions">
-          <span className="privacy-note"><span className="status-dot" /> Files stay on this device</span>
           <button className="button button-secondary" type="button" onClick={exportView}>Export view</button>
           <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()}>Open map</button>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept=".civ5map,.Civ5Map,application/octet-stream" onChange={onFileChange} />
@@ -415,7 +414,7 @@ export function Civ5MapViewer() {
               <p className="eyebrow">{map.source === "demo" ? "Sample map" : "Open map"}</p>
               <h2>{map.name}</h2>
             </div>
-            <span className="version-badge">v{map.version}</span>
+            <span className="version-badge" aria-label={`Excogitare version ${APP_VERSION}`}>{`v${APP_VERSION}`}</span>
           </div>
           <p className="map-description">{map.description || "Physical terrain extracted from the Civ5 map file."}</p>
           <dl className="map-stats">

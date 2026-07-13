@@ -21,8 +21,9 @@ test("server-renders the Civ5 map viewer shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Excogitare — Civ5 Map Viewer<\/title>/i);
   assert.match(html, /Excogitare/);
+  assert.match(html, /v0\.1\.2/);
   assert.match(html, /The Twin Continents/);
-  assert.match(html, /Files stay on this device/);
+  assert.doesNotMatch(html, /Files stay on this device/);
   assert.match(html, /Open map/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/i);
 });
