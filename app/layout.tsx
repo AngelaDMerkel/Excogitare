@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const title = "Atlas Viewer — Civ5 Map Renderer";
+const title = "Excogitare — Civ5 Map Viewer";
 const description = "Open and explore Civilization V map files directly in your browser.";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: "Atlas Viewer hex-map preview" }],
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: "Excogitare hex-map preview" }],
     },
     twitter: {
       card: "summary_large_image",

@@ -397,7 +397,7 @@ export function Civ5MapViewer() {
           <span className="brand-mark" aria-hidden="true">V</span>
           <div>
             <p className="eyebrow">Civ V Cartography</p>
-            <h1>Atlas Viewer</h1>
+            <h1>Excogitare</h1>
           </div>
         </div>
         <div className="topbar-actions">
