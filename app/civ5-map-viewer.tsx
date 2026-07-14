@@ -26,6 +26,7 @@ import {
   generateMap,
   MAP_PRESETS,
   MAP_SIZES,
+  randomGenerationOptions,
   WORLD_MODIFIERS,
   type MapGenerationOptions,
 } from "@/lib/map-generator";
@@ -321,6 +322,7 @@ export function Civ5MapViewer() {
   const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("VIEW");
   const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
+  const [createView, setCreateView] = useState<"GENERATE" | "EDIT">("GENERATE");
   const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
   const [editTool, setEditTool] = useState<"TILE" | "START">("TILE");
   const [luaReport, setLuaReport] = useState<LuaCompatibilityReport | null>(null);
@@ -456,6 +458,13 @@ export function Civ5MapViewer() {
     };
   }, [map]);
 
+  const generationSummary = useMemo(() => {
+    const sizeLabel = MAP_SIZES.find((item) => item.id === generationOptions.size)?.label ?? generationOptions.size;
+    const presetLabel = MAP_PRESETS.find((item) => item.id === generationOptions.preset)?.label ?? generationOptions.preset;
+    const styleLabel = generationOptions.style.toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
+    return `${styleLabel} · ${presetLabel} · ${sizeLabel} · ${generationOptions.players} players`;
+  }, [generationOptions]);
+
   const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled && (key !== "starts" || map.startLocations.length > 0)).length;
 
   const loadFile = useCallback(async (file: File) => {
@@ -509,7 +518,7 @@ export function Civ5MapViewer() {
     const drag = dragRef.current;
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
-    if (mode !== "CREATE" || drag?.moved) return;
+    if (mode !== "CREATE" || createView !== "EDIT" || drag?.moved) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const target = closestTile(map, (event.clientX - rect.left - view.x) / view.zoom, (event.clientY - rect.top - view.y) / view.zoom);
     if (!target) return;
@@ -632,6 +641,15 @@ export function Civ5MapViewer() {
     setMessage(`${generated.name} · generated from seed ${generationOptions.seed}`);
   };
 
+  const randomiseWorld = () => {
+    const options = randomGenerationOptions();
+    const generated = generateMap(options);
+    setGenerationOptions(options);
+    replaceMap(generated);
+    setCreateView("GENERATE");
+    setMessage(`${generated.name} · every generation option randomised`);
+  };
+
   const randomizeSeed = () => {
     const seed = Math.random().toString(36).slice(2, 10);
     setGenerationOptions((current) => ({ ...current, seed }));
@@ -727,6 +745,11 @@ export function Civ5MapViewer() {
 
       <section className="workspace">
         <aside className="sidebar" aria-label="Map information and layers">
+          {mode === "CREATE" && (
+            <button className="randomise-world-button" type="button" onClick={randomiseWorld}>
+              <span>Randomise</span><small>New map from every option</small>
+            </button>
+          )}
           <div className="map-heading">
             {isEditingMetadata ? (
               <label className="metadata-field metadata-name-field">
@@ -777,147 +800,146 @@ export function Civ5MapViewer() {
 
           {mode === "CREATE" && (
             <div className="creator-panel">
-              <div className="section-title"><h3>Create Mode</h3><span>seeded</span></div>
-              <fieldset className="style-picker">
-                <legend>Baseline style</legend>
-                {([
-                  ["REALISTIC", "Realistic", "Coarse-to-refined elevation, tectonic ranges, coupled climate"],
-                  ["FANTASTICAL", "Fantastical", "Warped regions, strange climates, dramatic coastlines"],
-                  ["MUNDANE", "Mundane", "Restrained shapes and familiar Civ-like distributions"],
-                  ["BRUTAL", "Brutal", "Harsh terrain, scarce resources, and fair but punishing competitive routes"],
-                ] as const).map(([value, label, note]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={generationOptions.style === value ? "is-active" : ""}
-                    onClick={() => setGenerationOptions((current) => value === "BRUTAL"
-                      ? { ...current, style: value, balance: "TOURNAMENT", startQuality: "BALANCED", mountainPercent: Math.max(18, current.mountainPercent) }
-                      : { ...current, style: value })}
-                  >
-                    <strong>{label}</strong><small>{note}</small>
-                  </button>
-                ))}
-              </fieldset>
-              <label className="control-field">
-                <span>Map type</span>
-                <select value={generationOptions.preset} onChange={(event) => {
-                  const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
-                  if (!preset) return;
-                  setGenerationOptions((current) => ({ ...current, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains }));
-                }}>
-                  {MAP_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
-                </select>
-                <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
-              </label>
-              <label className="control-field">
-                <span>World modifier</span>
-                <select value={generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier} onChange={(event) => {
-                  const modifier = event.target.value as MapGenerationOptions["modifier"];
-                  setGenerationOptions((current) => ({ ...current, modifier, mountainPercent: modifier === "STRATEGIC_DEPTH" ? Math.max(22, current.mountainPercent) : modifier === "DOOMSDAY" ? Math.max(18, current.mountainPercent) : current.mountainPercent }));
-                }}>
-                  {WORLD_MODIFIERS.map((modifier) => <option key={modifier.id} value={modifier.id}>{modifier.label}</option>)}
-                </select>
-                <small>{WORLD_MODIFIERS.find((modifier) => modifier.id === (generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier))?.description}</small>
-              </label>
-              <div className="percentage-controls">
-                <label className="control-field percentage-field">
-                  <span>Water percent <output>{generationOptions.waterPercent}%</output></span>
-                  <input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} />
-                </label>
-                <label className="control-field percentage-field">
-                  <span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span>
-                  <input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" || generationOptions.style === "BRUTAL" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} />
-                </label>
+              <div className="create-mode-tabs" role="tablist" aria-label="Create tools">
+                <button type="button" role="tab" aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Generate</button>
+                <button type="button" role="tab" aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
               </div>
-              <div className="control-grid">
-                <label className="control-field">
-                  <span>Map size</span>
-                  <select
-                    value={generationOptions.size}
-                    onChange={(event) => {
+
+              {createView === "GENERATE" ? (
+                <>
+                  <div className="section-title"><h3>Core settings</h3><span>seeded</span></div>
+                  <fieldset className="style-picker">
+                    <legend>Baseline style</legend>
+                    {([
+                      ["REALISTIC", "Realistic", "Tectonics and coupled climate"],
+                      ["FANTASTICAL", "Fantastical", "Warped and dramatic regions"],
+                      ["MUNDANE", "Mundane", "Restrained Civ-like geography"],
+                      ["BRUTAL", "Brutal", "Punishing competitive routes"],
+                    ] as const).map(([value, label, note]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={generationOptions.style === value ? "is-active" : ""}
+                        onClick={() => setGenerationOptions((current) => value === "BRUTAL"
+                          ? { ...current, style: value, balance: "TOURNAMENT", startQuality: "BALANCED", mountainPercent: Math.max(18, current.mountainPercent) }
+                          : { ...current, style: value })}
+                      >
+                        <strong>{label}</strong><small>{note}</small>
+                      </button>
+                    ))}
+                  </fieldset>
+                  <label className="control-field">
+                    <span>Map type</span>
+                    <select value={generationOptions.preset} onChange={(event) => {
+                      const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
+                      if (!preset) return;
+                      setGenerationOptions((current) => ({ ...current, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains }));
+                    }}>
+                      {MAP_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                    </select>
+                    <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
+                  </label>
+                  <label className="control-field">
+                    <span>Map size</span>
+                    <select value={generationOptions.size} onChange={(event) => {
                       const nextSize = event.target.value as MapGenerationOptions["size"];
                       const recommended = MAP_SIZES.find((item) => item.id === nextSize)?.recommendedPlayers ?? generationOptions.players;
                       setGenerationOptions((current) => ({ ...current, size: nextSize, players: recommended }));
-                    }}
-                  >
-                    {MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}
-                  </select>
-                </label>
-                <label className="control-field">
-                  <span>Players</span>
-                  <input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} />
-                </label>
-              </div>
-              <label className="control-field">
-                <span>Multiplayer layout</span>
-                <select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}>
-                  <option value="STANDARD">Equal separation</option>
-                  <option value="TOURNAMENT">Tournament normalized</option>
-                  <option value="TEAMS">Paired teams</option>
-                </select>
-              </label>
-              <label className="control-field">
-                <span>Start quality</span>
-                <select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}>
-                  <option value="STANDARD">Standard</option>
-                  <option value="BALANCED">Balanced strategic access</option>
-                  <option value="LEGENDARY">Legendary Start</option>
-                </select>
-                <small>{generationOptions.startQuality === "LEGENDARY" ? "Improves workable terrain and adds six valuable resources around every recommended start." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every recommended start." : "Leaves local terrain and resources untouched."}</small>
-              </label>
-              <div className="control-grid three-controls">
-                <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
-                <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
-                <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
-              </div>
-              <fieldset className="terrain-dominance-picker">
-                <legend>Dominant terrain</legend>
-                <small>Select one or more. With none selected, climate alone determines the mix.</small>
-                <div>
-                  {DOMINANT_TERRAINS.map((terrain) => {
-                    const selected = (generationOptions.dominantTerrains ?? []).includes(terrain.id);
-                    return (
-                      <button
-                        key={terrain.id}
-                        type="button"
-                        className={selected ? "is-active" : ""}
-                        aria-pressed={selected}
-                        onClick={() => setGenerationOptions((current) => ({
-                          ...current,
-                          dominantTerrains: (current.dominantTerrains ?? []).includes(terrain.id)
-                            ? (current.dominantTerrains ?? []).filter((item) => item !== terrain.id)
-                            : [...(current.dominantTerrains ?? []), terrain.id],
-                        }))}
-                      >
-                        {terrain.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-              <div className="seed-row">
-                <label className="control-field"><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
-                <button type="button" onClick={randomizeSeed}>Shuffle</button>
-              </div>
-              <button className="generate-button" type="button" onClick={generateNewMap}>Generate map</button>
-              <div className="generation-readout"><span>Current map</span><strong>{generationMetrics.water}% water · {generationMetrics.mountains}% mountains</strong></div>
-              <p className="editor-note">Start markers currently guide balance and editing. Geography-only Civ5Map exports let Civ V assign final starts; fixed scenario-start serialization is a later compatibility slice.</p>
-
-              <div className="tile-editor">
-                <div className="section-title"><h3>Edit map</h3><span>click a hex</span></div>
-                <div className="tool-tabs">
-                  <button type="button" className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
-                  <button type="button" className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
-                </div>
-                {editTool === "TILE" ? (
-                  <div className="brush-grid">
-                    <label className="control-field"><span>Terrain</span><select value={brush.terrain ?? ""} onChange={(event) => setBrush((current) => ({ ...current, terrain: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option>{map.terrains.map((name, index) => <option key={name} value={index}>{friendlyName(name, "TERRAIN_")}</option>)}</select></label>
-                    <label className="control-field"><span>Elevation</span><select value={brush.elevation ?? ""} onChange={(event) => setBrush((current) => ({ ...current, elevation: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="0">Flat</option><option value="1">Hills</option><option value="2">Mountain</option></select></label>
-                    <label className="control-field"><span>Feature</span><select value={brush.feature ?? ""} onChange={(event) => setBrush((current) => ({ ...current, feature: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.features.map((name, index) => <option key={name} value={index}>{friendlyName(name, "FEATURE_")}</option>)}</select></label>
-                    <label className="control-field"><span>Resource</span><select value={brush.resource ?? ""} onChange={(event) => setBrush((current) => ({ ...current, resource: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.resources.map((name, index) => <option key={name} value={index}>{friendlyName(name, "RESOURCE_")}</option>)}</select></label>
+                    }}>
+                      {MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}
+                    </select>
+                  </label>
+                  <div className="seed-row">
+                    <label className="control-field"><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
+                    <button type="button" onClick={randomizeSeed}>Shuffle</button>
                   </div>
-                ) : <p className="editor-note">Click a hex to add or remove a numbered start. Team Mode pairs consecutive players.</p>}
-              </div>
+                  <div className="generation-summary"><span>Configuration</span><strong>{generationSummary}</strong></div>
+
+                  <details className="creator-group">
+                    <summary><span>World shape</span><small>{generationOptions.waterPercent}% water · {generationOptions.mountainPercent}% mountains</small></summary>
+                    <div className="creator-group-body">
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge }))}>Reset world shape</button>
+                      <label className="control-field">
+                        <span>World modifier</span>
+                        <select value={generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier} onChange={(event) => {
+                          const modifier = event.target.value as MapGenerationOptions["modifier"];
+                          setGenerationOptions((current) => ({ ...current, modifier, mountainPercent: modifier === "STRATEGIC_DEPTH" ? Math.max(22, current.mountainPercent) : modifier === "DOOMSDAY" ? Math.max(18, current.mountainPercent) : current.mountainPercent }));
+                        }}>
+                          {WORLD_MODIFIERS.map((modifier) => <option key={modifier.id} value={modifier.id}>{modifier.label}</option>)}
+                        </select>
+                        <small>{WORLD_MODIFIERS.find((modifier) => modifier.id === (generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier))?.description}</small>
+                      </label>
+                      <label className="control-field">
+                        <span>Wrap type</span>
+                        <select value={generationOptions.wrapType ?? "PRESET"} onChange={(event) => setGenerationOptions((current) => ({ ...current, wrapType: event.target.value as MapGenerationOptions["wrapType"] }))}>
+                          <option value="PRESET">Map type default</option>
+                          <option value="EAST_WEST">East / west</option>
+                          <option value="NONE">No wrapping</option>
+                        </select>
+                      </label>
+                      <div className="percentage-controls">
+                        <label className="control-field percentage-field"><span>Water percent <output>{generationOptions.waterPercent}%</output></span><input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} /></label>
+                        <label className="control-field percentage-field"><span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span><input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" || generationOptions.style === "BRUTAL" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} /></label>
+                      </div>
+                      <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
+                    </div>
+                  </details>
+
+                  <details className="creator-group">
+                    <summary><span>Climate and terrain</span><small>{generationOptions.climate.toLowerCase()} · {generationOptions.rainfall.toLowerCase()}</small></summary>
+                    <div className="creator-group-body">
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, climate: DEFAULT_GENERATION_OPTIONS.climate, rainfall: DEFAULT_GENERATION_OPTIONS.rainfall, dominantTerrains: [] }))}>Reset climate</button>
+                      <div className="control-grid">
+                        <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
+                        <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
+                      </div>
+                      <fieldset className="terrain-dominance-picker">
+                        <legend>Dominant terrain</legend>
+                        <small>Select one or more. With none selected, climate determines the mix.</small>
+                        <div>
+                          {DOMINANT_TERRAINS.map((terrain) => {
+                            const selected = (generationOptions.dominantTerrains ?? []).includes(terrain.id);
+                            return <button key={terrain.id} type="button" className={selected ? "is-active" : ""} aria-pressed={selected} onClick={() => setGenerationOptions((current) => ({ ...current, dominantTerrains: (current.dominantTerrains ?? []).includes(terrain.id) ? (current.dominantTerrains ?? []).filter((item) => item !== terrain.id) : [...(current.dominantTerrains ?? []), terrain.id] }))}>{terrain.label}</button>;
+                          })}
+                        </div>
+                      </fieldset>
+                    </div>
+                  </details>
+
+                  <details className="creator-group">
+                    <summary><span>Players and starts</span><small>{generationOptions.players} players · {generationOptions.startQuality.toLowerCase()}</small></summary>
+                    <div className="creator-group-body">
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, players: MAP_SIZES.find((item) => item.id === current.size)?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, balance: DEFAULT_GENERATION_OPTIONS.balance, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }))}>Reset players</button>
+                      <div className="control-grid">
+                        <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>Layout</span><select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}><option value="STANDARD">Equal separation</option><option value="TOURNAMENT">Tournament</option><option value="TEAMS">Paired teams</option></select></label>
+                      </div>
+                      <label className="control-field"><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select><small>{generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}</small></label>
+                    </div>
+                  </details>
+
+                  <div className="creator-actions">
+                    <button className="generate-button" type="button" onClick={generateNewMap}>Generate map</button>
+                    <div className="generation-readout"><span>Current map</span><strong>{generationMetrics.water}% water · {generationMetrics.mountains}% mountains</strong></div>
+                  </div>
+                </>
+              ) : (
+                <div className="tile-editor">
+                  <div className="section-title"><h3>Edit map</h3><span>click a hex</span></div>
+                  <div className="tool-tabs">
+                    <button type="button" className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
+                    <button type="button" className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
+                  </div>
+                  {editTool === "TILE" ? (
+                    <div className="brush-grid">
+                      <label className="control-field"><span>Terrain</span><select value={brush.terrain ?? ""} onChange={(event) => setBrush((current) => ({ ...current, terrain: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option>{map.terrains.map((name, index) => <option key={name} value={index}>{friendlyName(name, "TERRAIN_")}</option>)}</select></label>
+                      <label className="control-field"><span>Elevation</span><select value={brush.elevation ?? ""} onChange={(event) => setBrush((current) => ({ ...current, elevation: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="0">Flat</option><option value="1">Hills</option><option value="2">Mountain</option></select></label>
+                      <label className="control-field"><span>Feature</span><select value={brush.feature ?? ""} onChange={(event) => setBrush((current) => ({ ...current, feature: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.features.map((name, index) => <option key={name} value={index}>{friendlyName(name, "FEATURE_")}</option>)}</select></label>
+                      <label className="control-field"><span>Resource</span><select value={brush.resource ?? ""} onChange={(event) => setBrush((current) => ({ ...current, resource: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.resources.map((name, index) => <option key={name} value={index}>{friendlyName(name, "RESOURCE_")}</option>)}</select></label>
+                    </div>
+                  ) : <p className="editor-note">Click a hex to add or remove a numbered start. Team Mode pairs consecutive players.</p>}
+                </div>
+              )}
             </div>
           )}
 
@@ -996,7 +1018,7 @@ export function Civ5MapViewer() {
 
         <div
           ref={canvasShellRef}
-          className={`canvas-shell${isDraggingFile ? " is-dragging" : ""}${mode === "CREATE" ? " is-editing" : ""}`}
+          className={`canvas-shell${isDraggingFile ? " is-dragging" : ""}${mode === "CREATE" && createView === "EDIT" ? " is-editing" : ""}`}
           onDragEnter={(event) => { event.preventDefault(); setIsDraggingFile(true); }}
           onDragOver={(event) => event.preventDefault()}
           onDragLeave={(event) => { if (event.currentTarget === event.target) setIsDraggingFile(false); }}
@@ -1034,7 +1056,7 @@ export function Civ5MapViewer() {
               </div>
             </div>
           ) : (
-            <div className="map-hint">{mode === "CREATE" ? "Click to edit" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
+            <div className="map-hint">{mode === "CREATE" && createView === "EDIT" ? "Click to edit" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
           )}
 
           {isDraggingFile && (

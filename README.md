@@ -8,7 +8,8 @@ A platform-agnostic, browser-based viewer and basic map editor for Civilization 
 - Render terrain, coasts, rivers, features, resources, hills, and mountains
 - Edit map metadata and individual terrain, elevation, feature, resource, and start-location tiles
 - Generate deterministic maps from eight landmass presets, Realistic/Fantastical/Mundane/Brutal baseline styles, and the six standard Civ V sizes
-- Control water from entirely dry worlds through ocean maps, set mountain percentages and dominant terrain types, tune start quality, and apply modifiers such as Strategic Depth, Fractured World, and Doomsday
+- Use a compact Generate/Edit workflow with expandable world, climate, and multiplayer controls, or Randomise every generation option into a fresh map
+- Control water from entirely dry worlds through ocean maps, set mountain percentages, wrapping behavior, and dominant terrain types, tune start quality, and apply modifiers such as Strategic Depth, Fractured World, and Doomsday
 - Preserve overland accessibility by carving narrow hill passes through any mountain system that would otherwise isolate territory
 - Equal-separation, tournament-normalized, and paired-team multiplayer start layouts
 - Undo and redo map edits

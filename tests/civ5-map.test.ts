@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata } from "../lib/civ5-map.ts";
-import { DEFAULT_GENERATION_OPTIONS, generateMap } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
 
 const encoder = new TextEncoder();
@@ -146,6 +146,33 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.deepEqual(first.startLocations, second.startLocations);
   assert.equal(first.startLocations.length, 4);
   assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 4);
+});
+
+test("Randomise produces complete valid settings and wrap choices control export geography", () => {
+  let state = 0x12345678;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  const wrapTypes = new Set<string>();
+  for (let index = 0; index < 60; index += 1) {
+    const options = randomGenerationOptions(random);
+    wrapTypes.add(options.wrapType);
+    assert.ok(options.waterPercent >= 0 && options.waterPercent <= 90);
+    assert.ok(options.mountainPercent >= 0 && options.mountainPercent <= 38);
+    assert.ok(options.players >= 2 && options.players <= 22);
+    assert.ok(options.seed.length >= 10);
+    if (options.modifier === "STRATEGIC_DEPTH") assert.ok(options.mountainPercent >= 22);
+    if (options.modifier === "DOOMSDAY" || options.style === "BRUTAL") assert.ok(options.mountainPercent >= 18);
+  }
+  assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
+
+  const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
+  const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });
+  const presetFlat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "LABYRINTH", size: "DUEL", wrapType: "PRESET" });
+  assert.equal(eastWest.wraps, true);
+  assert.equal(flat.wraps, false);
+  assert.equal(presetFlat.wraps, false);
 });
 
 test("generation styles honor requested water and mountain percentages", () => {

@@ -19,6 +19,7 @@ export type StartQuality = "STANDARD" | "BALANCED" | "LEGENDARY";
 export type WorldModifier = "NONE" | "FANTASTICAL" | "STRATEGIC_DEPTH" | "FRACTURED" | "DOOMSDAY";
 export type GenerationStyle = "REALISTIC" | "FANTASTICAL" | "MUNDANE" | "BRUTAL";
 export type DominantTerrain = "GRASSLAND" | "PLAINS" | "DESERT" | "TUNDRA";
+export type WrapType = "PRESET" | "EAST_WEST" | "NONE";
 
 export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: string }> = [
   { id: "GRASSLAND", label: "Grassland" },
@@ -55,6 +56,7 @@ export type MapGenerationOptions = {
   style: GenerationStyle;
   startQuality: StartQuality;
   modifier: WorldModifier;
+  wrapType: WrapType;
   waterPercent: number;
   mountainPercent: number;
   dominantTerrains: DominantTerrain[];
@@ -73,6 +75,7 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   style: "FANTASTICAL",
   startQuality: "BALANCED",
   modifier: "NONE",
+  wrapType: "PRESET",
   waterPercent: 55,
   mountainPercent: 16,
   dominantTerrains: [],
@@ -80,6 +83,39 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   rainfall: "NORMAL",
   worldAge: "NORMAL",
 };
+
+function randomItem<T>(items: readonly T[], random: () => number) {
+  return items[Math.min(items.length - 1, Math.floor(random() * items.length))];
+}
+
+export function randomGenerationOptions(random: () => number = Math.random): MapGenerationOptions {
+  const style = randomItem(["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const, random);
+  const preset = randomItem(MAP_PRESETS, random).id;
+  const size = randomItem(MAP_SIZES, random).id;
+  const modifier = randomItem(WORLD_MODIFIERS, random).id;
+  const minimumMountains = modifier === "STRATEGIC_DEPTH" ? 22 : modifier === "DOOMSDAY" || style === "BRUTAL" ? 18 : 0;
+  const dominantTerrains = DOMINANT_TERRAINS.filter(() => random() < 0.36).map((terrain) => terrain.id);
+  const seedPart = () => Math.floor(random() * 0x100000000).toString(36).padStart(7, "0");
+  return {
+    ...DEFAULT_GENERATION_OPTIONS,
+    style,
+    preset,
+    size,
+    modifier,
+    wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
+    waterPercent: Math.floor(random() * 91),
+    mountainPercent: minimumMountains + Math.floor(random() * (39 - minimumMountains)),
+    dominantTerrains,
+    players: 2 + Math.floor(random() * 21),
+    balance: randomItem(["STANDARD", "TOURNAMENT", "TEAMS"] as const, random),
+    startQuality: randomItem(["STANDARD", "BALANCED", "LEGENDARY"] as const, random),
+    climate: randomItem(["COOL", "TEMPERATE", "HOT"] as const, random),
+    rainfall: randomItem(["ARID", "NORMAL", "WET"] as const, random),
+    worldAge: randomItem(["YOUNG", "NORMAL", "OLD"] as const, random),
+    strategicBalance: false,
+    seed: `${seedPart()}-${seedPart()}`,
+  };
+}
 
 const TERRAINS = [
   "TERRAIN_OCEAN",
@@ -567,7 +603,8 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   const height = size.height;
   const seed = seedHash(`${resolved.seed}:${resolved.preset}:${resolved.size}:${resolved.style}:${resolved.modifier}`);
   const random = randomFactory(seed);
-  const wraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
+  const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
+  const wraps = resolved.wrapType === "PRESET" ? presetWraps : resolved.wrapType === "EAST_WEST";
   const centerConfig: Record<MapPresetId, [number, [number, number]]> = {
     CONTINENTS: [4, [0.18, 0.31]],
     PANGAEA: [1, [0.43, 0.54]],
