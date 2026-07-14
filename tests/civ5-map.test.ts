@@ -8,8 +8,22 @@ import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type
 import { applyRepairIssues, buildRepairIssues } from "../lib/map-repair.ts";
 import { featurePlacementVerdict, isPassableLand, resourcePlacementVerdict, wonderPlacementVerdict } from "../lib/civ5-rules.ts";
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "../lib/political-map.ts";
+import { fitViewport, minimumViewportZoom } from "../lib/map-viewport.ts";
 
 const encoder = new TextEncoder();
+
+test("Fit keeps extreme horizontal and vertical maps inside the visible viewport", () => {
+  const viewport = { width: 1000, height: 600 };
+  for (const bounds of [{ width: 12_000, height: 300 }, { width: 300, height: 12_000 }]) {
+    const view = fitViewport(viewport, bounds);
+    assert.ok(view.zoom < 0.16);
+    assert.ok(view.x >= 22 - 1e-9);
+    assert.ok(view.y >= 22 - 1e-9);
+    assert.ok(view.x + bounds.width * view.zoom <= viewport.width - 22 + 1e-9);
+    assert.ok(view.y + bounds.height * view.zoom <= viewport.height - 22 + 1e-9);
+    assert.equal(minimumViewportZoom(viewport, bounds), view.zoom);
+  }
+});
 
 function adjacentIndices(index: number, width: number, height: number, wraps: boolean) {
   const x = index % width;
@@ -594,13 +608,19 @@ test("geometry choices preserve the size budget while changing the aspect ratio"
   const wide = resolveMapDimensions("STANDARD", "WIDE");
   const needle = resolveMapDimensions("STANDARD", "NEEDLE");
   const ribbon = resolveMapDimensions("STANDARD", "RIBBON");
+  const pin = resolveMapDimensions("STANDARD", "PIN");
+  const string = resolveMapDimensions("STANDARD", "STRING");
   const square = resolveMapDimensions("STANDARD", "SQUARE");
   assert.ok(tall.height / tall.width > 2);
   assert.ok(wide.width / wide.height > 3);
   assert.ok(needle.height / needle.width > 10);
   assert.ok(ribbon.width / ribbon.height > 10);
+  assert.ok(pin.height / pin.width > 30);
+  assert.ok(string.width / string.height > 30);
+  assert.ok(pin.height / pin.width > needle.height / needle.width);
+  assert.ok(string.width / string.height > ribbon.width / ribbon.height);
   assert.equal(square.width, square.height);
-  for (const dimensions of [tall, wide, needle, ribbon, square]) {
+  for (const dimensions of [tall, wide, needle, ribbon, pin, string, square]) {
     assert.ok(Math.abs(dimensions.width * dimensions.height - 80 * 52) / (80 * 52) < 0.03);
   }
 
@@ -633,7 +653,7 @@ test("Randomise produces complete valid settings and wrap choices control export
     if (options.modifier === "DOOMSDAY" || options.style === "BRUTAL") assert.ok(options.mountainPercent >= 18);
   }
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
-  assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "SQUARE"]));
+  assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "PIN", "STRING", "SQUARE"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });

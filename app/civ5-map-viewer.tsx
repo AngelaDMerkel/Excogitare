@@ -23,6 +23,18 @@ import {
   type Civ5Tile,
 } from "@/lib/civ5-map";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "@/lib/map-analysis";
+import {
+  applyStructureOperation,
+  compareMaps,
+  createMapCheckpoint,
+  generateBatchCandidate,
+  regenerateMapStage,
+  restoreMapCheckpoint,
+  type BatchCandidate,
+  type MapCheckpoint,
+  type RegenerationStage,
+  type StructureOperation,
+} from "@/lib/map-design";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "@/lib/generation-history";
 import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile, type RepairIssue, type RepairProfile } from "@/lib/map-repair";
 import {
@@ -47,6 +59,7 @@ import {
 import { runLuaMapScript } from "@/lib/lua-runtime";
 import { mergeLuaDependencies, type LuaProjectDependency, type LuaRuntimeMetadata, type LuaScriptOption } from "@/lib/lua-project";
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "@/lib/political-map";
+import { fitViewport, minimumViewportZoom } from "@/lib/map-viewport";
 
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
@@ -864,12 +877,22 @@ export function Civ5MapViewer() {
   const [activeGenerationId, setActiveGenerationId] = useState<number | null>(null);
   const [createView, setCreateView] = useState<"GENERATE" | "EDIT" | "ANALYZE">("GENERATE");
   const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
-  const [editTool, setEditTool] = useState<"TILE" | "FILL" | "SELECT" | "START">("TILE");
+  const [editTool, setEditTool] = useState<"TILE" | "FILL" | "SELECT" | "START" | "STRUCTURE">("TILE");
   const [brushSize, setBrushSize] = useState(1);
   const [selectionAnchor, setSelectionAnchor] = useState<{ x: number; y: number } | null>(null);
   const [selection, setSelection] = useState<TileSelection | null>(null);
   const [tileClipboard, setTileClipboard] = useState<TileClipboard | null>(null);
   const [isPasting, setIsPasting] = useState(false);
+  const [structureOperation, setStructureOperation] = useState<StructureOperation>("RAISE_PLATE");
+  const [structureStrength, setStructureStrength] = useState<1 | 2 | 3>(2);
+  const [batchCount, setBatchCount] = useState(8);
+  const [batchCandidates, setBatchCandidates] = useState<BatchCandidate[]>([]);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<MapCheckpoint[]>([]);
+  const [checkpointName, setCheckpointName] = useState("");
+  const [comparisonCheckpointId, setComparisonCheckpointId] = useState<number | null>(null);
+  const [comparisonView, setComparisonView] = useState<"CURRENT" | "CHECKPOINT" | "DIFFERENCE">("CURRENT");
   const [focusedStart, setFocusedStart] = useState<Civ5StartLocation | null>(null);
   const [showExportValidation, setShowExportValidation] = useState(false);
   const [repairBaseline, setRepairBaseline] = useState<Civ5Map | null>(null);
@@ -908,6 +931,8 @@ export function Civ5MapViewer() {
   const luaInputRef = useRef<HTMLInputElement>(null);
   const luaDependencyInputRef = useRef<HTMLInputElement>(null);
   const generationIdRef = useRef(0);
+  const regenerationIdRef = useRef(0);
+  const checkpointIdRef = useRef(0);
   const mapRef = useRef(map);
   const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
 
@@ -947,12 +972,16 @@ export function Civ5MapViewer() {
   }, []);
 
   const repairPreviewMap = useMemo(() => repairBaseline ? applyRepairIssues(repairBaseline, repairIssues, repairSelected) : map, [repairBaseline, repairIssues, repairSelected, map]);
+  const comparisonCheckpoint = useMemo(() => checkpoints.find((checkpoint) => checkpoint.id === comparisonCheckpointId) ?? null, [checkpoints, comparisonCheckpointId]);
+  const mapComparison = useMemo(() => comparisonCheckpoint ? compareMaps(map, comparisonCheckpoint.map) : null, [map, comparisonCheckpoint]);
   const canvasMap = mode === "REPAIR" && repairBaseline
     ? repairView === "ORIGINAL" ? repairBaseline : repairPreviewMap
-    : map;
+    : mode === "CREATE" && comparisonCheckpoint && comparisonView === "CHECKPOINT" ? comparisonCheckpoint.map : map;
   const repairHighlights = useMemo(() => mode === "REPAIR" && repairView === "DIFFERENCE"
     ? new Set(repairIssues.filter((issue) => repairSelected.has(issue.id) && issue.tileIndex !== undefined).map((issue) => issue.tileIndex!))
-    : new Set<number>(), [mode, repairView, repairIssues, repairSelected]);
+    : mode === "CREATE" && comparisonView === "DIFFERENCE" && mapComparison?.dimensionsMatch
+      ? mapComparison.changedTiles
+      : new Set<number>(), [mode, repairView, repairIssues, repairSelected, comparisonView, mapComparison]);
   const politicalAvailable = hasPoliticalLayer(canvasMap);
   const politicalOwnership = useMemo(() => buildPoliticalOwnership(canvasMap), [canvasMap]);
   const hasScenarioOwnership = canvasMap.tiles.some((tile) => tile.owner !== undefined);
@@ -985,8 +1014,7 @@ export function Civ5MapViewer() {
   );
   const bounds = useMemo(() => ({ width: mapProjection.width, height: mapProjection.height }), [mapProjection]);
   const fitMap = useCallback((targetSize: Size, targetBounds = bounds) => {
-    const zoom = Math.max(0.16, Math.min(1.7, Math.min((targetSize.width - 44) / targetBounds.width, (targetSize.height - 44) / targetBounds.height)));
-    setView({ zoom, x: (targetSize.width - targetBounds.width * zoom) / 2, y: (targetSize.height - targetBounds.height * zoom) / 2 });
+    setView(fitViewport(targetSize, targetBounds));
   }, [bounds]);
 
   useEffect(() => {
@@ -1168,8 +1196,8 @@ export function Civ5MapViewer() {
       : closestTile(map, worldPoint.x, worldPoint.y);
     if (!target) return;
     const sourceY = map.height - 1 - target.row;
-    if (editTool === "SELECT") {
-      if (isPasting && tileClipboard) {
+    if (editTool === "SELECT" || editTool === "STRUCTURE") {
+      if (editTool === "SELECT" && isPasting && tileClipboard) {
         commitMap((current) => {
           const tiles = current.tiles.map((tile) => ({ ...tile }));
           for (let dy = 0; dy < tileClipboard.height; dy += 1) {
@@ -1192,7 +1220,7 @@ export function Civ5MapViewer() {
       } else {
         setSelection({ minX: Math.min(selectionAnchor.x, target.col), minY: Math.min(selectionAnchor.y, sourceY), maxX: Math.max(selectionAnchor.x, target.col), maxY: Math.max(selectionAnchor.y, sourceY) });
         setSelectionAnchor(null);
-        setMessage("Region selected · copy or edit it");
+        setMessage(editTool === "STRUCTURE" ? "World region selected · choose a structural operation" : "Region selected · copy or edit it");
       }
       return;
     }
@@ -1207,7 +1235,7 @@ export function Civ5MapViewer() {
           player: startLocations.filter((start) => !start.cityState).length,
           civilization: "",
           leader: "",
-          team: generationOptions.balance === "TEAMS" ? Math.floor(startLocations.length / 2) : startLocations.length,
+          team: generationOptions.balance === "TEAMS" ? Math.floor(startLocations.length / generationOptions.teamSize) : startLocations.length,
           playable: true,
           cityState: false,
         });
@@ -1251,7 +1279,7 @@ export function Civ5MapViewer() {
 
   const zoomAt = (factor: number, screenX: number, screenY: number) => {
     setView((current) => {
-      const zoom = Math.max(0.16, Math.min(4.5, current.zoom * factor));
+      const zoom = Math.max(minimumViewportZoom(size, bounds), Math.min(4.5, current.zoom * factor));
       const worldX = (screenX - current.x) / current.zoom;
       const worldY = (screenY - current.y) / current.zoom;
       return { zoom, x: screenX - worldX * zoom, y: screenY - worldY * zoom };
@@ -1431,6 +1459,78 @@ export function Civ5MapViewer() {
   const randomizeSeed = () => {
     const seed = Math.random().toString(36).slice(2, 10);
     setGenerationOptions((current) => ({ ...current, seed }));
+  };
+
+  const runSelectivePass = (stage: RegenerationStage) => {
+    const variation = ++regenerationIdRef.current;
+    const regenerated = regenerateMapStage(map, generationOptions, stage, variation);
+    replaceMap(regenerated);
+    if (regenerated.generation) setGenerationOptions(regenerated.generation);
+    const id = ++generationIdRef.current;
+    setGenerationHistory((history) => addGenerationToHistory(history, regenerated, id));
+    setActiveGenerationId(id);
+    setComparisonCheckpointId(null);
+    setComparisonView("CURRENT");
+    const labels: Record<RegenerationStage, string> = { WORLD: "world", CLIMATE: "climate and biomes", RIVERS: "river network", CONTENT: "resources and sites", STARTS: "players and starts" };
+    setMessage(`${labels[stage]} regenerated · other compatible layers retained`);
+  };
+
+  const generateBatch = async () => {
+    if (batchRunning) return;
+    setBatchRunning(true);
+    setBatchCandidates([]);
+    setBatchProgress(0);
+    const candidates: BatchCandidate[] = [];
+    for (let index = 0; index < batchCount; index += 1) {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      candidates.push(generateBatchCandidate(generationOptions, index));
+      candidates.sort((one, two) => two.score - one.score || one.balance.spread - two.balance.spread);
+      setBatchCandidates([...candidates]);
+      setBatchProgress(index + 1);
+    }
+    setBatchRunning(false);
+    setMessage(`${batchCount} candidates generated and ranked · best score ${candidates[0]?.score ?? 0}`);
+  };
+
+  const openBatchCandidate = (candidate: BatchCandidate) => {
+    const restored = cloneMap(candidate.map);
+    replaceMap(restored);
+    if (restored.generation) setGenerationOptions(restored.generation);
+    const id = ++generationIdRef.current;
+    setGenerationHistory((history) => addGenerationToHistory(history, restored, id));
+    setActiveGenerationId(id);
+    setMessage(`${candidate.seed} · selected from batch with score ${candidate.score}`);
+  };
+
+  const saveCheckpoint = () => {
+    const id = ++checkpointIdRef.current;
+    const checkpoint = createMapCheckpoint(map, checkpointName, id);
+    setCheckpoints((current) => [checkpoint, ...current].slice(0, 30));
+    setCheckpointName("");
+    setMessage(`${checkpoint.name} · checkpoint saved`);
+  };
+
+  const restoreCheckpoint = (checkpoint: MapCheckpoint) => {
+    const restored = restoreMapCheckpoint(checkpoint);
+    replaceMap(restored);
+    if (restored.generation) setGenerationOptions(restored.generation);
+    setComparisonCheckpointId(null);
+    setComparisonView("CURRENT");
+    setMessage(`${checkpoint.name} · checkpoint restored`);
+  };
+
+  const compareCheckpoint = (checkpoint: MapCheckpoint) => {
+    setComparisonCheckpointId(checkpoint.id);
+    setComparisonView("DIFFERENCE");
+    setMessage(`${checkpoint.name} · showing changes from checkpoint`);
+  };
+
+  const applyWorldStructure = () => {
+    if (!selection) return;
+    const variation = ++regenerationIdRef.current;
+    const structured = applyStructureOperation(map, selection, structureOperation, structureStrength, generationOptions, variation);
+    replaceMap(structured);
+    setMessage(`${structureOperation.toLowerCase().replaceAll("_", " ")} applied to selected world region · undo available`);
   };
 
   const exportLua = () => {
@@ -1703,6 +1803,56 @@ export function Civ5MapViewer() {
                       ) : <p>Generated maps will appear here. The newest 30 remain available for this session.</p>}
                     </div>
                   </details>
+                  <details className="creator-group iteration-group">
+                    <summary><span>Selective regeneration</span><small>rerun one design pass</small></summary>
+                    <div className="creator-group-body">
+                      <p className="iteration-note">Rerun one layer while retaining the parts of the current map that remain compatible. A world pass necessarily rebuilds everything downstream.</p>
+                      <div className="selective-pass-grid">
+                        <button type="button" onClick={() => runSelectivePass("WORLD")}><strong>World</strong><small>Land, relief and all dependent layers</small></button>
+                        <button type="button" onClick={() => runSelectivePass("CLIMATE")}><strong>Climate</strong><small>Terrain and biome features</small></button>
+                        <button type="button" onClick={() => runSelectivePass("RIVERS")}><strong>Rivers</strong><small>Drainage on current relief</small></button>
+                        <button type="button" onClick={() => runSelectivePass("CONTENT")}><strong>Content</strong><small>Resources, wonders and sites</small></button>
+                        <button type="button" onClick={() => runSelectivePass("STARTS")}><strong>Starts</strong><small>Majors, teams and city states</small></button>
+                      </div>
+                    </div>
+                  </details>
+                  <details className="creator-group batch-generation-group">
+                    <summary><span>Candidate batch</span><small>{batchRunning ? `${batchProgress} / ${batchCount}` : batchCandidates.length ? `${batchCandidates.length} ranked` : "compare seeds"}</small></summary>
+                    <div className="creator-group-body">
+                      <div className="batch-controls">
+                        <label className="control-field"><span>Candidates</span><select value={batchCount} disabled={batchRunning} onChange={(event) => setBatchCount(Number(event.target.value))}><option value="4">4 quick</option><option value="8">8 standard</option><option value="12">12 thorough</option><option value="20">20 tournament</option></select></label>
+                        <button type="button" disabled={batchRunning} onClick={() => void generateBatch()}>{batchRunning ? `Generating ${batchProgress} / ${batchCount}…` : "Generate and rank"}</button>
+                      </div>
+                      {batchCandidates.length > 0 && (
+                        <div className="batch-candidate-list">
+                          {batchCandidates.map((candidate, index) => (
+                            <button type="button" key={candidate.seed} onClick={() => openBatchCandidate(candidate)}>
+                              <span><em>#{index + 1}</em><strong>{candidate.score}</strong><small>score</small></span>
+                              <span><strong>{candidate.seed}</strong><small>{candidate.balance.grade} balance · {candidate.balance.spread}% spread · {candidate.errors ? `${candidate.errors} errors` : "valid"}</small></span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                  <details className="creator-group checkpoint-group">
+                    <summary><span>Named checkpoints</span><small>{checkpoints.length ? `${checkpoints.length} saved` : "compare revisions"}</small></summary>
+                    <div className="creator-group-body">
+                      <div className="checkpoint-create"><input aria-label="Checkpoint name" placeholder={`e.g. Before river pass`} value={checkpointName} onChange={(event) => setCheckpointName(event.target.value)} /><button type="button" onClick={saveCheckpoint}>Save current</button></div>
+                      {comparisonCheckpoint && mapComparison && (
+                        <div className="checkpoint-comparison">
+                          <strong>Compared with {comparisonCheckpoint.name}</strong>
+                          <small>{mapComparison.dimensionsMatch ? `${mapComparison.changedTiles.size.toLocaleString()} changed tiles · ${mapComparison.changedStarts} changed starts` : "Dimensions differ; tile overlay is unavailable."}</small>
+                          <div><button type="button" className={comparisonView === "CURRENT" ? "is-active" : ""} onClick={() => setComparisonView("CURRENT")}>Current</button><button type="button" className={comparisonView === "CHECKPOINT" ? "is-active" : ""} onClick={() => setComparisonView("CHECKPOINT")}>Checkpoint</button><button type="button" disabled={!mapComparison.dimensionsMatch} className={comparisonView === "DIFFERENCE" ? "is-active" : ""} onClick={() => setComparisonView("DIFFERENCE")}>Difference</button></div>
+                        </div>
+                      )}
+                      {checkpoints.length ? (
+                        <div className="checkpoint-list">
+                          {checkpoints.map((checkpoint) => <div key={checkpoint.id}><span><strong>{checkpoint.name}</strong><small>{checkpoint.map.width}×{checkpoint.map.height} · {new Date(checkpoint.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></span><div><button type="button" onClick={() => compareCheckpoint(checkpoint)}>Compare</button><button type="button" onClick={() => restoreCheckpoint(checkpoint)}>Restore</button><button type="button" aria-label={`Delete ${checkpoint.name}`} onClick={() => { setCheckpoints((current) => current.filter((item) => item.id !== checkpoint.id)); if (comparisonCheckpointId === checkpoint.id) setComparisonCheckpointId(null); }}>×</button></div></div>)}
+                        </div>
+                      ) : <p className="iteration-note">Save a deliberate revision before a risky generation pass or structural edit.</p>}
+                    </div>
+                  </details>
                   <div className="section-title"><h3>Core settings</h3><span>seeded</span></div>
                   <fieldset className="style-picker">
                     <legend>Baseline style</legend>
@@ -1781,6 +1931,8 @@ export function Civ5MapViewer() {
                           <option value="WIDE">Very thin and wide</option>
                           <option value="NEEDLE">Needle — extreme vertical</option>
                           <option value="RIBBON">Ribbon — extreme horizontal</option>
+                          <option value="PIN">Pin — ultra-extreme vertical</option>
+                          <option value="STRING">String — ultra-extreme horizontal</option>
                           <option value="SQUARE">Perfectly square</option>
                         </select>
                         <small>{(() => { const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry); return `${dimensions.width} × ${dimensions.height} tiles`; })()}</small>
@@ -1846,12 +1998,18 @@ export function Civ5MapViewer() {
                   <details className="creator-group">
                     <summary><span>Players and starts</span><small>{generationOptions.players} players · {generationOptions.cityStates} city states</small></summary>
                     <div className="creator-group-body">
-                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => { const sizePreset = MAP_SIZES.find((item) => item.id === current.size); return { ...current, players: sizePreset?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, cityStates: sizePreset?.recommendedCityStates ?? DEFAULT_GENERATION_OPTIONS.cityStates, balance: DEFAULT_GENERATION_OPTIONS.balance, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }; })}>Reset players</button>
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => { const sizePreset = MAP_SIZES.find((item) => item.id === current.size); return { ...current, players: sizePreset?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, cityStates: sizePreset?.recommendedCityStates ?? DEFAULT_GENERATION_OPTIONS.cityStates, balance: DEFAULT_GENERATION_OPTIONS.balance, teamSize: DEFAULT_GENERATION_OPTIONS.teamSize, teamLayout: DEFAULT_GENERATION_OPTIONS.teamLayout, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }; })}>Reset players</button>
                       <div className="control-grid three-controls">
                         <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Layout</span><select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}><option value="STANDARD">Equal separation</option><option value="TOURNAMENT">Tournament</option><option value="TEAMS">Paired teams</option></select></label>
                       </div>
+                      {generationOptions.balance === "TEAMS" && (
+                        <div className="team-balance-controls">
+                          <label className="control-field"><span>Team size</span><select value={generationOptions.teamSize} onChange={(event) => setGenerationOptions((current) => ({ ...current, teamSize: Number(event.target.value) as 2 | 3 | 4 }))}><option value="2">2v2 teams</option><option value="3">3-player teams</option><option value="4">4-player teams</option></select></label>
+                          <label className="control-field"><span>Team geography</span><select value={generationOptions.teamLayout} onChange={(event) => setGenerationOptions((current) => ({ ...current, teamLayout: event.target.value as MapGenerationOptions["teamLayout"] }))}><option value="CLUSTERED">Cluster teammates</option><option value="FRONTLINES">Opposing fronts</option><option value="DISTRIBUTED">Distributed teammates</option></select></label>
+                        </div>
+                      )}
                       <label className="control-field"><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select><small>{generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}</small></label>
                       <div className="control-grid three-controls">
                         <label className="control-field"><span>City-state spacing</span><input type="number" min="1" max="12" value={generationOptions.cityStateMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateMinSpacing: Number(event.target.value) }))} /></label>
@@ -1873,6 +2031,7 @@ export function Civ5MapViewer() {
                     <button type="button" className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
                     <button type="button" className={editTool === "FILL" ? "is-active" : ""} onClick={() => setEditTool("FILL")}>Flood fill</button>
                     <button type="button" className={editTool === "SELECT" ? "is-active" : ""} onClick={() => setEditTool("SELECT")}>Region</button>
+                    <button type="button" className={editTool === "STRUCTURE" ? "is-active" : ""} onClick={() => { setEditTool("STRUCTURE"); setIsPasting(false); }}>World structure</button>
                     <button type="button" className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
                   </div>
                   {editTool === "TILE" || editTool === "FILL" ? (
@@ -1895,7 +2054,16 @@ export function Civ5MapViewer() {
                       </div>
                       {isPasting && <small>Click the destination tile for the copied region&apos;s lower-left corner.</small>}
                     </div>
-                  ) : <p className="editor-note">Click a hex to add or remove a numbered major start. Team Mode pairs consecutive players.</p>}
+                  ) : editTool === "STRUCTURE" ? (
+                    <div className="structure-editor">
+                      <p className="editor-note">Select two corners on the map, then reshape the region as a coherent world structure.</p>
+                      {selection ? <strong>{selection.maxX - selection.minX + 1} × {selection.maxY - selection.minY + 1} tiles selected</strong> : <small>No world region selected.</small>}
+                      <label className="control-field"><span>Operation</span><select value={structureOperation} onChange={(event) => setStructureOperation(event.target.value as StructureOperation)}><option value="RAISE_PLATE">Raise tectonic plate</option><option value="CARVE_BASIN">Carve sea basin</option><option value="RIDGE">Build mountain chain</option><option value="CLIMATE">Paint climate region</option><option value="WATERSHED">Rebuild watershed</option></select></label>
+                      <label className="control-field"><span>Strength</span><select value={structureStrength} onChange={(event) => setStructureStrength(Number(event.target.value) as 1 | 2 | 3)}><option value="1">Subtle</option><option value="2">Pronounced</option><option value="3">Extreme</option></select></label>
+                      {structureOperation === "CLIMATE" && <small>Climate painting uses the first dominant terrain selected under Generate, or grassland when none is selected.</small>}
+                      <div><button type="button" disabled={!selection} onClick={applyWorldStructure}>Apply to region</button><button type="button" disabled={!selection} onClick={() => { setSelection(null); setSelectionAnchor(null); }}>Clear</button></div>
+                    </div>
+                  ) : <p className="editor-note">Click a hex to add or remove a numbered major start. Team Mode groups consecutive players using the selected team size.</p>}
                 </div>
               ) : (
                 <div className="analysis-panel">

@@ -287,6 +287,41 @@ button { color: inherit; }
 .creator-group summary span { grid-column: 1; font-size: 10px; font-weight: 650; }
 .creator-group summary small { grid-column: 1; color: #6d837e; font-size: 8px; text-transform: capitalize; }
 .creator-group-body { display: grid; gap: 10px; padding: 11px 10px 12px; border-top: 1px solid var(--line); }
+.iteration-note { margin: 0; color: #718782; font-size: 8px; line-height: 1.5; }
+.selective-pass-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.selective-pass-grid button { min-height: 48px; display: grid; gap: 2px; align-content: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; background: rgba(20, 49, 55, .62); color: #aebfba; text-align: left; cursor: pointer; }
+.selective-pass-grid button:first-child { grid-column: 1 / -1; border-color: rgba(217, 185, 111, .22); }
+.selective-pass-grid strong { font-size: 9px; }
+.selective-pass-grid small { color: #6f8580; font-size: 7px; line-height: 1.35; }
+.batch-controls { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 7px; }
+.batch-controls > button { min-height: 34px; border: 1px solid transparent; border-radius: 4px; background: var(--gold); color: #172622; font-size: 8px; font-weight: 700; cursor: pointer; }
+.batch-controls > button:disabled { opacity: .55; cursor: wait; }
+.batch-candidate-list { display: grid; gap: 5px; max-height: 260px; overflow: auto; }
+.batch-candidate-list > button { display: grid; grid-template-columns: 46px 1fr; gap: 8px; padding: 7px; border: 1px solid var(--line); border-radius: 4px; background: rgba(8, 24, 28, .34); color: inherit; text-align: left; cursor: pointer; }
+.batch-candidate-list > button > span { min-width: 0; display: grid; gap: 2px; align-content: center; }
+.batch-candidate-list > button > span:first-child { grid-template-columns: auto 1fr; column-gap: 4px; }
+.batch-candidate-list em { grid-row: 1 / span 2; align-self: center; color: #718781; font-size: 7px; font-style: normal; }
+.batch-candidate-list strong { overflow: hidden; color: #b9c8c3; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.batch-candidate-list small { color: #6f8580; font-size: 7px; }
+.checkpoint-create { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.checkpoint-create input { min-width: 0; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; outline: 0; background: #0c2429; color: #b9c8c3; font-size: 9px; }
+.checkpoint-create button,
+.checkpoint-comparison button,
+.checkpoint-list button { min-height: 29px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: #173137; color: #9eafa9; font-size: 7px; cursor: pointer; }
+.checkpoint-comparison { display: grid; gap: 5px; padding: 8px; border: 1px solid rgba(126, 216, 216, .23); border-radius: 4px; background: rgba(49, 119, 122, .08); }
+.checkpoint-comparison strong { color: #b8c8c2; font-size: 9px; }
+.checkpoint-comparison small { color: #708984; font-size: 7px; }
+.checkpoint-comparison > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.checkpoint-comparison button.is-active { border-color: rgba(126, 216, 216, .42); color: #b7dddd; }
+.checkpoint-comparison button:disabled { opacity: .35; cursor: not-allowed; }
+.checkpoint-list { display: grid; gap: 5px; }
+.checkpoint-list > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 7px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; }
+.checkpoint-list > div > span { min-width: 0; display: grid; gap: 2px; }
+.checkpoint-list strong { overflow: hidden; color: #afc0ba; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.checkpoint-list small { color: #687f79; font-size: 7px; }
+.checkpoint-list > div > div { display: flex; gap: 4px; }
+.checkpoint-list button:last-child { width: 27px; padding: 0; color: #c58c7d; }
+.team-balance-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 8px; border: 1px solid rgba(217, 185, 111, .18); border-radius: 4px; background: rgba(217, 185, 111, .04); }
 .group-reset { justify-self: end; padding: 0; border: 0; background: transparent; color: #8d9f9a; font-size: 8px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .creator-actions { position: sticky; bottom: -20px; z-index: 2; display: grid; gap: 7px; margin: 3px -3px -20px; padding: 10px 3px 20px; background: linear-gradient(180deg, rgba(16, 37, 42, 0), #10252a 12px); }
 .control-grid { display: grid; grid-template-columns: 1.35fr .65fr; gap: 8px; }
@@ -342,6 +377,13 @@ button { color: inherit; }
 .region-tools button.is-active { border-color: rgba(239, 209, 138, .35); color: var(--gold-bright); }
 .region-tools button:disabled { opacity: .4; cursor: not-allowed; }
 .region-tools small { color: #d0b978; font-size: 8px; }
+.structure-editor { display: grid; gap: 9px; }
+.structure-editor > strong { color: #b7c8c2; font-size: 10px; }
+.structure-editor > small { color: #718983; font-size: 8px; line-height: 1.45; }
+.structure-editor > div { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.structure-editor > div button { min-height: 34px; border: 1px solid var(--line); border-radius: 4px; background: #173137; color: #aebfba; font-size: 8px; cursor: pointer; }
+.structure-editor > div button:first-child { border-color: transparent; background: var(--gold); color: #172622; font-weight: 700; }
+.structure-editor > div button:disabled { opacity: .4; cursor: not-allowed; }
 .analysis-panel { display: grid; gap: 14px; }
 .analysis-summary { display: grid; grid-template-columns: 50px 1fr; align-items: center; gap: 11px; padding: 11px; border: 1px solid var(--line); border-radius: 6px; background: rgba(8, 24, 28, .32); }
 .analysis-grade { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-family: Georgia, serif; font-size: 23px; }
