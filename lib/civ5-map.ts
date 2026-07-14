@@ -44,6 +44,7 @@ const GAME_DESCRIPTION_HEADER_SIZE = 120;
 const PLAYER_RECORD_SIZE = 436;
 const MAX_DIMENSION = 512;
 const decoder = new TextDecoder("utf-8");
+const encoder = new TextEncoder();
 
 function readStringList(bytes: Uint8Array) {
   const values = decoder.decode(bytes).split("\0");
@@ -53,6 +54,41 @@ function readStringList(bytes: Uint8Array) {
 
 function cleanText(bytes: Uint8Array) {
   return decoder.decode(bytes).replace(/\0+$/g, "").trim();
+}
+
+export function updateCiv5MapMetadata(buffer: ArrayBuffer, name: string, description: string) {
+  if (buffer.byteLength < HEADER_SIZE) {
+    throw new Error("This file is too small to contain a Civ5 map header.");
+  }
+
+  const source = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const terrainSize = view.getUint32(14, true);
+  const featureSize = view.getUint32(18, true);
+  const wonderSize = view.getUint32(22, true);
+  const resourceSize = view.getUint32(26, true);
+  const modSize = view.getUint32(30, true);
+  const oldNameSize = view.getUint32(34, true);
+  const oldDescriptionSize = view.getUint32(38, true);
+  const nameOffset = HEADER_SIZE + terrainSize + featureSize + wonderSize + resourceSize + modSize;
+  const suffixOffset = nameOffset + oldNameSize + oldDescriptionSize;
+
+  if (nameOffset > source.byteLength || suffixOffset > source.byteLength) {
+    throw new Error("The map metadata sections extend past the end of the file.");
+  }
+
+  const nameBytes = encoder.encode(name.replaceAll("\0", ""));
+  const descriptionBytes = encoder.encode(description.replaceAll("\0", ""));
+  const output = new Uint8Array(source.byteLength - oldNameSize - oldDescriptionSize + nameBytes.byteLength + descriptionBytes.byteLength);
+
+  output.set(source.subarray(0, nameOffset));
+  const outputView = new DataView(output.buffer);
+  outputView.setUint32(34, nameBytes.byteLength, true);
+  outputView.setUint32(38, descriptionBytes.byteLength, true);
+  output.set(nameBytes, nameOffset);
+  output.set(descriptionBytes, nameOffset + nameBytes.byteLength);
+  output.set(source.subarray(suffixOffset), nameOffset + nameBytes.byteLength + descriptionBytes.byteLength);
+  return output.buffer;
 }
 
 function parseStartLocations(

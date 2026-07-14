@@ -14,6 +14,7 @@ import {
 import {
   createDemoMap,
   parseCiv5Map,
+  updateCiv5MapMetadata,
   type Civ5Map,
   type Civ5Tile,
 } from "@/lib/civ5-map";
@@ -27,6 +28,7 @@ type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
 type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
+type ImportedMapSource = { fileName: string; buffer: ArrayBuffer };
 
 const TERRAIN_COLORS: Record<string, string> = {
   OCEAN: "#183d50",
@@ -289,12 +291,17 @@ function closestTile(map: Civ5Map, worldX: number, worldY: number): HoveredTile 
 
 export function Civ5MapViewer() {
   const [map, setMap] = useState<Civ5Map>(() => createDemoMap());
+  const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true });
   const [hovered, setHovered] = useState<HoveredTile>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [message, setMessage] = useState("Demo map loaded");
+  const [showEditPrompt, setShowEditPrompt] = useState(false);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -352,9 +359,13 @@ export function Civ5MapViewer() {
     }
     try {
       setMessage("Reading map…");
-      const parsed = parseCiv5Map(await file.arrayBuffer(), file.name);
+      const buffer = await file.arrayBuffer();
+      const parsed = parseCiv5Map(buffer, file.name);
       setMap(parsed);
+      setSourceFile({ fileName: file.name, buffer });
       setHovered(null);
+      setShowEditPrompt(false);
+      setIsEditingMetadata(false);
       setMessage(`${file.name} · rendered locally`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "That map could not be read.");
@@ -418,6 +429,52 @@ export function Civ5MapViewer() {
     link.click();
   };
 
+  const requestEditMode = () => {
+    setDraftName(map.name);
+    setDraftDescription(map.description);
+    setShowEditPrompt(true);
+  };
+
+  const enterEditMode = () => {
+    setShowEditPrompt(false);
+    setIsEditingMetadata(true);
+  };
+
+  const cancelEditMode = () => {
+    setShowEditPrompt(false);
+    setIsEditingMetadata(false);
+    setDraftName(map.name);
+    setDraftDescription(map.description);
+  };
+
+  const saveMetadata = () => {
+    const name = draftName.trim();
+    if (!name) return;
+    setMap((current) => ({ ...current, name, description: draftDescription }));
+    setIsEditingMetadata(false);
+    setMessage(sourceFile ? "Map details edited · ready to export" : "Demo map details edited");
+  };
+
+  const exportCiv5Map = () => {
+    if (!sourceFile || isEditingMetadata) return;
+    try {
+      const exported = updateCiv5MapMetadata(sourceFile.buffer, map.name, map.description);
+      const blobUrl = URL.createObjectURL(new Blob([exported], { type: "application/octet-stream" }));
+      const baseName = sourceFile.fileName.replace(/\.civ5map$/i, "");
+      const downloadName = `${baseName}-edited.Civ5Map`;
+      const link = document.createElement("a");
+      link.download = downloadName;
+      link.href = blobUrl;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+      setMessage(`${downloadName} · exported`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The edited map could not be exported.");
+    }
+  };
+
   const activeTile = hovered?.tile;
   return (
     <main className="viewer-app">
@@ -429,7 +486,16 @@ export function Civ5MapViewer() {
           </div>
         </div>
         <div className="topbar-actions">
-          <button className="button button-secondary" type="button" onClick={exportView}>Export view</button>
+          <button className="button button-secondary button-export-view" type="button" onClick={exportView}>Export view</button>
+          <button
+            className="button button-secondary button-export-map"
+            type="button"
+            onClick={exportCiv5Map}
+            disabled={!sourceFile || isEditingMetadata}
+            title={!sourceFile ? "Open a Civ5Map file before exporting" : isEditingMetadata ? "Save your edits before exporting" : "Export an edited Civ5Map file"}
+          >
+            Export Civ5Map
+          </button>
           <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()}>Open map</button>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept=".civ5map,.Civ5Map,application/octet-stream" onChange={onFileChange} />
         </div>
@@ -438,13 +504,49 @@ export function Civ5MapViewer() {
       <section className="workspace">
         <aside className="sidebar" aria-label="Map information and layers">
           <div className="map-heading">
-            <div>
-              <p className="eyebrow">{map.source === "demo" ? "Sample map" : "Open map"}</p>
-              <h2>{map.name}</h2>
-            </div>
+            {isEditingMetadata ? (
+              <label className="metadata-field metadata-name-field">
+                <span>Name</span>
+                <input value={draftName} maxLength={160} onChange={(event) => setDraftName(event.target.value)} autoFocus />
+              </label>
+            ) : (
+              <div>
+                <p className="eyebrow">{map.source === "demo" ? "Sample map" : "Open map"}</p>
+                <button className="editable-map-name" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
+                  <h2>{map.name}</h2>
+                </button>
+              </div>
+            )}
             <span className="version-badge" aria-label={`Excogitare version ${APP_VERSION}`}>{`v${APP_VERSION}`}</span>
           </div>
-          <p className="map-description">{map.description || "Physical terrain extracted from the Civ5 map file."}</p>
+          {isEditingMetadata ? (
+            <div className="metadata-editor">
+              <label className="metadata-field">
+                <span>Description</span>
+                <textarea value={draftDescription} maxLength={2000} rows={4} onChange={(event) => setDraftDescription(event.target.value)} />
+              </label>
+              <div className="metadata-actions">
+                <button type="button" onClick={cancelEditMode}>Cancel</button>
+                <button className="save-metadata" type="button" disabled={!draftName.trim()} onClick={saveMetadata}>Save changes</button>
+              </div>
+            </div>
+          ) : (
+            <button className="editable-map-description" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
+              {map.description || "Physical terrain extracted from the Civ5 map file."}
+            </button>
+          )}
+
+          {showEditPrompt && !isEditingMetadata && (
+            <div className="edit-mode-prompt" role="dialog" aria-label="Enter Edit Mode">
+              <strong>Enter Edit Mode?</strong>
+              <p>Change this map&apos;s name and description. Saved changes will be included in the exported Civ5Map.</p>
+              {!sourceFile && <small>Open a Civ5Map file to enable binary export.</small>}
+              <div>
+                <button type="button" onClick={() => setShowEditPrompt(false)}>Not now</button>
+                <button className="confirm-edit" type="button" onClick={enterEditMode}>Edit details</button>
+              </div>
+            </div>
+          )}
           <dl className="map-stats">
             <div><dt>Dimensions</dt><dd>{map.width} × {map.height}</dd></div>
             <div><dt>World</dt><dd>{friendlyName(map.worldSize, "")}</dd></div>
@@ -492,7 +594,7 @@ export function Civ5MapViewer() {
             </div>
           </div>
 
-          <button className="demo-button" type="button" onClick={() => { setMap(createDemoMap()); setMessage("Demo map loaded"); }}>Reset to sample map</button>
+          <button className="demo-button" type="button" onClick={() => { setMap(createDemoMap()); setSourceFile(null); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>
         </aside>
 
         <div

@@ -21,7 +21,8 @@ body {
 }
 
 button,
-input { font: inherit; }
+input,
+textarea { font: inherit; }
 
 button { color: inherit; }
 
@@ -83,6 +84,7 @@ button { color: inherit; }
 }
 
 .button:hover { transform: translateY(-1px); }
+.button:disabled { cursor: not-allowed; opacity: .42; transform: none; }
 .button-secondary { border-color: var(--line); background: #173137; color: #cbd7d2; }
 .button-primary { background: var(--gold); color: #1b2724; box-shadow: 0 6px 18px rgba(217, 185, 111, 0.13); }
 .button-primary:hover { background: var(--gold-bright); }
@@ -101,6 +103,59 @@ button { color: inherit; }
 
 .map-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .map-heading h2 { margin: 0; font-family: Georgia, serif; font-size: 22px; font-weight: 500; line-height: 1.18; }
+.map-heading > div { min-width: 0; }
+
+.editable-map-name,
+.editable-map-description {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: text;
+}
+.editable-map-name { display: block; border-radius: 3px; }
+.editable-map-name:hover h2,
+.editable-map-name:focus-visible h2 { color: var(--gold-bright); }
+.editable-map-description {
+  min-height: 36px;
+  margin: 10px 0 19px;
+  color: #8ea29c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.editable-map-description:hover,
+.editable-map-description:focus-visible { color: #c1d0ca; }
+
+.metadata-editor { display: grid; gap: 10px; margin: 11px 0 18px; }
+.metadata-field { min-width: 0; display: grid; gap: 5px; }
+.metadata-field > span { color: #7e9893; font-family: var(--font-geist-mono), monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.metadata-field input,
+.metadata-field textarea {
+  width: 100%;
+  border: 1px solid rgba(239, 209, 138, .26);
+  border-radius: 5px;
+  outline: 0;
+  background: rgba(7, 22, 26, .68);
+  color: #e1e9e4;
+}
+.metadata-field input { height: 36px; padding: 0 10px; font-family: Georgia, serif; font-size: 16px; }
+.metadata-field textarea { min-height: 82px; padding: 9px 10px; resize: vertical; font-size: 11px; line-height: 1.45; }
+.metadata-field input:focus,
+.metadata-field textarea:focus { border-color: rgba(239, 209, 138, .58); box-shadow: 0 0 0 2px rgba(239, 209, 138, .08); }
+.metadata-name-field { flex: 1; }
+.metadata-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.metadata-actions button,
+.edit-mode-prompt button { min-height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 4px; background: #173137; color: #aebfba; font-size: 9px; cursor: pointer; }
+.metadata-actions .save-metadata,
+.edit-mode-prompt .confirm-edit { border-color: transparent; background: var(--gold); color: #172622; font-weight: 700; }
+.metadata-actions button:disabled { cursor: not-allowed; opacity: .4; }
+
+.edit-mode-prompt { margin: 0 0 18px; padding: 12px; border: 1px solid rgba(221, 194, 128, .2); border-radius: 6px; background: rgba(8, 25, 29, .66); }
+.edit-mode-prompt strong { color: #e5d39f; font-size: 11px; }
+.edit-mode-prompt p { margin: 5px 0 8px; color: #8fa39d; font-size: 10px; line-height: 1.45; }
+.edit-mode-prompt small { display: block; margin: -2px 0 9px; color: #718983; font-size: 9px; }
+.edit-mode-prompt > div { display: flex; justify-content: flex-end; gap: 7px; }
 
 .version-badge {
   flex: 0 0 auto;
@@ -112,8 +167,6 @@ button { color: inherit; }
   font-size: 9px;
   text-transform: uppercase;
 }
-
-.map-description { min-height: 36px; margin: 10px 0 19px; color: #8ea29c; font-size: 12px; line-height: 1.5; }
 
 .map-stats { display: grid; grid-template-columns: 1fr 1fr; margin: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .map-stats div { padding: 10px 11px; background: rgba(8, 24, 28, 0.34); }
@@ -247,7 +300,7 @@ button { color: inherit; }
 @media (max-width: 640px) {
   .topbar { height: auto; min-height: 72px; flex-wrap: wrap; padding-block: 12px; }
   .brand { min-width: 0; }
-  .brand .eyebrow, .button-secondary { display: none; }
+  .brand .eyebrow, .button-export-view { display: none; }
   .brand h1 { font-size: 18px; }
   .button { height: 35px; padding-inline: 12px; }
   .workspace { display: flex; flex-direction: column; min-height: 0; overflow: visible; }
