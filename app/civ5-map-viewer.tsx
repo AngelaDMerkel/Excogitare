@@ -223,6 +223,7 @@ function drawMap(
   size: Size,
   pixelRatio: number,
 ) {
+  let paintedTiles = 0;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.clearRect(0, 0, size.width, size.height);
   context.fillStyle = "#10242b";
@@ -244,6 +245,7 @@ function drawMap(
       context.fillStyle = layers.elevation && tile.elevation === 2 ? shade(base, -34) : layers.elevation && tile.elevation === 1 ? shade(base, -15) : base;
       hexPath(context, center.x, center.y);
       context.fill();
+      paintedTiles += 1;
 
       if (layers.grid) {
         context.strokeStyle = "rgba(6, 22, 25, .34)";
@@ -289,6 +291,7 @@ function drawMap(
   }
   if (layers.starts && map.startLocations.length) drawStartLocations(context, map, view);
   context.restore();
+  return paintedTiles;
 }
 
 function closestTile(map: Civ5Map, worldX: number, worldY: number): HoveredTile {
@@ -333,6 +336,7 @@ export function Civ5MapViewer() {
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const renderCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
@@ -413,8 +417,24 @@ export function Civ5MapViewer() {
     if (canvas.height !== backingHeight) canvas.height = backingHeight;
     if (canvas.style.width !== displayWidth) canvas.style.width = displayWidth;
     if (canvas.style.height !== displayHeight) canvas.style.height = displayHeight;
+    if (!renderCanvasRef.current) renderCanvasRef.current = document.createElement("canvas");
+    const renderCanvas = renderCanvasRef.current;
+    if (renderCanvas.width !== backingWidth) renderCanvas.width = backingWidth;
+    if (renderCanvas.height !== backingHeight) renderCanvas.height = backingHeight;
+    const renderContext = renderCanvas.getContext("2d");
     const context = canvas.getContext("2d");
-    if (context) drawMap(context, map, layers, hovered, view, size, pixelRatio);
+    if (!context || !renderContext) return;
+
+    // Complete the next frame away from the visible canvas. If a transient
+    // layout state culls every tile, retain the last valid map frame instead
+    // of replacing it with the blue canvas background.
+    const paintedTiles = drawMap(renderContext, map, layers, hovered, view, size, pixelRatio);
+    if (map.tiles.length && paintedTiles === 0) return;
+    context.save();
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.globalCompositeOperation = "copy";
+    context.drawImage(renderCanvas, 0, 0);
+    context.restore();
   }, [map, layers, hovered, view, size]);
 
   const terrainBreakdown = useMemo(() => {

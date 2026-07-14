@@ -41,6 +41,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /useLayoutEffect\(\(\) => \{/);
   assert.match(source, /if \(canvas\.width !== backingWidth\) canvas\.width = backingWidth/);
   assert.match(source, /if \(canvas\.height !== backingHeight\) canvas\.height = backingHeight/);
+  assert.match(source, /renderCanvasRef = useRef<HTMLCanvasElement \| null>\(null\)/);
+  assert.match(source, /const paintedTiles = drawMap\(renderContext/);
+  assert.match(source, /if \(map\.tiles\.length && paintedTiles === 0\) return/);
+  assert.match(source, /context\.drawImage\(renderCanvas, 0, 0\)/);
   assert.doesNotMatch(source, /canvas\.width = Math\.round\(size\.width \* pixelRatio\)/);
   assert.doesNotMatch(source, /canvas\.height = Math\.round\(size\.height \* pixelRatio\)/);
 });
