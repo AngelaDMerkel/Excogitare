@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
+import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 4 },
@@ -20,7 +21,7 @@ export type WorldModifier = "NONE" | "FANTASTICAL" | "STRATEGIC_DEPTH" | "FRACTU
 export type GenerationStyle = "REALISTIC" | "FANTASTICAL" | "MUNDANE" | "BRUTAL";
 export type DominantTerrain = "GRASSLAND" | "PLAINS" | "DESERT" | "TUNDRA";
 export type WrapType = "PRESET" | "EAST_WEST" | "NONE";
-export type MapGeometry = "STANDARD" | "TALL" | "WIDE" | "SQUARE";
+export type MapGeometry = "STANDARD" | "TALL" | "WIDE" | "NEEDLE" | "RIBBON" | "SQUARE";
 export type AbundanceSetting = "SCARCE" | "STANDARD" | "ABUNDANT";
 export type ResourceDistribution = "EVEN" | "REGIONAL" | "CLUSTERED";
 export type CoastalPreference = "ANY" | "PREFER" | "REQUIRE";
@@ -34,9 +35,10 @@ export function resolveMapDimensions(sizeId: MapSizeId, geometry: MapGeometry) {
     const side = Math.max(16, Math.round(Math.sqrt(area)));
     return { width: side, height: side };
   }
-  const ratio = geometry === "TALL" ? 0.4 : 4;
-  const width = Math.max(16, Math.round(Math.sqrt(area * ratio)));
-  const height = Math.max(16, Math.round(area / width));
+  const ratio = geometry === "TALL" ? 0.4 : geometry === "WIDE" ? 4 : geometry === "NEEDLE" ? 1 / 12 : 12;
+  const minimumDimension = geometry === "NEEDLE" || geometry === "RIBBON" ? 8 : 16;
+  const width = Math.max(minimumDimension, Math.round(Math.sqrt(area * ratio)));
+  const height = Math.max(minimumDimension, Math.round(area / width));
   return { width, height };
 }
 
@@ -162,7 +164,7 @@ export function randomGenerationOptions(random: () => number = Math.random): Map
     size,
     modifier,
     wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
-    geometry: randomItem(["STANDARD", "TALL", "WIDE", "SQUARE"] as const, random),
+    geometry: randomItem(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "SQUARE"] as const, random),
     waterPercent: Math.floor(random() * 91),
     mountainPercent: minimumMountains + Math.floor(random() * (39 - minimumMountains)),
     dominantTerrains,
@@ -609,7 +611,7 @@ function riverNeighbor(x: number, y: number, direction: 0 | 2 | 3, width: number
   return [nextX, nextY] as const;
 }
 
-function generateRiverNetwork(
+export function generateRiverNetwork(
   tiles: Civ5Tile[],
   reliefValues: number[],
   moistures: number[],
@@ -619,7 +621,9 @@ function generateRiverNetwork(
   style: GenerationStyle,
   rainfall: RainfallSetting,
   random: () => number,
+  waterMask?: ReadonlyArray<boolean>,
 ) {
+  const isWaterTile = (index: number) => waterMask?.[index] ?? tiles[index].terrain < 2;
   const vertices: RiverVertex[] = [];
   const vertexByKey = new Map<string, number>();
   const edges: RiverEdge[] = [];
@@ -648,10 +652,12 @@ function generateRiverNetwork(
         const neighbor = riverNeighbor(x, y, definition.direction, width, height, wraps);
         if (!neighbor) continue;
         const neighborIndex = neighbor[1] * width + neighbor[0];
-        if (tiles[owner].terrain < 2 && tiles[neighborIndex].terrain < 2) continue;
         const adjacentTiles: [number, number] = [owner, neighborIndex];
         const a = vertexIndex(definition.start, adjacentTiles);
         const b = vertexIndex(definition.end, adjacentTiles);
+        // A river mouth ends at a coastal/lake vertex. It never occupies the
+        // shoreline edge itself, which would render as a river in the water.
+        if (isWaterTile(owner) || isWaterTile(neighborIndex)) continue;
         const edgeIndex = edges.length;
         edges.push({ a, b, owner, bit: definition.bit, tiles: adjacentTiles });
         vertices[a].edges.push(edgeIndex);
@@ -660,11 +666,11 @@ function generateRiverNetwork(
     }
   }
 
-  const isWater = vertices.map((vertex) => vertex.tiles.some((index) => tiles[index].terrain < 2));
+  const isWater = vertices.map((vertex) => vertex.tiles.some(isWaterTile));
   if (!isWater.some(Boolean)) return new Uint8Array(tiles.length);
   const rawHeight = vertices.map((vertex, vertexNumber) => {
     if (isWater[vertexNumber]) return -1;
-    const land = vertex.tiles.filter((index) => tiles[index].terrain >= 2);
+    const land = vertex.tiles.filter((index) => !isWaterTile(index));
     const relief = land.reduce((sum, index) => sum + reliefValues[index], 0) / Math.max(1, land.length);
     const elevation = Math.max(...land.map((index) => tiles[index].elevation));
     return relief + elevation * 0.28;
@@ -702,7 +708,7 @@ function generateRiverNetwork(
 
   const candidates = vertices.flatMap((vertex, vertexNumber) => {
     if (isWater[vertexNumber] || parentEdge[vertexNumber] < 0 || vertex.edges.length < 2) return [];
-    const mountainTile = vertex.tiles.find((index) => tiles[index].terrain >= 2 && tiles[index].elevation === 2);
+    const mountainTile = vertex.tiles.find((index) => !isWaterTile(index) && tiles[index].elevation === 2);
     if (mountainTile === undefined) return [];
     let current = vertexNumber;
     let length = 0;
@@ -718,7 +724,7 @@ function generateRiverNetwork(
     return [{ vertex: vertexNumber, mountainTile, length, score: moisture * 1.25 + rawHeight[vertexNumber] * 0.62 + Math.min(length, 24) * 0.018 + random() * 0.22 }];
   }).sort((a, b) => b.score - a.score);
 
-  const landCount = tiles.filter((tile) => tile.terrain >= 2).length;
+  const landCount = tiles.reduce((count, _tile, index) => count + (isWaterTile(index) ? 0 : 1), 0);
   const rainfallFactor = rainfall === "WET" ? 1.5 : rainfall === "ARID" ? 0.58 : 1;
   const styleFactor = style === "REALISTIC" ? 1.22 : style === "FANTASTICAL" ? 1.08 : style === "BRUTAL" ? 0.72 : 0.9;
   const desiredSources = Math.max(1, Math.min(32, Math.round(landCount * 0.0024 * rainfallFactor * styleFactor)));
@@ -744,7 +750,13 @@ function generateRiverNetwork(
       pathEdges.push(edgeIndex);
       pathVertices.push(next);
       current = next;
-      if (isWater[current] || networkVertices.has(current)) {
+      if (isWater[current]) {
+        // Two channels sharing only the same mouth would turn that coastal
+        // vertex into an apparent inland continuation instead of an outlet.
+        reachedDrainage = !networkVertices.has(current);
+        break;
+      }
+      if (networkVertices.has(current)) {
         reachedDrainage = true;
         break;
       }
@@ -777,6 +789,29 @@ function hexDistance(a: [number, number], b: [number, number], width: number, wr
   return Math.min(direct(a, b), direct([a[0] - width, a[1]], b), direct([a[0] + width, a[1]], b));
 }
 
+function passableRegionSizes(tiles: Civ5Tile[], width: number, height: number, wraps: boolean) {
+  const sizes = new Int32Array(tiles.length);
+  const visited = new Uint8Array(tiles.length);
+  for (let origin = 0; origin < tiles.length; origin += 1) {
+    if (visited[origin] || tiles[origin].terrain < 2 || tiles[origin].elevation === 2) continue;
+    const component = [origin];
+    visited[origin] = 1;
+    for (let cursor = 0; cursor < component.length; cursor += 1) {
+      const index = component[cursor];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+        const next = ny * width + nx;
+        if (visited[next] || tiles[next].terrain < 2 || tiles[next].elevation === 2) continue;
+        visited[next] = 1;
+        component.push(next);
+      }
+    }
+    for (const index of component) sizes[index] = component.length;
+  }
+  return sizes;
+}
+
 function placeStartLocations(
   tiles: Civ5Tile[],
   width: number,
@@ -787,10 +822,14 @@ function placeStartLocations(
   random: () => number,
 ) {
   const candidates: Array<[number, number]> = [];
+  const regionSizes = passableRegionSizes(tiles, width, height, wraps);
+  const minimumRegionSize = Math.min(12, Math.max(...regionSizes));
   for (let y = 2; y < height - 2; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const tile = tiles[y * width + x];
+      const index = y * width + x;
+      const tile = tiles[index];
       if (tile.terrain < 2 || tile.elevation === 2) continue;
+      if (regionSizes[index] < minimumRegionSize) continue;
       const workable = neighbors(x, y, width, height, wraps).filter(([nx, ny]) => {
         const neighbor = tiles[ny * width + nx];
         return neighbor.terrain >= 2 && neighbor.elevation < 2;
@@ -868,11 +907,15 @@ function placeCityStateLocations(
   if (count <= 0) return [];
   const occupied = new Set(majorStarts.map((start) => `${start.x},${start.y}`));
   const candidates: Array<[number, number]> = [];
+  const regionSizes = passableRegionSizes(tiles, width, height, wraps);
+  const minimumRegionSize = Math.min(12, Math.max(...regionSizes));
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 0; x < width; x += 1) {
       if (occupied.has(`${x},${y}`)) continue;
-      const tile = tiles[y * width + x];
+      const index = y * width + x;
+      const tile = tiles[index];
       if (tile.terrain < 2 || tile.elevation === 2) continue;
+      if (regionSizes[index] < minimumRegionSize) continue;
       const coastal = neighbors(x, y, width, height, wraps).some(([nx, ny]) => tiles[ny * width + nx].terrain < 2);
       if (coastalPreference === "REQUIRE" && !coastal) continue;
       const workable = neighbors(x, y, width, height, wraps).filter(([nx, ny]) => {

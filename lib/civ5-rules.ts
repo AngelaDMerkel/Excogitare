@@ -8,7 +8,8 @@ function typeName(values: string[], index: number) {
 
 export function isWaterTerrain(map: Civ5Map, tile: Civ5Tile) {
   const terrain = typeName(map.terrains, tile.terrain);
-  return terrain.includes("OCEAN") || terrain.includes("COAST") || tile.terrain < 2;
+  if (terrain) return terrain.includes("OCEAN") || terrain.includes("COAST");
+  return tile.terrain < 2;
 }
 
 export function isPassableLand(map: Civ5Map, tile: Civ5Tile) {

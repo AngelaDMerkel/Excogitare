@@ -27,6 +27,7 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.match(html, /Start locations/);
   assert.match(html, /4 positions/);
   assert.match(html, /Export Civ5Map/);
+  assert.match(html, /Show map legend/);
   assert.match(html, />Explore</);
   assert.match(html, />Create</);
   assert.match(html, />Repair</);
@@ -46,11 +47,18 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /const paintedTiles = drawMap\(renderContext/);
   assert.match(source, /if \(canvasMap\.tiles\.length && paintedTiles === 0\) return/);
   assert.match(source, /context\.drawImage\(renderCanvas, 0, 0\)/);
+  assert.match(source, /transparentBackground = false/);
+  assert.match(source, /getContext\("2d", \{ alpha: true \}\)/);
+  assert.match(source, /repairHighlights, true\)/);
+  assert.match(source, /exported with transparent background/);
   assert.match(source, /\[4, 5, 1\]/);
   assert.match(source, /\[3, 4, 2\]/);
   assert.match(source, /\[2, 3, 4\]/);
   assert.match(source, /tileCenter\(col, row, map\.height - 1 - row\)/);
   assert.match(source, />Randomise</);
+  assert.match(source, /Generation history/);
+  assert.match(source, /MAX_GENERATION_HISTORY/);
+  assert.match(source, /openGeneration/);
   assert.match(source, /aria-label="Create tools"/);
   assert.match(source, /World shape/);
   assert.match(source, /Climate and terrain/);
@@ -70,6 +78,8 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Ancient ruins/);
   assert.match(source, /<span>Wrap type<\/span>/);
   assert.match(source, /<span>Geometry<\/span>/);
+  assert.match(source, /Needle — extreme vertical/);
+  assert.match(source, /Ribbon — extreme horizontal/);
   assert.match(source, /<span>City states<\/span>/);
   assert.match(source, /projection-button/);
   assert.match(source, /unprojectPoint/);
@@ -77,6 +87,9 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /drawIsometricRelief/);
   assert.match(source, /closestIsometricTile/);
   assert.match(source, /ISO 3D/);
+  assert.match(source, /aria-controls="map-legend"/);
+  assert.match(source, /Resources on this map/);
+  assert.match(source, /Repair finding/);
   assert.doesNotMatch(source, /canvas\.width = Math\.round\(size\.width \* pixelRatio\)/);
   assert.doesNotMatch(source, /canvas\.height = Math\.round\(size\.height \* pixelRatio\)/);
 });

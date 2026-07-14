@@ -4,6 +4,7 @@ import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, u
 import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
+import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "../lib/generation-history.ts";
 import { applyRepairIssues, buildRepairIssues } from "../lib/map-repair.ts";
 import { isPassableLand, resourcePlacementVerdict } from "../lib/civ5-rules.ts";
 
@@ -92,12 +93,14 @@ function assertRiverNetworks(map: ReturnType<typeof generateMap>) {
         if (map.wraps) nextX = (nextX + map.width) % map.width;
         if (nextX < 0 || nextX >= map.width || nextY < 0 || nextY >= map.height || Math.abs(nextX - x) > 1) continue;
         const neighbor = nextY * map.width + nextX;
-        if (map.tiles[owner].terrain < 2 && map.tiles[neighbor].terrain < 2) continue;
         for (const vertex of [definition.a, definition.b]) {
           addTile(vertex, owner);
           addTile(vertex, neighbor);
         }
-        if (map.tiles[owner].river & definition.bit) addRiverEdge(definition.a, definition.b);
+        if (map.tiles[owner].river & definition.bit) {
+          assert.ok(map.tiles[owner].terrain >= 2 && map.tiles[neighbor].terrain >= 2, "a river occupied an ocean or shoreline edge");
+          addRiverEdge(definition.a, definition.b);
+        }
       }
     }
   }
@@ -123,13 +126,47 @@ function assertRiverNetworks(map: ReturnType<typeof generateMap>) {
     }
     const componentEdges = componentEdgeDegree / 2;
     const endpoints = componentVertices.filter((vertex) => riverNeighbors.get(vertex)!.size === 1);
-    const touchesMountain = endpoints.some((vertex) => [...(vertexTiles.get(vertex) ?? [])].some((index) => map.tiles[index].terrain >= 2 && map.tiles[index].elevation === 2));
-    const touchesWater = endpoints.some((vertex) => [...(vertexTiles.get(vertex) ?? [])].some((index) => map.tiles[index].terrain < 2));
+    const vertexTouchesMountain = (vertex: string) => [...(vertexTiles.get(vertex) ?? [])].some((index) => map.tiles[index].terrain >= 2 && map.tiles[index].elevation === 2);
+    const vertexTouchesWater = (vertex: string) => [...(vertexTiles.get(vertex) ?? [])].some((index) => map.tiles[index].terrain < 2);
+    const touchesMountain = endpoints.some(vertexTouchesMountain);
+    const touchesWater = endpoints.some(vertexTouchesWater);
     assert.ok(componentEdges >= 3, "a river was too short to form a continuous channel");
     assert.equal(componentEdges, componentVertices.length - 1, "a river network contained a loop");
     assert.ok(touchesMountain, "a river network did not begin at a mountain");
     assert.ok(touchesWater, "a river network did not terminate in water");
+    assert.ok(endpoints.every((vertex) => vertexTouchesMountain(vertex) || vertexTouchesWater(vertex)), "a river network ended inland away from a mountain");
+    assert.ok(componentVertices.filter(vertexTouchesWater).every((vertex) => riverNeighbors.get(vertex)!.size === 1), "a river continued through an ocean or lake outlet");
   }
+}
+
+function riverEdgeRecords(map: Civ5Map) {
+  const records: Array<{ owner: number; neighbor: number; bit: 1 | 2 | 4; a: string; b: string }> = [];
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const owner = y * map.width + x;
+      const centerX = x * 2 + (y & 1);
+      const centerY = y * 3;
+      const definitions = y % 2 === 0
+        ? [
+            { bit: 1 as const, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
+            { bit: 2 as const, dx: -1, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
+            { bit: 4 as const, dx: 0, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
+          ]
+        : [
+            { bit: 1 as const, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
+            { bit: 2 as const, dx: 0, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
+            { bit: 4 as const, dx: 1, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
+          ];
+      for (const definition of definitions) {
+        let nextX = x + definition.dx;
+        const nextY = y + definition.dy;
+        if (map.wraps) nextX = (nextX + map.width) % map.width;
+        if (nextX < 0 || nextX >= map.width || nextY < 0 || nextY >= map.height || Math.abs(nextX - x) > 1) continue;
+        records.push({ owner, neighbor: nextY * map.width + nextX, bit: definition.bit, a: definition.a, b: definition.b });
+      }
+    }
+  }
+  return records;
 }
 
 function createScenarioMap() {
@@ -182,6 +219,81 @@ function createScenarioMap() {
   view.setUint32(playerOffset + 428, 0, true);
   view.setUint8(playerOffset + 432, 2);
   view.setUint8(playerOffset + 433, 1);
+  for (let tile = 0; tile < width * height; tile += 1) {
+    const improvement = playerOffset + 436 + tile * 8;
+    view.setUint16(improvement, 0xffff, true);
+    view.setUint16(improvement + 2, 0xffff, true);
+    view.setUint8(improvement + 5, 0xff);
+    view.setUint8(improvement + 6, 0xff);
+    view.setUint8(improvement + 7, 0xff);
+  }
+  return buffer;
+}
+
+function createScenarioCityMap() {
+  const width = 2;
+  const height = 2;
+  const terrain = encoder.encode("TERRAIN_OCEAN\0TERRAIN_GRASS\0");
+  const name = encoder.encode("Broken city");
+  const description = encoder.encode("City begins in the ocean");
+  const worldSize = encoder.encode("WORLDSIZE_DUEL");
+  const tileDataSize = width * height * 8;
+  const tileOffset = 42 + terrain.length + name.length + description.length + 4 + worldSize.length;
+  const scenarioOffset = tileOffset + tileDataSize;
+  const cityOffset = scenarioOffset + 128;
+  const teamOffset = cityOffset + 136;
+  const playerOffset = teamOffset + 64;
+  const improvementOffset = playerOffset + 436;
+  const buffer = new ArrayBuffer(improvementOffset + tileDataSize);
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+
+  view.setUint8(0, 0x1c);
+  view.setUint32(1, width, true);
+  view.setUint32(5, height, true);
+  view.setUint8(9, 1);
+  view.setUint32(14, terrain.length, true);
+  view.setUint32(34, name.length, true);
+  view.setUint32(38, description.length, true);
+  let offset = 42;
+  bytes.set(terrain, offset);
+  offset += terrain.length;
+  bytes.set(name, offset);
+  offset += name.length;
+  bytes.set(description, offset);
+  offset += description.length;
+  view.setUint32(offset, worldSize.length, true);
+  offset += 4;
+  bytes.set(worldSize, offset);
+  offset += worldSize.length;
+  for (let tileIndex = 0; tileIndex < width * height; tileIndex += 1) {
+    const tile = offset + tileIndex * 8;
+    view.setUint8(tile, tileIndex === 0 ? 0 : 1);
+    view.setUint8(tile + 1, 0xff);
+    view.setUint8(tile + 2, 0xff);
+    view.setUint8(tile + 5, 1);
+    view.setUint8(tile + 6, 0xff);
+  }
+
+  view.setUint8(scenarioOffset + 80, 1);
+  view.setUint8(scenarioOffset + 82, 1);
+  view.setUint32(scenarioOffset + 116, 136, true);
+  bytes.set(encoder.encode("Atlantis"), cityOffset);
+  view.setUint8(cityOffset + 64, 0);
+  view.setUint16(cityOffset + 66, 4, true);
+  bytes.set(encoder.encode("Team 1"), teamOffset);
+  bytes.set(encoder.encode("CIVILIZATION_TEST"), playerOffset + 160);
+  view.setUint32(playerOffset + 424, 1, true);
+  view.setUint32(playerOffset + 428, 1, true);
+  view.setUint8(playerOffset + 433, 1);
+  for (let tileIndex = 0; tileIndex < width * height; tileIndex += 1) {
+    const improvement = improvementOffset + tileIndex * 8;
+    view.setUint16(improvement, tileIndex === 0 ? 0 : 0xffff, true);
+    view.setUint16(improvement + 2, 0xffff, true);
+    view.setUint8(improvement + 5, 0xff);
+    view.setUint8(improvement + 6, 0xff);
+    view.setUint8(improvement + 7, 0xff);
+  }
   return buffer;
 }
 
@@ -232,6 +344,21 @@ test("exports repaired start coordinates and scenario flags into player records"
   assert.equal(parsed.players, 1);
 });
 
+test("repairs scenario cities placed on water and preserves the corrected tile link on export", () => {
+  const original = createScenarioCityMap();
+  const parsed = parseCiv5Map(original, "city-test.Civ5Map");
+  assert.deepEqual(parsed.cities?.map((city) => ({ name: city.name, x: city.x, y: city.y })), [{ name: "Atlantis", x: 0, y: 0 }]);
+  const issues = buildRepairIssues(parsed);
+  const cityIssue = issues.find((issue) => issue.id === "city-placement-0");
+  assert.equal(cityIssue?.mutation?.kind, "MOVE_CITY");
+  const repaired = applyRepairIssues(parsed, issues, new Set([cityIssue!.id]));
+  const roundTrip = parseCiv5Map(updateCiv5Map(original, repaired), "city-test.Civ5Map");
+  const city = roundTrip.cities?.[0];
+  assert.ok(city);
+  assert.equal(isPassableLand(roundTrip, roundTrip.tiles[city.y * roundTrip.width + city.x]), true);
+  assert.notDeepEqual([city.x, city.y], [0, 0]);
+});
+
 test("repair parser recovers truncated geography into a complete renderable grid", () => {
   const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "repair-salvage" });
   const serialized = serializeCiv5Map(generated);
@@ -268,6 +395,102 @@ test("repair tests correct illegal resources, features, and river bytes", () => 
   assert.equal(repaired.tiles[0].feature, 255);
   assert.equal(repaired.tiles[6].feature, 255);
   assert.equal(repaired.tiles[8].river, 0);
+});
+
+test("illegal resources are deleted when no compatible relocation exists", () => {
+  const map: Civ5Map = {
+    name: "No ocean", description: "", worldSize: "Custom", version: 12, width: 3, height: 2, players: 0, wraps: false,
+    terrains: ["TERRAIN_GRASS"], features: [], wonders: [], resources: ["RESOURCE_FISH"],
+    tiles: Array.from({ length: 6 }, () => ({ terrain: 0, resource: 255, feature: 255, river: 0, elevation: 0, continent: 0, wonder: 255, resourceAmount: 0 })),
+    startLocations: [], source: "file",
+  };
+  map.tiles[0].resource = 0;
+  map.tiles[0].resourceAmount = 2;
+  const issues = buildRepairIssues(map);
+  const issue = issues.find((candidate) => candidate.id === "resource-0");
+  assert.equal(issue?.mutation?.kind, "REMOVE_RESOURCE");
+  const repaired = applyRepairIssues(map, issues, new Set([issue!.id]));
+  assert.equal(repaired.tiles[0].resource, 255);
+  assert.equal(repaired.tiles[0].resourceAmount, 0);
+});
+
+test("repair rebuilds broken river fragments into logical mountain-to-sea networks", () => {
+  const generated = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    style: "REALISTIC",
+    rainfall: "WET",
+    waterPercent: 45,
+    mountainPercent: 24,
+    seed: "repair-river-network",
+  });
+  assert.equal(buildRepairIssues(generated).some((issue) => issue.id === "river-network"), false, "a generated logical network was incorrectly flagged");
+  const broken: Civ5Map = { ...generated, tiles: generated.tiles.map((tile) => ({ ...tile, river: 0 })) };
+  const fragment = broken.tiles.findIndex((tile, index) => {
+    const x = index % broken.width;
+    return x > 0 && tile.terrain >= 2 && broken.tiles[index - 1].terrain >= 2;
+  });
+  assert.ok(fragment >= 0);
+  broken.tiles[fragment].river = 1;
+  const issues = buildRepairIssues(broken);
+  const riverIssue = issues.find((issue) => issue.id === "river-network");
+  assert.equal(riverIssue?.mutation?.kind, "SET_RIVER_NETWORK");
+  const repaired = applyRepairIssues(broken, issues, new Set([riverIssue!.id]));
+  assert.notEqual(repaired.tiles.map((tile) => tile.river).join(","), broken.tiles.map((tile) => tile.river).join(","));
+  assertRiverNetworks(repaired as ReturnType<typeof generateMap>);
+});
+
+test("repair removes water-edge rivers and inland tributary dead ends", () => {
+  const generated = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    style: "REALISTIC",
+    rainfall: "WET",
+    waterPercent: 45,
+    mountainPercent: 24,
+    seed: "repair-river-water-correctness",
+  });
+  assertRiverNetworks(generated);
+  const records = riverEdgeRecords(generated);
+  const shoreline = records.find((edge) => generated.tiles[edge.owner].terrain < 2 || generated.tiles[edge.neighbor].terrain < 2);
+  assert.ok(shoreline, "test map did not contain a shoreline edge");
+
+  const inWater: Civ5Map = { ...generated, tiles: generated.tiles.map((tile) => ({ ...tile })) };
+  inWater.tiles[shoreline.owner].river |= shoreline.bit;
+  const waterIssues = buildRepairIssues(inWater);
+  const waterIssue = waterIssues.find((issue) => issue.id === "river-network");
+  assert.equal(waterIssue?.mutation?.kind, "SET_RIVER_NETWORK");
+  const waterRepaired = applyRepairIssues(inWater, waterIssues, new Set([waterIssue!.id]));
+  assertRiverNetworks(waterRepaired as ReturnType<typeof generateMap>);
+
+  const riverVertices = new Set(records.flatMap((edge) => generated.tiles[edge.owner].river & edge.bit ? [edge.a, edge.b] : []));
+  const vertexTiles = new Map<string, Set<number>>();
+  for (const edge of records) {
+    for (const vertex of [edge.a, edge.b]) {
+      const tiles = vertexTiles.get(vertex) ?? new Set<number>();
+      tiles.add(edge.owner);
+      tiles.add(edge.neighbor);
+      vertexTiles.set(vertex, tiles);
+    }
+  }
+  const deadEndEdge = records.find((edge) => {
+    if (generated.tiles[edge.owner].river & edge.bit) return false;
+    if (generated.tiles[edge.owner].terrain < 2 || generated.tiles[edge.neighbor].terrain < 2) return false;
+    const attached = riverVertices.has(edge.a) !== riverVertices.has(edge.b);
+    if (!attached) return false;
+    const end = riverVertices.has(edge.a) ? edge.b : edge.a;
+    return [...(vertexTiles.get(end) ?? [])].every((index) => generated.tiles[index].terrain >= 2 && generated.tiles[index].elevation !== 2);
+  });
+  assert.ok(deadEndEdge, "test map did not contain a suitable inland branch edge");
+
+  const deadEnd: Civ5Map = { ...generated, tiles: generated.tiles.map((tile) => ({ ...tile })) };
+  deadEnd.tiles[deadEndEdge.owner].river |= deadEndEdge.bit;
+  const deadEndIssues = buildRepairIssues(deadEnd);
+  const deadEndIssue = deadEndIssues.find((issue) => issue.id === "river-network");
+  assert.equal(deadEndIssue?.mutation?.kind, "SET_RIVER_NETWORK");
+  assert.match(deadEndIssue?.detail ?? "", /inland dead end/i);
+  const deadEndRepaired = applyRepairIssues(deadEnd, deadEndIssues, new Set([deadEndIssue!.id]));
+  assertRiverNetworks(deadEndRepaired as ReturnType<typeof generateMap>);
 });
 
 test("start-location repair tests cover passability, duplicates, counts, city-state flags, and reachability", () => {
@@ -317,21 +540,43 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 10);
 });
 
+test("generation history retains the newest 30 exact map snapshots", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "history-source" });
+  let history: GenerationHistoryEntry[] = [];
+  for (let id = 1; id <= 35; id += 1) history = addGenerationToHistory(history, generated, id);
+
+  assert.equal(history.length, MAX_GENERATION_HISTORY);
+  assert.equal(history[0].id, 35);
+  assert.equal(history.at(-1)?.id, 6);
+  const restored = restoreGeneration(history[0]);
+  restored.tiles[0].terrain = 99;
+  restored.generation!.dominantTerrains.push("DESERT");
+  assert.notEqual(history[0].map.tiles[0].terrain, 99);
+  assert.notDeepEqual(history[0].map.generation?.dominantTerrains, restored.generation?.dominantTerrains);
+});
+
 test("geometry choices preserve the size budget while changing the aspect ratio", () => {
   assert.deepEqual(resolveMapDimensions("STANDARD", "STANDARD"), { width: 80, height: 52 });
   const tall = resolveMapDimensions("STANDARD", "TALL");
   const wide = resolveMapDimensions("STANDARD", "WIDE");
+  const needle = resolveMapDimensions("STANDARD", "NEEDLE");
+  const ribbon = resolveMapDimensions("STANDARD", "RIBBON");
   const square = resolveMapDimensions("STANDARD", "SQUARE");
   assert.ok(tall.height / tall.width > 2);
   assert.ok(wide.width / wide.height > 3);
+  assert.ok(needle.height / needle.width > 10);
+  assert.ok(ribbon.width / ribbon.height > 10);
   assert.equal(square.width, square.height);
-  for (const dimensions of [tall, wide, square]) {
+  for (const dimensions of [tall, wide, needle, ribbon, square]) {
     assert.ok(Math.abs(dimensions.width * dimensions.height - 80 * 52) / (80 * 52) < 0.03);
   }
 
   const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", geometry: "TALL", seed: "vertical-world" });
   assert.equal(generated.width, resolveMapDimensions("DUEL", "TALL").width);
   assert.equal(generated.height, resolveMapDimensions("DUEL", "TALL").height);
+  const extreme = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", geometry: "RIBBON", seed: "horizontal-world" });
+  assert.ok(extreme.width / extreme.height > 10);
+  assert.equal(extreme.tiles.length, extreme.width * extreme.height);
 });
 
 test("Randomise produces complete valid settings and wrap choices control export geography", () => {
@@ -355,7 +600,7 @@ test("Randomise produces complete valid settings and wrap choices control export
     if (options.modifier === "DOOMSDAY" || options.style === "BRUTAL") assert.ok(options.mountainPercent >= 18);
   }
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
-  assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "SQUARE"]));
+  assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "SQUARE"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });

@@ -21,6 +21,17 @@ export type Civ5StartLocation = {
   cityState: boolean;
 };
 
+export type Civ5City = {
+  id: number;
+  name: string;
+  owner: number;
+  population: number;
+  x: number;
+  y: number;
+  recordValid: boolean;
+  duplicate: boolean;
+};
+
 export type Civ5Map = {
   name: string;
   description: string;
@@ -36,6 +47,7 @@ export type Civ5Map = {
   resources: string[];
   tiles: Civ5Tile[];
   startLocations: Civ5StartLocation[];
+  cities?: Civ5City[];
   source: "demo" | "file" | "generated" | "script";
   generation?: import("./map-generator.ts").MapGenerationOptions;
 };
@@ -43,6 +55,7 @@ export type Civ5Map = {
 const HEADER_SIZE = 42;
 const TILE_SIZE = 8;
 const GAME_DESCRIPTION_HEADER_SIZE = 120;
+const GAME_DESCRIPTION_V11_HEADER_SIZE = 128;
 const PLAYER_RECORD_SIZE = 436;
 const MAX_DIMENSION = 512;
 const decoder = new TextDecoder("utf-8");
@@ -142,6 +155,19 @@ function writeScenarioStarts(buffer: ArrayBuffer, map: Civ5Map) {
   }
 }
 
+function writeScenarioCities(buffer: ArrayBuffer, map: Civ5Map) {
+  if (!map.cities) return;
+  const view = new DataView(buffer);
+  const improvementDataSize = map.width * map.height * TILE_SIZE;
+  const improvementOffset = buffer.byteLength - improvementDataSize;
+  if (improvementOffset < 0) return;
+  for (let index = 0; index < map.width * map.height; index += 1) view.setUint16(improvementOffset + index * TILE_SIZE, 0xffff, true);
+  for (const city of map.cities) {
+    if (city.id < 0 || city.id > 0xfffe || city.x < 0 || city.y < 0 || city.x >= map.width || city.y >= map.height) continue;
+    view.setUint16(improvementOffset + (city.y * map.width + city.x) * TILE_SIZE, city.id, true);
+  }
+}
+
 export function updateCiv5Map(buffer: ArrayBuffer, map: Civ5Map) {
   const original = parseCiv5Map(buffer, map.name);
   if (original.width !== map.width || original.height !== map.height || map.tiles.length !== original.tiles.length) {
@@ -153,6 +179,7 @@ export function updateCiv5Map(buffer: ArrayBuffer, map: Civ5Map) {
   if (offset + map.tiles.length * TILE_SIZE > output.byteLength) throw new Error("The map tile section is incomplete.");
   writeTiles(new DataView(output), offset, map);
   writeScenarioStarts(output, map);
+  writeScenarioCities(output, map);
   return output;
 }
 
@@ -244,6 +271,59 @@ function parseStartLocations(
   return startLocations;
 }
 
+function parseCities(
+  view: DataView,
+  bytes: Uint8Array,
+  scenarioOffset: number,
+  width: number,
+  height: number,
+  version: number,
+) {
+  const cities: Civ5City[] = [];
+  const headerSize = version >= 11 ? GAME_DESCRIPTION_V11_HEADER_SIZE : GAME_DESCRIPTION_HEADER_SIZE;
+  if (scenarioOffset + headerSize > bytes.byteLength) return undefined;
+  const cityRecordSize = version >= 12 ? 136 : 104;
+  const cityDataSize = view.getUint32(scenarioOffset + 116, true);
+  const leadingDataSize = [84, 88, 92, 96, 100, 104, 108, 112].reduce((total, relativeOffset) => total + view.getUint32(scenarioOffset + relativeOffset, true), 0);
+  const cityDataOffset = scenarioOffset + headerSize + leadingDataSize;
+  if (cityDataSize % cityRecordSize !== 0 || cityDataOffset + cityDataSize > bytes.byteLength) return undefined;
+
+  const records = Array.from({ length: cityDataSize / cityRecordSize }, (_, id) => {
+    const offset = cityDataOffset + id * cityRecordSize;
+    return {
+      id,
+      name: cleanText(bytes.subarray(offset, offset + 64)),
+      owner: view.getUint8(offset + 64),
+      population: view.getUint16(offset + 66, true),
+    };
+  });
+  const improvementDataSize = width * height * TILE_SIZE;
+  const improvementOffset = bytes.byteLength - improvementDataSize;
+  if (improvementOffset < cityDataOffset + cityDataSize) return cities;
+  const seen = new Set<number>();
+  for (let index = 0; index < width * height; index += 1) {
+    const id = view.getUint16(improvementOffset + index * TILE_SIZE, true);
+    if (id === 0xffff) continue;
+    const record = records[id];
+    cities.push({
+      id,
+      name: record?.name || `Unknown city ${id}`,
+      owner: record?.owner ?? 255,
+      population: record?.population ?? 0,
+      x: index % width,
+      y: Math.floor(index / width),
+      recordValid: Boolean(record),
+      duplicate: seen.has(id),
+    });
+    seen.add(id);
+  }
+  for (const record of records) {
+    if (seen.has(record.id)) continue;
+    cities.push({ ...record, x: -1, y: -1, recordValid: true, duplicate: false });
+  }
+  return cities;
+}
+
 export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map {
   if (buffer.byteLength < HEADER_SIZE) {
     throw new Error("This file is too small to contain a Civ5 map header.");
@@ -329,6 +409,7 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
   }
 
   const startLocations = parseStartLocations(view, bytes, offset, width, height);
+  const cities = parseCities(view, bytes, offset, width, height, version);
 
   return {
     name: mapName || fallbackName.replace(/\.civ5map$/i, ""),
@@ -345,6 +426,7 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     resources,
     tiles,
     startLocations,
+    cities,
     source: "file",
   };
 }

@@ -23,6 +23,7 @@ import {
   type Civ5Tile,
 } from "@/lib/civ5-map";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "@/lib/map-analysis";
+import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "@/lib/generation-history";
 import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile, type RepairIssue, type RepairProfile } from "@/lib/map-repair";
 import {
   DEFAULT_GENERATION_OPTIONS,
@@ -430,12 +431,15 @@ function drawMap(
   selection: TileSelection | null,
   focusedStart: Civ5StartLocation | null,
   highlightedRepairs: ReadonlySet<number>,
+  transparentBackground = false,
 ) {
   let paintedTiles = 0;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.clearRect(0, 0, size.width, size.height);
-  context.fillStyle = "#10242b";
-  context.fillRect(0, 0, size.width, size.height);
+  if (!transparentBackground) {
+    context.fillStyle = "#10242b";
+    context.fillRect(0, 0, size.width, size.height);
+  }
   context.save();
   context.translate(view.x, view.y);
   context.scale(view.zoom, view.zoom);
@@ -667,6 +671,8 @@ export function Civ5MapViewer() {
   const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("VIEW");
   const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
+  const [generationHistory, setGenerationHistory] = useState<GenerationHistoryEntry[]>([]);
+  const [activeGenerationId, setActiveGenerationId] = useState<number | null>(null);
   const [createView, setCreateView] = useState<"GENERATE" | "EDIT" | "ANALYZE">("GENERATE");
   const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
   const [editTool, setEditTool] = useState<"TILE" | "FILL" | "SELECT" | "START">("TILE");
@@ -688,6 +694,7 @@ export function Civ5MapViewer() {
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
+  const [showLegend, setShowLegend] = useState(false);
   const [projection, setProjection] = useState<Projection>("FLAT");
   const [hovered, setHovered] = useState<HoveredTile>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -701,6 +708,7 @@ export function Civ5MapViewer() {
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
+  const generationIdRef = useRef(0);
   const mapRef = useRef(map);
   const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
 
@@ -714,6 +722,7 @@ export function Civ5MapViewer() {
     setSelection(null);
     setSelectionAnchor(null);
     setFocusedStart(null);
+    setActiveGenerationId(null);
   }, []);
 
   const commitMap = useCallback((next: Civ5Map | ((current: Civ5Map) => Civ5Map)) => {
@@ -1046,12 +1055,19 @@ export function Civ5MapViewer() {
   };
 
   const exportView = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const link = document.createElement("a");
-    link.download = `${map.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "civ5-map"}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = Math.round(size.width * pixelRatio);
+    exportCanvas.height = Math.round(size.height * pixelRatio);
+    const context = exportCanvas.getContext("2d", { alpha: true });
+    if (!context) return;
+    drawMap(context, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights, true);
+    const fileName = `${canvasMap.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "civ5-map"}.png`;
+    exportCanvas.toBlob((blob) => {
+      if (!blob) return;
+      download(blob, fileName, "image/png");
+      setMessage(`${fileName} · exported with transparent background`);
+    }, "image/png");
   };
 
   const requestEditMode = () => {
@@ -1153,6 +1169,9 @@ export function Civ5MapViewer() {
   const generateNewMap = () => {
     const generated = generateMap(generationOptions);
     replaceMap(generated);
+    const id = ++generationIdRef.current;
+    setGenerationHistory((history) => addGenerationToHistory(history, generated, id));
+    setActiveGenerationId(id);
     setMode("CREATE");
     setMessage(`${generated.name} · generated from seed ${generationOptions.seed}`);
   };
@@ -1162,8 +1181,21 @@ export function Civ5MapViewer() {
     const generated = generateMap(options);
     setGenerationOptions(options);
     replaceMap(generated);
+    const id = ++generationIdRef.current;
+    setGenerationHistory((history) => addGenerationToHistory(history, generated, id));
+    setActiveGenerationId(id);
     setCreateView("GENERATE");
     setMessage(`${generated.name} · every generation option randomised`);
+  };
+
+  const openGeneration = (entry: GenerationHistoryEntry) => {
+    const restored = restoreGeneration(entry);
+    replaceMap(restored);
+    setActiveGenerationId(entry.id);
+    if (restored.generation) setGenerationOptions({ ...restored.generation, dominantTerrains: [...restored.generation.dominantTerrains] });
+    setMode("CREATE");
+    setCreateView("GENERATE");
+    setMessage(`${restored.name} · restored from generation history`);
   };
 
   const randomizeSeed = () => {
@@ -1329,18 +1361,19 @@ export function Civ5MapViewer() {
           {mode === "REPAIR" && repairBaseline && (
             <div className="repair-panel">
               <div className="section-title"><h3>Automated repair</h3><span>{repairIssues.filter((issue) => issue.severity !== "INFO").length} findings</span></div>
-              <p className="repair-intro">Checks file structure, legal terrain content, river geometry, scenario records, and start locations before export.</p>
+              <p className="repair-intro">Checks file structure, legal terrain content, complete mountain-to-ocean-or-lake river drainage, scenario records, and start locations before export.</p>
 
               <div className="repair-profile" role="group" aria-label="Repair profile">
                 {(["SAFE", "STANDARD", "COMPETITIVE"] as const).map((profile) => (
                   <button key={profile} type="button" className={repairProfile === profile ? "is-active" : ""} onClick={() => selectRepairProfile(profile)}>{profile.toLowerCase()}</button>
                 ))}
               </div>
-              <small className="repair-profile-note">{repairProfile === "SAFE" ? "Only certain structural and scenario corrections." : repairProfile === "STANDARD" ? "Safe fixes plus legal placement and disconnected-river corrections." : "All automated fixes plus competitive start-location review."}</small>
+              <small className="repair-profile-note">{repairProfile === "SAFE" ? "Only certain structural and scenario corrections." : repairProfile === "STANDARD" ? "Safe fixes plus guaranteed resource cleanup and complete river-network rebuilding." : "All automated fixes plus competitive start-location review."}</small>
 
               <div className="repair-view-tabs" role="tablist" aria-label="Repair comparison view">
                 {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
               </div>
+              <p className="repair-preview-note"><strong>Corrected is a live preview.</strong> Apply selected to commit the checked fixes, or export the repaired preview directly.</p>
 
               {repairDiagnostics.length > 0 && (
                 <details className="repair-diagnostics">
@@ -1352,6 +1385,8 @@ export function Civ5MapViewer() {
               <div className="start-test-summary">
                 <strong>Start-location tests included</strong>
                 <span>Bounds · land access · mountain safety · duplicates · spacing · player count · city-state flags</span>
+                <strong>Scenario-city tests included</strong>
+                <span>Tile links · duplicate IDs · missing records · water and mountain placement</span>
               </div>
 
               <div className="repair-issue-list">
@@ -1368,7 +1403,7 @@ export function Civ5MapViewer() {
               </div>
 
               <div className="repair-actions">
-                <button type="button" disabled={!repairSelected.size} onClick={applySelectedRepairs}>Apply selected</button>
+                <button type="button" disabled={!repairSelected.size} onClick={applySelectedRepairs}>Apply selected ({repairSelected.size})</button>
                 <button className="repair-export" type="button" onClick={() => performCiv5MapExport(repairPreviewMap, true)}>Export repaired Civ5Map</button>
               </div>
             </div>
@@ -1384,6 +1419,25 @@ export function Civ5MapViewer() {
 
               {createView === "GENERATE" ? (
                 <>
+                  <details className="generation-history">
+                    <summary><span>Generation history</span><small>{generationHistory.length} / {MAX_GENERATION_HISTORY} saved</small></summary>
+                    <div className="generation-history-body">
+                      {generationHistory.length ? (
+                        <div className="generation-history-list">
+                          {generationHistory.map((entry) => {
+                            const options = entry.map.generation;
+                            const preset = options ? MAP_PRESETS.find((item) => item.id === options.preset)?.label ?? options.preset : "Generated map";
+                            return (
+                              <button key={entry.id} type="button" className={activeGenerationId === entry.id ? "is-active" : ""} onClick={() => openGeneration(entry)}>
+                                <span><strong>Generation {entry.id}</strong><small>{options ? `${options.style.toLowerCase()} · ${preset}` : preset}</small></span>
+                                <span><em>{entry.map.width} × {entry.map.height}</em><code>{options?.seed ?? "unknown seed"}</code></span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : <p>Generated maps will appear here. The newest 30 remain available for this session.</p>}
+                    </div>
+                  </details>
                   <div className="section-title"><h3>Core settings</h3><span>seeded</span></div>
                   <fieldset className="style-picker">
                     <legend>Baseline style</legend>
@@ -1460,6 +1514,8 @@ export function Civ5MapViewer() {
                           <option value="STANDARD">Standard proportions</option>
                           <option value="TALL">Very tall and narrow</option>
                           <option value="WIDE">Very thin and wide</option>
+                          <option value="NEEDLE">Needle — extreme vertical</option>
+                          <option value="RIBBON">Ribbon — extreme horizontal</option>
                           <option value="SQUARE">Perfectly square</option>
                         </select>
                         <small>{(() => { const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry); return `${dimensions.width} × ${dimensions.height} tiles`; })()}</small>
@@ -1712,7 +1768,79 @@ export function Civ5MapViewer() {
             <button className="fit-button" type="button" onClick={() => fitMap(size)}>Fit</button>
             <i aria-hidden="true" />
             <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" aria-pressed={projection === "ISOMETRIC"} title={projection === "ISOMETRIC" ? "Return to 2D view" : "Switch to 3D isometric view"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO 3D"}</button>
+            <i aria-hidden="true" />
+            <button className={`legend-button${showLegend ? " is-active" : ""}`} type="button" aria-expanded={showLegend} aria-controls="map-legend" aria-label={showLegend ? "Hide map legend" : "Show map legend"} onClick={() => setShowLegend((current) => !current)}>Legend</button>
           </div>
+
+          {showLegend && (
+            <aside id="map-legend" className="map-legend" aria-label="Map icon legend">
+              <header>
+                <div><span>Map key</span><h2>Legend</h2></div>
+                <button type="button" aria-label="Close map legend" onClick={() => setShowLegend(false)}>×</button>
+              </header>
+
+              <section>
+                <h3>Terrain color</h3>
+                <div className="legend-terrain-grid">
+                  {canvasMap.terrains.map((terrain, index) => (
+                    <div key={`${terrain}-${index}`}><i style={{ background: terrainColor(terrain) }} aria-hidden="true" /><span>{friendlyName(terrain, "TERRAIN_")}</span></div>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <h3>Relief and waterways</h3>
+                <div className="map-symbol-list">
+                  <div><i className="legend-icon icon-hill" aria-hidden="true">▲</i><span><strong>Hill</strong><small>Dark, low relief</small></span></div>
+                  <div><i className="legend-icon icon-mountain" aria-hidden="true">▲</i><span><strong>Mountain</strong><small>Pale or snow-capped peak</small></span></div>
+                  <div><i className="legend-icon icon-river" aria-hidden="true">≈</i><span><strong>River</strong><small>Blue line following hex edges</small></span></div>
+                </div>
+              </section>
+
+              <section>
+                <h3>Features</h3>
+                <div className="map-symbol-list compact-symbols">
+                  <div><i className="legend-icon icon-forest" aria-hidden="true">▲▲▲</i><span><strong>Forest</strong><small>Three dark trees</small></span></div>
+                  <div><i className="legend-icon icon-jungle" aria-hidden="true">●●●</i><span><strong>Jungle</strong><small>Clustered green canopy</small></span></div>
+                  <div><i className="legend-icon icon-marsh" aria-hidden="true">〽</i><span><strong>Marsh</strong><small>Dark reeds</small></span></div>
+                  <div><i className="legend-icon icon-ice" aria-hidden="true">◆</i><span><strong>Ice</strong><small>Pale angular field</small></span></div>
+                </div>
+              </section>
+
+              <section>
+                <h3>Map symbols</h3>
+                <div className="map-symbol-list">
+                  <div><i className="legend-icon icon-resource" aria-hidden="true"><b /></i><span><strong>Resource</strong><small>Dark badge with a type-colored center</small></span></div>
+                  <div><i className="legend-icon icon-wonder" aria-hidden="true">★</i><span><strong>Natural wonder</strong><small>Gold star</small></span></div>
+                  <div><i className="legend-icon icon-major-start" aria-hidden="true">1</i><span><strong>Major start</strong><small>Gold numbered marker</small></span></div>
+                  <div><i className="legend-icon icon-city-state" aria-hidden="true">CS</i><span><strong>City-state start</strong><small>Blue CS marker</small></span></div>
+                  <div><i className="legend-icon icon-camp" aria-hidden="true">×</i><span><strong>Barbarian camp</strong><small>Red crossed circle</small></span></div>
+                  <div><i className="legend-icon icon-ruin" aria-hidden="true">⌂</i><span><strong>Ancient ruin</strong><small>Pale hut</small></span></div>
+                </div>
+              </section>
+
+              {canvasMap.tiles.some((tile) => tile.resource !== 255) && (
+                <section>
+                  <h3>Resources on this map</h3>
+                  <div className="legend-resource-grid">
+                    {canvasMap.resources.map((resource, index) => canvasMap.tiles.some((tile) => tile.resource === index) ? (
+                      <div key={`${resource}-${index}`}><i style={{ background: resourceColor(resource) }} aria-hidden="true" /><span>{friendlyName(resource, "RESOURCE_")}</span></div>
+                    ) : null)}
+                  </div>
+                </section>
+              )}
+
+              <section>
+                <h3>Selection and repair</h3>
+                <div className="map-symbol-list">
+                  <div><i className="legend-icon icon-hover" aria-hidden="true" /><span><strong>Hovered tile</strong><small>Gold outline</small></span></div>
+                  <div><i className="legend-icon icon-selection" aria-hidden="true" /><span><strong>Editor selection</strong><small>Cyan fill and outline</small></span></div>
+                  <div><i className="legend-icon icon-repair" aria-hidden="true" /><span><strong>Repair finding</strong><small>Orange fill in Difference view</small></span></div>
+                  <div><i className="legend-icon icon-focus" aria-hidden="true" /><span><strong>Focused start</strong><small>Cyan ring in balance analysis</small></span></div>
+                </div>
+              </section>
+            </aside>
+          )}
 
           <div className="file-status" role="status">{message}</div>
 

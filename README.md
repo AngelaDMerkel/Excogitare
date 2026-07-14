@@ -32,4 +32,3 @@ Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/ter
 - Emulated API endpoints for Civ5 to read and generate maps based on the Lua
 - Modal popup with generation walkthough(?)
 - Add a political view based on work by [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage)
-- Map repair feature to repair broken maps 

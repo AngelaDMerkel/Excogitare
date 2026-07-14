@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
+import { generateRiverNetwork } from "./map-generator.ts";
 import {
   adjacentCoordinates,
   featurePlacementVerdict,
@@ -10,13 +11,17 @@ import {
 } from "./civ5-rules.ts";
 
 export type RepairProfile = "SAFE" | "STANDARD" | "COMPETITIVE";
-export type RepairCategory = "STRUCTURE" | "RESOURCES" | "FEATURES" | "WONDERS" | "RIVERS" | "STARTS" | "SCENARIO" | "VISUAL";
+export type RepairCategory = "STRUCTURE" | "RESOURCES" | "FEATURES" | "WONDERS" | "RIVERS" | "STARTS" | "CITIES" | "SCENARIO" | "VISUAL";
 export type RepairMutation =
   | { kind: "SET_TILE"; index: number; changes: Partial<Civ5Tile> }
   | { kind: "MOVE_RESOURCE"; from: number; to: number }
+  | { kind: "REMOVE_RESOURCE"; index: number }
   | { kind: "MOVE_WONDER"; from: number; to: number }
   | { kind: "MOVE_START"; startIndex: number; x: number; y: number }
   | { kind: "SET_START"; startIndex: number; changes: Partial<Civ5StartLocation> }
+  | { kind: "MOVE_CITY"; id: number; fromX: number; fromY: number; x: number; y: number }
+  | { kind: "REMOVE_CITY_LINK"; id: number; x: number; y: number }
+  | { kind: "SET_RIVER_NETWORK"; rivers: number[] }
   | { kind: "SET_PLAYERS"; players: number };
 
 export type RepairIssue = {
@@ -65,7 +70,109 @@ function riverNeighbor(map: Civ5Map, index: number, bit: number) {
   const ny = y + dy;
   if (map.wraps) nx = (nx + map.width) % map.width;
   if (nx < 0 || nx >= map.width || ny < 0 || ny >= map.height) return null;
+  if (Math.abs(nx - x) > 1) return null;
   return ny * map.width + nx;
+}
+
+type RepairRiverEdge = { a: string; b: string; tiles: [number, number] };
+
+function rebuildLogicalRivers(map: Civ5Map) {
+  const edges: RepairRiverEdge[] = [];
+  const adjacency = new Map<string, number[]>();
+  const vertexTiles = new Map<string, Set<number>>();
+  let invalidEdges = map.tiles.filter((tile) => Boolean(tile.river & ~7)).length;
+  const addVertexEdge = (vertex: string, edge: number) => adjacency.set(vertex, [...(adjacency.get(vertex) ?? []), edge]);
+  const addVertexTiles = (vertex: string, tiles: [number, number]) => {
+    const values = vertexTiles.get(vertex) ?? new Set<number>();
+    for (const tile of tiles) values.add(tile);
+    vertexTiles.set(vertex, values);
+  };
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const owner = y * map.width + x;
+      const centerX = x * 2 + (y & 1);
+      const centerY = y * 3;
+      const definitions = [
+        { bit: 1, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
+        { bit: 2, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
+        { bit: 4, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
+      ];
+      for (const definition of definitions) {
+        const enabled = Boolean(map.tiles[owner].river & definition.bit);
+        const neighbor = riverNeighbor(map, owner, definition.bit);
+        if (neighbor === null) {
+          if (enabled) invalidEdges += 1;
+          continue;
+        }
+        addVertexTiles(definition.a, [owner, neighbor]);
+        addVertexTiles(definition.b, [owner, neighbor]);
+        // Civ5 rivers occupy edges between two land plots. Their mouth is the
+        // endpoint where that land edge meets an ocean, coast, or lake plot.
+        // Keeping a river bit on a shoreline or open-water edge renders the
+        // channel in the water rather than terminating it.
+        if (isWaterTerrain(map, map.tiles[owner]) || isWaterTerrain(map, map.tiles[neighbor])) {
+          if (enabled) invalidEdges += 1;
+          continue;
+        }
+        if (!enabled) continue;
+        const edgeIndex = edges.length;
+        edges.push({ a: definition.a, b: definition.b, tiles: [owner, neighbor] });
+        addVertexEdge(definition.a, edgeIndex);
+        addVertexEdge(definition.b, edgeIndex);
+      }
+    }
+  }
+
+  const invalidComponents: string[] = [];
+  const visitedVertices = new Set<string>();
+  for (const origin of adjacency.keys()) {
+    if (visitedVertices.has(origin)) continue;
+    const queue = [origin];
+    const vertices: string[] = [];
+    const componentEdges = new Set<number>();
+    visitedVertices.add(origin);
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const vertex = queue[cursor];
+      vertices.push(vertex);
+      for (const edgeIndex of adjacency.get(vertex) ?? []) {
+        componentEdges.add(edgeIndex);
+        const edge = edges[edgeIndex];
+        const next = edge.a === vertex ? edge.b : edge.a;
+        if (visitedVertices.has(next)) continue;
+        visitedVertices.add(next);
+        queue.push(next);
+      }
+    }
+    const endpoints = vertices.filter((vertex) => (adjacency.get(vertex)?.length ?? 0) === 1);
+    const vertexTouches = (vertex: string, predicate: (tile: Civ5Tile) => boolean) => [...(vertexTiles.get(vertex) ?? [])].some((index) => predicate(map.tiles[index]));
+    const waterEndpoints = endpoints.filter((vertex) => vertexTouches(vertex, (tile) => isWaterTerrain(map, tile)));
+    const mountainEndpoints = endpoints.filter((vertex) => vertexTouches(vertex, (tile) => tile.elevation === 2 && !isWaterTerrain(map, tile)));
+    const deadEnds = endpoints.filter((vertex) => !waterEndpoints.includes(vertex) && !mountainEndpoints.includes(vertex));
+    const waterInsideChannel = vertices.some((vertex) => (adjacency.get(vertex)?.length ?? 0) > 1 && vertexTouches(vertex, (tile) => isWaterTerrain(map, tile)));
+    if (componentEdges.size < 3) invalidComponents.push("short fragment");
+    if (componentEdges.size !== vertices.length - 1) invalidComponents.push("loop or broken junction");
+    if (!mountainEndpoints.length) invalidComponents.push("no mountain headwater");
+    if (!waterEndpoints.length) invalidComponents.push("no ocean or lake outlet");
+    if (deadEnds.length) invalidComponents.push("inland dead end");
+    if (waterInsideChannel) invalidComponents.push("river continues through water");
+  }
+  if (!map.tiles.some((tile) => tile.river) || (!invalidEdges && !invalidComponents.length)) return null;
+
+  let seed = 2166136261;
+  for (const character of `${map.name}:${map.width}x${map.height}`) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const relief = map.tiles.map((tile) => tile.elevation * 0.42 + (isWaterTerrain(map, tile) ? -0.2 : 0.18));
+  const moisture = map.tiles.map((tile) => {
+    const terrain = map.terrains[tile.terrain] ?? "";
+    return terrain.includes("GRASS") ? 1 : terrain.includes("PLAINS") ? 0.68 : terrain.includes("TUNDRA") ? 0.42 : terrain.includes("DESERT") ? 0.12 : isWaterTerrain(map, tile) ? 1 : 0.5;
+  });
+  const waterMask = map.tiles.map((tile) => isWaterTerrain(map, tile));
+  const rivers = [...generateRiverNetwork(map.tiles, relief, moisture, map.width, map.height, map.wraps, "REALISTIC", "NORMAL", random, waterMask)];
+  const reasons = [...new Set([...(invalidEdges ? ["invalid edges"] : []), ...invalidComponents])];
+  return { rivers, reasons };
 }
 
 export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
@@ -98,9 +205,9 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
         severity: "ERROR",
         confidence: "CERTAIN",
         title: "Illegal resource placement",
-        detail: target === null ? `${resourceVerdict.reason} No safe relocation was found.` : `${resourceVerdict.reason} Move it to the nearest compatible empty tile.`,
+        detail: target === null ? `${resourceVerdict.reason} No legal destination exists, so delete the resource.` : `${resourceVerdict.reason} Move it to the nearest compatible empty tile.`,
         ...location,
-        mutation: target === null ? undefined : { kind: "MOVE_RESOURCE", from: index, to: target },
+        mutation: target === null ? { kind: "REMOVE_RESOURCE", index } : { kind: "MOVE_RESOURCE", from: index, to: target },
         minimumProfile: "STANDARD",
       });
     }
@@ -119,20 +226,15 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
     if (tile.resource !== 255 && tile.wonder !== 255 && resourceVerdict.valid) {
       const target = nearestValidTile(map, index, (candidate, candidateIndex) => candidate.resource === 255 && candidate.wonder === 255 && resourcePlacementVerdict(map, { ...candidate, resource: tile.resource }).valid && !reservedResources.has(candidateIndex), reservedResources);
       if (target !== null) reservedResources.add(target);
-      add({ id: `overlap-${index}`, category: "VISUAL", severity: "ERROR", confidence: "CERTAIN", title: "Wonder and resource overlap", detail: target === null ? "A natural wonder and resource occupy the same rendered tile; manual relocation is required." : "A natural wonder and resource occupy the same rendered tile; relocate the resource to the nearest legal tile.", ...location, mutation: target === null ? undefined : { kind: "MOVE_RESOURCE", from: index, to: target }, minimumProfile: "STANDARD" });
+      add({ id: `overlap-${index}`, category: "VISUAL", severity: "ERROR", confidence: "CERTAIN", title: "Wonder and resource overlap", detail: target === null ? "A natural wonder and resource occupy the same rendered tile; no legal destination exists, so delete the resource." : "A natural wonder and resource occupy the same rendered tile; relocate the resource to the nearest legal tile.", ...location, mutation: target === null ? { kind: "REMOVE_RESOURCE", index } : { kind: "MOVE_RESOURCE", from: index, to: target }, minimumProfile: "STANDARD" });
     }
+  }
 
-    let repairedRiver = tile.river & 7;
-    for (const bit of [1, 2, 4]) {
-      if (!(repairedRiver & bit)) continue;
-      const neighbor = riverNeighbor(map, index, bit);
-      if (neighbor === null || (isWaterTerrain(map, tile) && isWaterTerrain(map, map.tiles[neighbor]))) repairedRiver &= ~bit;
-    }
-    if (repairedRiver !== tile.river) {
-      add({ id: `river-mask-${index}`, category: "RIVERS", severity: "ERROR", confidence: "CERTAIN", title: "Invalid river edge", detail: "Remove unsupported or all-water river edges while preserving valid edges on this tile.", ...location, mutation: { kind: "SET_TILE", index, changes: { river: repairedRiver } }, minimumProfile: "SAFE" });
-    } else if (repairedRiver && !adjacentCoordinates(location.x, location.y, map.width, map.height, map.wraps).some(([x, y]) => map.tiles[y * map.width + x].river & 7)) {
-      add({ id: `river-fragment-${index}`, category: "RIVERS", severity: "WARNING", confidence: "HIGH", title: "Disconnected river fragment", detail: "This isolated segment cannot form a continuous visible river; remove it.", ...location, mutation: { kind: "SET_TILE", index, changes: { river: 0 } }, minimumProfile: "STANDARD" });
-    }
+  const riverRepair = rebuildLogicalRivers(map);
+  if (riverRepair) {
+    const firstRiver = map.tiles.findIndex((tile) => tile.river !== 0);
+    const replacementCount = riverRepair.rivers.filter(Boolean).length;
+    add({ id: "river-network", category: "RIVERS", severity: "ERROR", confidence: "HIGH", title: "Illogical river network", detail: `${riverRepair.reasons.join(", ")}. Rebuild the river system as continuous mountain-to-ocean-or-lake drainage with no water-edge segments${replacementCount ? "." : "; no viable route exists, so remove the broken rivers."}`, ...(firstRiver >= 0 ? tileLocation(map, firstRiver) : {}), mutation: { kind: "SET_RIVER_NETWORK", rivers: riverRepair.rivers }, minimumProfile: "STANDARD" });
   }
 
   const passableComponents: Array<Set<number>> = [];
@@ -158,6 +260,28 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
   }
   passableComponents.sort((one, two) => two.size - one.size);
   const largestPassableComponent = passableComponents[0] ?? new Set<number>();
+
+  const reservedCities = new Set((map.cities ?? []).flatMap((city) => city.x >= 0 && city.y >= 0 && city.x < map.width && city.y < map.height ? [city.y * map.width + city.x] : []));
+  for (const city of map.cities ?? []) {
+    const inBounds = city.x >= 0 && city.y >= 0 && city.x < map.width && city.y < map.height;
+    const index = inBounds ? city.y * map.width + city.x : undefined;
+    if (!city.recordValid || city.duplicate) {
+      add({ id: `city-link-${city.id}-${city.x}-${city.y}`, category: "CITIES", severity: "ERROR", confidence: "CERTAIN", title: city.duplicate ? "Duplicate city tile link" : "City tile has no scenario record", detail: "Remove the invalid city reference from the tile improvement data.", x: inBounds ? city.x : undefined, y: inBounds ? city.y : undefined, tileIndex: index, mutation: inBounds ? { kind: "REMOVE_CITY_LINK", id: city.id, x: city.x, y: city.y } : undefined, minimumProfile: "SAFE" });
+      continue;
+    }
+    if (!inBounds) {
+      add({ id: `city-unplaced-${city.id}`, category: "CITIES", severity: "WARNING", confidence: "REVIEW", title: "City record has no map tile", detail: `${city.name || `City ${city.id}`} exists in scenario data but is not linked to a tile; manual review is required.`, minimumProfile: "COMPETITIVE" });
+      continue;
+    }
+    if (!isPassableLand(map, map.tiles[index!])) {
+      reservedCities.delete(index!);
+      const target = nearestValidTile(map, index!, (tile, candidateIndex) => isPassableLand(map, tile) && tile.wonder === 255 && !reservedCities.has(candidateIndex), reservedCities);
+      reservedCities.add(index!);
+      if (target !== null) reservedCities.add(target);
+      add({ id: `city-placement-${city.id}`, category: "CITIES", severity: "ERROR", confidence: "CERTAIN", title: "City on impassable terrain", detail: target === null ? `${city.name || `City ${city.id}`} is on water or a mountain and needs manual relocation.` : `Move ${city.name || `City ${city.id}`} from water or mountain terrain to the nearest passable tile.`, x: city.x, y: city.y, tileIndex: index, mutation: target === null ? undefined : { kind: "MOVE_CITY", id: city.id, fromX: city.x, fromY: city.y, x: target % map.width, y: Math.floor(target / map.width) }, minimumProfile: "SAFE" });
+    }
+  }
+
   const occupiedStarts = new Set<number>();
   for (let startIndex = 0; startIndex < map.startLocations.length; startIndex += 1) {
     const start = map.startLocations[startIndex];
@@ -198,7 +322,7 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
 }
 
 export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedIds: ReadonlySet<string>) {
-  const result: Civ5Map = { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })) };
+  const result: Civ5Map = { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })) };
   for (const issue of issues) {
     if (!selectedIds.has(issue.id) || !issue.mutation) continue;
     const mutation = issue.mutation;
@@ -210,16 +334,26 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
       target.resourceAmount = source.resourceAmount;
       source.resource = 255;
       source.resourceAmount = 0;
+    } else if (mutation.kind === "REMOVE_RESOURCE") {
+      result.tiles[mutation.index].resource = 255;
+      result.tiles[mutation.index].resourceAmount = 0;
     } else if (mutation.kind === "MOVE_WONDER") {
       result.tiles[mutation.to].wonder = result.tiles[mutation.from].wonder;
       result.tiles[mutation.from].wonder = 255;
     } else if (mutation.kind === "MOVE_START") Object.assign(result.startLocations[mutation.startIndex], { x: mutation.x, y: mutation.y });
     else if (mutation.kind === "SET_START") Object.assign(result.startLocations[mutation.startIndex], mutation.changes);
-    else if (mutation.kind === "SET_PLAYERS") result.players = mutation.players;
+    else if (mutation.kind === "MOVE_CITY") {
+      const city = result.cities?.find((candidate) => candidate.id === mutation.id && candidate.x === mutation.fromX && candidate.y === mutation.fromY);
+      if (city) Object.assign(city, { x: mutation.x, y: mutation.y });
+    } else if (mutation.kind === "REMOVE_CITY_LINK") {
+      result.cities = result.cities?.filter((city) => city.id !== mutation.id || city.x !== mutation.x || city.y !== mutation.y);
+    } else if (mutation.kind === "SET_RIVER_NETWORK") {
+      for (let index = 0; index < result.tiles.length; index += 1) result.tiles[index].river = mutation.rivers[index] ?? 0;
+    } else if (mutation.kind === "SET_PLAYERS") result.players = mutation.players;
   }
   return result;
 }
 
 export function cloneMap(map: Civ5Map) {
-  return { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })) };
+  return { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })) };
 }
