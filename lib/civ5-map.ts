@@ -7,7 +7,9 @@ export type Civ5Tile = {
   continent: number;
   wonder: number;
   resourceAmount: number;
-  improvement?: "IMPROVEMENT_BARBARIAN_CAMP" | "IMPROVEMENT_GOODY_HUT";
+  improvement?: "IMPROVEMENT_BARBARIAN_CAMP" | "IMPROVEMENT_GOODY_HUT" | "IMPROVEMENT_CITY_RUINS";
+  route?: "ROUTE_ROAD" | "ROUTE_RAILROAD";
+  owner?: number;
 };
 
 export type Civ5StartLocation = {
@@ -19,6 +21,7 @@ export type Civ5StartLocation = {
   team: number;
   playable: boolean;
   cityState: boolean;
+  teamColor?: string;
 };
 
 export type Civ5City = {
@@ -262,6 +265,7 @@ function parseStartLocations(
       player,
       leader: cleanText(bytes.subarray(recordOffset + 32, recordOffset + 96)),
       civilization: cleanText(bytes.subarray(recordOffset + 160, recordOffset + 224)),
+      teamColor: cleanText(bytes.subarray(recordOffset + 224, recordOffset + 288)),
       team: view.getUint8(recordOffset + 432),
       playable: Boolean(view.getUint8(recordOffset + 433)),
       cityState: player >= playerCount,
@@ -269,6 +273,29 @@ function parseStartLocations(
   }
 
   return startLocations;
+}
+
+function parseScenarioTileMetadata(
+  view: DataView,
+  bytes: Uint8Array,
+  scenarioOffset: number,
+  width: number,
+  height: number,
+  tiles: Civ5Tile[],
+) {
+  if (scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE > bytes.byteLength) return;
+  const improvementDataSize = width * height * TILE_SIZE;
+  const improvementOffset = bytes.byteLength - improvementDataSize;
+  if (improvementOffset < scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE) return;
+
+  for (let index = 0; index < tiles.length; index += 1) {
+    const offset = improvementOffset + index * TILE_SIZE;
+    const owner = view.getUint8(offset + 4);
+    const route = view.getUint8(offset + 6);
+    if (owner !== 0xff) tiles[index].owner = owner;
+    if (route === 0) tiles[index].route = "ROUTE_ROAD";
+    if (route === 1) tiles[index].route = "ROUTE_RAILROAD";
+  }
 }
 
 function parseCities(
@@ -408,6 +435,7 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     offset += TILE_SIZE;
   }
 
+  parseScenarioTileMetadata(view, bytes, offset, width, height, tiles);
   const startLocations = parseStartLocations(view, bytes, offset, width, height);
   const cities = parseCities(view, bytes, offset, width, height, version);
 

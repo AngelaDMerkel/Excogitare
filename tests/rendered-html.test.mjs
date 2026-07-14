@@ -49,8 +49,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /context\.drawImage\(renderCanvas, 0, 0\)/);
   assert.match(source, /transparentBackground = false/);
   assert.match(source, /getContext\("2d", \{ alpha: true \}\)/);
-  assert.match(source, /repairHighlights, true\)/);
+  assert.match(source, /repairHighlights, politicalOwnership, true\)/);
   assert.match(source, /exported with transparent background/);
+  assert.match(source, /const baseName = mapExportBaseName\(targetMap\)/);
+  assert.doesNotMatch(source, /sourceFile\?\.fileName\.replace\(\/\\\.civ5map/);
   assert.match(source, /\[4, 5, 1\]/);
   assert.match(source, /\[3, 4, 2\]/);
   assert.match(source, /\[2, 3, 4\]/);
@@ -76,6 +78,9 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Region/);
   assert.match(source, /Barbarians/);
   assert.match(source, /Ancient ruins/);
+  assert.match(source, /Abandoned road/);
+  assert.match(source, /Ruined city/);
+  assert.match(source, /Fallout/);
   assert.match(source, /<span>Wrap type<\/span>/);
   assert.match(source, /<span>Geometry<\/span>/);
   assert.match(source, /Needle — extreme vertical/);
@@ -88,8 +93,16 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /closestIsometricTile/);
   assert.match(source, /ISO 3D/);
   assert.match(source, /aria-controls="map-legend"/);
+  assert.match(source, /<strong>Political<\/strong>/);
+  assert.match(source, /Scenario territories and borders/);
+  assert.match(source, /buildPoliticalOwnership/);
+  assert.match(source, /drawPoliticalBorders/);
+  assert.match(source, /drawPoliticalCities/);
   assert.match(source, /Resources on this map/);
   assert.match(source, /Repair finding/);
   assert.doesNotMatch(source, /canvas\.width = Math\.round\(size\.width \* pixelRatio\)/);
   assert.doesNotMatch(source, /canvas\.height = Math\.round\(size\.height \* pixelRatio\)/);
+  assert.match(source, /\[canvasMap\.width, canvasMap\.height, projection\]/);
+  assert.match(source, /\}, \[size, fitMap\]\);/);
+  assert.doesNotMatch(source, /\}, \[canvasMap, size, fitMap\]\);/);
 });

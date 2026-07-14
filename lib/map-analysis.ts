@@ -99,12 +99,14 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
   let invalidRiverBits = 0;
   let isolatedRivers = 0;
   let previewSites = 0;
+  let previewRoutes = 0;
   for (let index = 0; index < map.tiles.length; index += 1) {
     const tile = map.tiles[index];
     if (tile.resource !== 255 && (tile.resource < 0 || tile.resource >= map.resources.length)) invalidResources += 1;
     if (tile.wonder !== 255 && (tile.wonder < 0 || tile.wonder >= map.wonders.length)) invalidWonders += 1;
     if (tile.river & ~7) invalidRiverBits += 1;
     if (tile.improvement) previewSites += 1;
+    if (tile.route) previewRoutes += 1;
     if (tile.river & 7) {
       const x = index % map.width;
       const y = Math.floor(index / map.width);
@@ -115,7 +117,7 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
   if (invalidWonders) issues.push({ severity: "ERROR", category: "RESOURCES", message: `${invalidWonders} tiles reference missing wonder definitions.` });
   if (invalidRiverBits) issues.push({ severity: "ERROR", category: "RIVERS", message: `${invalidRiverBits} tiles contain unsupported river-edge flags.` });
   if (isolatedRivers) issues.push({ severity: "WARNING", category: "RIVERS", message: `${isolatedRivers} river tiles appear disconnected and should be inspected.` });
-  if (previewSites) issues.push({ severity: "WARNING", category: "SCENARIO", message: `${previewSites} barbarian camps or ruins are previewed; geography-only Civ5Map export does not retain scenario improvements.` });
+  if (previewSites || previewRoutes) issues.push({ severity: "WARNING", category: "SCENARIO", message: `${previewSites} scenario sites and ${previewRoutes} road tiles are previewed; geography-only Civ5Map export does not retain scenario improvements or routes.` });
   if (!issues.length) issues.push({ severity: "INFO", category: "STRUCTURE", message: "No structural Civ5Map problems were detected." });
   return issues;
 }

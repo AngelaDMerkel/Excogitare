@@ -532,6 +532,8 @@ button { color: inherit; }
 .icon-jungle { color: #2c8a59; font-size: 8px; letter-spacing: -1px; }
 .icon-marsh { color: #477c65; font-family: Georgia, serif; font-size: 19px; }
 .icon-ice { color: #deeeee; font-size: 16px; }
+.icon-fallout { color: #9ebc5d; font-size: 16px; }
+.icon-political { width: 24px; height: 18px; justify-self: center; border: 2px solid #5a3038; border-radius: 2px; background: #b7648b; box-shadow: 0 0 0 1px rgba(8, 20, 22, .8); }
 .icon-resource { position: relative; }
 .icon-resource::before { content: ""; width: 15px; height: 15px; border-radius: 50%; background: #14282a; }
 .icon-resource b { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #e8bd63; }
@@ -542,6 +544,8 @@ button { color: inherit; }
 .icon-city-state { background: #7cb5c3; font-size: 7px; }
 .icon-camp { width: 17px; height: 17px; justify-self: center; border: 2px solid #d28468; border-radius: 50%; background: #4c2721; color: #d28468; font-size: 14px; }
 .icon-ruin { color: #d8c08a; font-size: 19px; text-shadow: 0 2px 0 #4d493a; }
+.icon-road { color: #b59767; font-size: 22px; text-shadow: 0 2px 0 #251f1b; }
+.icon-city-ruin { color: #b09d79; font-size: 19px; text-shadow: 2px 2px 0 #464139; }
 .icon-hover,
 .icon-selection,
 .icon-repair { width: 25px; height: 22px; justify-self: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }

@@ -309,10 +309,15 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
   }
 
   const starts = map.startLocations.filter((start) => !start.cityState);
-  for (let one = 0; one < starts.length; one += 1) {
-    for (let two = one + 1; two < starts.length; two += 1) {
-      const distance = hexDistance([starts[one].x, starts[one].y], [starts[two].x, starts[two].y], map.width, map.wraps);
-      if (distance < 4) add({ id: `start-spacing-${one}-${two}`, category: "STARTS", severity: "WARNING", confidence: "REVIEW", title: "Major starts are very close", detail: `Players ${starts[one].player + 1} and ${starts[two].player + 1} are only ${distance} hexes apart. Competitive repair recommends manual review.`, x: starts[two].x, y: starts[two].y, tileIndex: starts[two].y * map.width + starts[two].x, minimumProfile: "COMPETITIVE" });
+  // Create's balance tools already explain deliberate close-start scenarios on
+  // extreme geometry maps. Repair reserves this imported-map advisory for
+  // foreign files while retaining all hard correctness checks for every map.
+  if (map.source !== "generated") {
+    for (let one = 0; one < starts.length; one += 1) {
+      for (let two = one + 1; two < starts.length; two += 1) {
+        const distance = hexDistance([starts[one].x, starts[one].y], [starts[two].x, starts[two].y], map.width, map.wraps);
+        if (distance < 4) add({ id: `start-spacing-${one}-${two}`, category: "STARTS", severity: "WARNING", confidence: "REVIEW", title: "Major starts are very close", detail: `Players ${starts[one].player + 1} and ${starts[two].player + 1} are only ${distance} hexes apart. Competitive repair recommends manual review.`, x: starts[two].x, y: starts[two].y, tileIndex: starts[two].y * map.width + starts[two].x, minimumProfile: "COMPETITIVE" });
+      }
     }
   }
   if (starts.length !== map.players) add({ id: "player-count", category: "SCENARIO", severity: "WARNING", confidence: "CERTAIN", title: "Player count mismatch", detail: `Set the header player count from ${map.players} to ${starts.length}.`, mutation: { kind: "SET_PLAYERS", players: starts.length }, minimumProfile: "SAFE" });

@@ -45,6 +45,7 @@ import {
   type LuaCompatibilityReport,
 } from "@/lib/map-script";
 import { runLuaMapScript } from "@/lib/lua-runtime";
+import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "@/lib/political-map";
 
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
@@ -54,7 +55,7 @@ const APP_VERSION = "0.4.8";
 
 type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
-type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
+type Layers = { political: boolean; grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer; salvaged?: boolean };
 type WorkspaceMode = "VIEW" | "CREATE" | "REPAIR" | "SCRIPT";
@@ -94,15 +95,15 @@ function shade(hex: string, amount: number) {
   return `rgb(${red}, ${green}, ${blue})`;
 }
 
-function mapBounds(map: Civ5Map) {
+function mapBounds(width: number, height: number) {
   return {
-    width: HEX_WIDTH * (map.width + 0.5) + MAP_MARGIN * 2,
-    height: HEX_RADIUS * 1.5 * (map.height - 1) + HEX_RADIUS * 2 + MAP_MARGIN * 2,
+    width: HEX_WIDTH * (width + 0.5) + MAP_MARGIN * 2,
+    height: HEX_RADIUS * 1.5 * (height - 1) + HEX_RADIUS * 2 + MAP_MARGIN * 2,
   };
 }
 
-function projectionTransform(map: Civ5Map, projection: Projection): ProjectionTransform {
-  const bounds = mapBounds(map);
+function projectionTransform(width: number, height: number, projection: Projection): ProjectionTransform {
+  const bounds = mapBounds(width, height);
   if (projection === "FLAT") return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, ...bounds };
   const base = { a: 0.86, b: 0.25, c: -0.52, d: 0.38 };
   const corners = [
@@ -289,6 +290,27 @@ function drawFeature(context: CanvasRenderingContext2D, name: string, x: number,
     context.lineTo(x + 12, y + 6);
     context.closePath();
     context.fill();
+  } else if (name.includes("FALLOUT")) {
+    context.fillStyle = "rgba(109, 126, 55, .42)";
+    context.strokeStyle = "rgba(179, 202, 93, .9)";
+    context.lineWidth = 1.4;
+    context.beginPath();
+    context.arc(x, y, 8, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = "rgba(37, 48, 28, .9)";
+    for (let part = 0; part < 3; part += 1) {
+      const angle = -Math.PI / 2 + part * Math.PI * 2 / 3;
+      context.beginPath();
+      context.moveTo(x + Math.cos(angle) * 2, y + Math.sin(angle) * 2);
+      context.lineTo(x + Math.cos(angle - 0.38) * 7, y + Math.sin(angle - 0.38) * 7);
+      context.lineTo(x + Math.cos(angle + 0.38) * 7, y + Math.sin(angle + 0.38) * 7);
+      context.closePath();
+      context.fill();
+    }
+    context.beginPath();
+    context.arc(x, y, 1.7, 0, Math.PI * 2);
+    context.fill();
   }
   context.restore();
 }
@@ -343,7 +365,71 @@ function drawMapContent(context: CanvasRenderingContext2D, tile: Civ5Tile, x: nu
     context.fill();
     context.stroke();
     context.restore();
+  } else if (tile.improvement === "IMPROVEMENT_CITY_RUINS") {
+    context.save();
+    context.fillStyle = "rgba(70, 65, 57, .96)";
+    context.strokeStyle = "#b09d79";
+    context.lineWidth = 1.35;
+    context.fillRect(x - 8, y - 2, 6, 8);
+    context.strokeRect(x - 8, y - 2, 6, 8);
+    context.fillRect(x + 1, y - 7, 7, 13);
+    context.strokeRect(x + 1, y - 7, 7, 13);
+    context.beginPath();
+    context.moveTo(x - 9, y - 2);
+    context.lineTo(x - 5, y - 7);
+    context.lineTo(x - 1, y - 2);
+    context.moveTo(x, y - 7);
+    context.lineTo(x + 4, y - 11);
+    context.lineTo(x + 9, y - 7);
+    context.stroke();
+    context.restore();
   }
+}
+
+function drawRoad(
+  context: CanvasRenderingContext2D,
+  map: Civ5Map,
+  col: number,
+  row: number,
+  center: { x: number; y: number },
+  showElevation: boolean,
+  projection: ProjectionTransform,
+) {
+  const sourceRow = map.height - 1 - row;
+  const offsets = sourceRow % 2 === 0
+    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
+  const connections: Array<{ x: number; y: number }> = [];
+  for (const [dx, dy] of offsets) {
+    let nextX = col + dx;
+    const nextY = sourceRow + dy;
+    if (map.wraps) nextX = (nextX + map.width) % map.width;
+    if (nextX < 0 || nextX >= map.width || nextY < 0 || nextY >= map.height || Math.abs(nextX - col) > 1) continue;
+    const nextTile = map.tiles[nextY * map.width + nextX];
+    if (!nextTile?.route) continue;
+    const nextDisplayRow = map.height - 1 - nextY;
+    const base = tileCenter(nextX, nextDisplayRow, nextY);
+    const isometric = projection.b !== 0;
+    connections.push(liftPoint(base.x, base.y, tileReliefHeight(nextTile, showElevation, isometric), projection));
+  }
+  context.save();
+  context.lineCap = "round";
+  for (const pass of [{ color: "rgba(37, 31, 27, .78)", width: 5.2 }, { color: "rgba(181, 151, 103, .9)", width: 2.3 }]) {
+    context.strokeStyle = pass.color;
+    context.lineWidth = pass.width;
+    context.beginPath();
+    if (!connections.length) {
+      context.moveTo(center.x - 7, center.y + 2);
+      context.lineTo(center.x + 7, center.y - 2);
+    } else {
+      for (const next of connections) {
+        context.moveTo(center.x, center.y);
+        context.lineTo((center.x + next.x) / 2, (center.y + next.y) / 2);
+      }
+    }
+    context.stroke();
+  }
+  context.restore();
 }
 
 function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, y: number) {
@@ -419,6 +505,100 @@ function drawStartLocations(
   context.restore();
 }
 
+function drawPoliticalBorders(
+  context: CanvasRenderingContext2D,
+  map: Civ5Map,
+  col: number,
+  sourceRow: number,
+  center: { x: number; y: number },
+  owner: number,
+  ownership: Int16Array,
+) {
+  if (owner < 0) return;
+  const offsets = sourceRow % 2 === 0
+    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
+  const points = hexPoints(center.x, center.y);
+  const border = politicalColors(map, owner).border;
+  const edges: Array<[number, number]> = [];
+
+  for (const [dx, dy] of offsets) {
+    let nextX = col + dx;
+    const nextY = sourceRow + dy;
+    if (map.wraps) nextX = (nextX + map.width) % map.width;
+    const inBounds = nextX >= 0 && nextX < map.width && nextY >= 0 && nextY < map.height && Math.abs(nextX - col) <= 1;
+    if (inBounds && ownership[nextY * map.width + nextX] === owner) continue;
+
+    const nextDisplayRow = map.height - 1 - nextY;
+    const neighborCenter = tileCenter(col + dx, nextDisplayRow, nextY);
+    const directionX = neighborCenter.x - tileCenter(col, map.height - 1 - sourceRow, sourceRow).x;
+    const directionY = neighborCenter.y - tileCenter(col, map.height - 1 - sourceRow, sourceRow).y;
+    let bestEdge: [number, number] = [0, 1];
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < 6; index += 1) {
+      const next = (index + 1) % 6;
+      const middleX = (points[index].x + points[next].x) / 2 - center.x;
+      const middleY = (points[index].y + points[next].y) / 2 - center.y;
+      const score = middleX * directionX + middleY * directionY;
+      if (score > bestScore) {
+        bestScore = score;
+        bestEdge = [index, next];
+      }
+    }
+    if (!edges.some(([one, two]) => one === bestEdge[0] && two === bestEdge[1])) edges.push(bestEdge);
+  }
+
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  for (const pass of [{ color: "rgba(9, 20, 22, .82)", width: 4.8 }, { color: border, width: 2.3 }]) {
+    context.strokeStyle = pass.color;
+    context.lineWidth = pass.width;
+    context.beginPath();
+    for (const [one, two] of edges) {
+      context.moveTo(points[one].x, points[one].y);
+      context.lineTo(points[two].x, points[two].y);
+    }
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawPoliticalCities(
+  context: CanvasRenderingContext2D,
+  map: Civ5Map,
+  ownership: Int16Array,
+  showElevation: boolean,
+  projection: ProjectionTransform,
+) {
+  if (!map.cities?.length) return;
+  const isometric = projection.b !== 0;
+  context.save();
+  context.textAlign = "center";
+  context.textBaseline = "bottom";
+  for (const city of map.cities) {
+    if (city.x < 0 || city.y < 0 || city.x >= map.width || city.y >= map.height) continue;
+    const tileIndex = city.y * map.width + city.x;
+    const owner = city.owner === 255 ? ownership[tileIndex] : city.owner;
+    const colors = politicalColors(map, owner);
+    const displayRow = map.height - 1 - city.y;
+    const base = tileCenter(city.x, displayRow, city.y);
+    const center = liftPoint(base.x, base.y, tileReliefHeight(map.tiles[tileIndex], showElevation, isometric) + (isometric ? 5 : 0), projection);
+    context.fillStyle = colors.city;
+    context.strokeStyle = "rgba(8, 20, 22, .92)";
+    context.lineWidth = 1.8;
+    context.fillRect(center.x - 5, center.y - 5, 10, 10);
+    context.strokeRect(center.x - 5, center.y - 5, 10, 10);
+    context.font = '700 7px "Geist Mono", monospace';
+    context.lineWidth = 2.8;
+    context.strokeStyle = "rgba(8, 20, 22, .9)";
+    context.strokeText(city.name, center.x, center.y - 8);
+    context.fillStyle = "#edf0e9";
+    context.fillText(city.name, center.x, center.y - 8);
+  }
+  context.restore();
+}
+
 function drawMap(
   context: CanvasRenderingContext2D,
   map: Civ5Map,
@@ -431,6 +611,7 @@ function drawMap(
   selection: TileSelection | null,
   focusedStart: Civ5StartLocation | null,
   highlightedRepairs: ReadonlySet<number>,
+  politicalOwnership: Int16Array,
   transparentBackground = false,
 ) {
   let paintedTiles = 0;
@@ -470,7 +651,12 @@ function drawMap(
       const screenY = view.y + projected.y * view.zoom;
       if (screenX < -70 || screenY < -70 || screenX > size.width + 70 || screenY > size.height + 70) continue;
 
-      const base = terrainColor(map.terrains[tile.terrain]);
+      const sourceY = map.height - 1 - row;
+      const sourceIndex = sourceY * map.width + col;
+      const terrainName = map.terrains[tile.terrain] ?? "";
+      const isWater = terrainName.includes("OCEAN") || terrainName.includes("COAST");
+      const owner = layers.political ? politicalOwnership[sourceIndex] : -1;
+      const base = owner >= 0 && !isWater ? politicalColors(map, owner).fill : terrainColor(terrainName);
       const reliefHeight = tileReliefHeight(tile, layers.elevation, isometric);
       if (reliefHeight) drawIsometricSidewalls(context, baseCenter, center, base, projection);
       context.fillStyle = isometric && reliefHeight
@@ -486,6 +672,7 @@ function drawMap(
         context.stroke();
       }
 
+      if (layers.features && tile.route) drawRoad(context, map, col, row, center, layers.elevation, projection);
       if (layers.features && tile.feature !== 255) {
         drawFeature(context, map.features[tile.feature] ?? "", center.x, center.y);
       }
@@ -518,13 +705,14 @@ function drawMap(
         context.fill();
       }
 
+      if (layers.political && owner >= 0) drawPoliticalBorders(context, map, col, sourceY, center, owner, politicalOwnership);
+
       if (hovered?.col === col && hovered.row === row) {
         hexPath(context, center.x, center.y);
         context.strokeStyle = "#f1d183";
         context.lineWidth = 2.8 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
-      const sourceY = map.height - 1 - row;
       if (selection && col >= selection.minX && col <= selection.maxX && sourceY >= selection.minY && sourceY <= selection.maxY) {
         hexPath(context, center.x, center.y);
         context.fillStyle = "rgba(94, 198, 205, .18)";
@@ -533,7 +721,6 @@ function drawMap(
         context.lineWidth = 1.6 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
-      const sourceIndex = sourceY * map.width + col;
       if (highlightedRepairs.has(sourceIndex)) {
         hexPath(context, center.x, center.y);
         context.fillStyle = "rgba(222, 119, 78, .34)";
@@ -543,6 +730,7 @@ function drawMap(
         context.stroke();
       }
   }
+  if (layers.political) drawPoliticalCities(context, map, politicalOwnership, layers.elevation, projection);
   if ((layers.starts || layers.cityStates) && map.startLocations.length) {
     drawStartLocations(context, map, view, layers.starts, layers.cityStates, layers.elevation, projection);
   }
@@ -693,7 +881,7 @@ export function Civ5MapViewer() {
   const [luaFileName, setLuaFileName] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
-  const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
+  const [layers, setLayers] = useState<Layers>({ political: false, grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
   const [showLegend, setShowLegend] = useState(false);
   const [projection, setProjection] = useState<Projection>("FLAT");
   const [hovered, setHovered] = useState<HoveredTile>(null);
@@ -754,6 +942,9 @@ export function Civ5MapViewer() {
   const repairHighlights = useMemo(() => mode === "REPAIR" && repairView === "DIFFERENCE"
     ? new Set(repairIssues.filter((issue) => repairSelected.has(issue.id) && issue.tileIndex !== undefined).map((issue) => issue.tileIndex!))
     : new Set<number>(), [mode, repairView, repairIssues, repairSelected]);
+  const politicalAvailable = hasPoliticalLayer(canvasMap);
+  const politicalOwnership = useMemo(() => buildPoliticalOwnership(canvasMap), [canvasMap]);
+  const hasScenarioOwnership = canvasMap.tiles.some((tile) => tile.owner !== undefined);
 
   const undo = () => {
     const previous = pastMaps.at(-1);
@@ -775,7 +966,12 @@ export function Civ5MapViewer() {
     if (mode === "REPAIR") beginRepair(next, repairDiagnostics);
   };
 
-  const mapProjection = useMemo(() => projectionTransform(canvasMap, projection), [canvasMap, projection]);
+  // Map edits replace the map object, but they do not change viewport geometry.
+  // Keep this memo stable across content-only edits so zoom and pan survive redraws.
+  const mapProjection = useMemo(
+    () => projectionTransform(canvasMap.width, canvasMap.height, projection),
+    [canvasMap.width, canvasMap.height, projection],
+  );
   const bounds = useMemo(() => ({ width: mapProjection.width, height: mapProjection.height }), [mapProjection]);
   const fitMap = useCallback((targetSize: Size, targetBounds = bounds) => {
     const zoom = Math.max(0.16, Math.min(1.7, Math.min((targetSize.width - 44) / targetBounds.width, (targetSize.height - 44) / targetBounds.height)));
@@ -796,7 +992,7 @@ export function Civ5MapViewer() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => fitMap(size));
     return () => window.cancelAnimationFrame(frame);
-  }, [canvasMap, size, fitMap]);
+  }, [size, fitMap]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -824,14 +1020,14 @@ export function Civ5MapViewer() {
     // Complete the next frame away from the visible canvas. If a transient
     // layout state culls every tile, retain the last valid map frame instead
     // of replacing it with the blue canvas background.
-    const paintedTiles = drawMap(renderContext, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights);
+    const paintedTiles = drawMap(renderContext, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights, politicalOwnership);
     if (canvasMap.tiles.length && paintedTiles === 0) return;
     context.save();
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.globalCompositeOperation = "copy";
     context.drawImage(renderCanvas, 0, 0);
     context.restore();
-  }, [canvasMap, layers, hovered, view, size, mapProjection, selection, focusedStart, repairHighlights]);
+  }, [canvasMap, layers, hovered, view, size, mapProjection, selection, focusedStart, repairHighlights, politicalOwnership]);
 
   const terrainBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
@@ -865,6 +1061,7 @@ export function Civ5MapViewer() {
   const majorStartCount = map.startLocations.filter((start) => !start.cityState).length;
   const cityStateCount = map.startLocations.filter((start) => start.cityState).length;
   const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled
+    && (key !== "political" || politicalAvailable)
     && (key !== "starts" || majorStartCount > 0)
     && (key !== "cityStates" || cityStateCount > 0)).length;
 
@@ -1061,8 +1258,8 @@ export function Civ5MapViewer() {
     exportCanvas.height = Math.round(size.height * pixelRatio);
     const context = exportCanvas.getContext("2d", { alpha: true });
     if (!context) return;
-    drawMap(context, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights, true);
-    const fileName = `${canvasMap.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "civ5-map"}.png`;
+    drawMap(context, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights, politicalOwnership, true);
+    const fileName = `${mapExportBaseName(canvasMap)}.png`;
     exportCanvas.toBlob((blob) => {
       if (!blob) return;
       download(blob, fileName, "image/png");
@@ -1099,8 +1296,8 @@ export function Civ5MapViewer() {
   const performCiv5MapExport = (targetMap = map, repaired = false) => {
     try {
       const exported = sourceFile && !sourceFile.salvaged ? updateCiv5Map(sourceFile.buffer, targetMap) : serializeCiv5Map(targetMap);
-      const baseName = sourceFile?.fileName.replace(/\.civ5map$/i, "") ?? mapExportBaseName(targetMap);
-      const suffix = repaired ? "-repaired" : sourceFile ? "-edited" : "";
+      const baseName = mapExportBaseName(targetMap);
+      const suffix = repaired ? "-repaired" : "";
       const downloadName = `${baseName}${suffix}.Civ5Map`;
       download(exported, downloadName);
       setMessage(`${downloadName} · exported`);
@@ -1553,7 +1750,7 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Ancient ruins</span><select value={generationOptions.ruinAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinAbundance: event.target.value as MapGenerationOptions["ruinAbundance"] }))}><option value="NONE">None</option><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="RAGING">Abundant</option></select></label>
                         <label className="control-field"><span>Ruin start distance</span><input type="number" min="1" max="12" value={generationOptions.ruinStartDistance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinStartDistance: Number(event.target.value) }))} /></label>
                       </div>
-                      <small className="content-note">Camps and ruins are scenario improvements. Excogitare previews and analyzes them; geography-only export reports that they cannot yet be embedded.</small>
+                      <small className="content-note">Camps, ruins, ruined cities, and roads are scenario content. Excogitare previews and analyzes them; geography-only export reports that they cannot yet be embedded.</small>
                     </div>
                   </details>
 
@@ -1691,6 +1888,16 @@ export function Civ5MapViewer() {
           <div className="panel-section">
             <div className="section-title"><h3>Layers</h3><span>{visibleLayerCount} on</span></div>
             <div className="layer-list">
+              <label className={`layer-row${politicalAvailable ? "" : " is-disabled"}`}>
+                <span><strong>Political</strong><small>{hasScenarioOwnership ? "Scenario territories and borders" : politicalAvailable ? "Projected start influence" : "No ownership data in this map"}</small></span>
+                <input
+                  type="checkbox"
+                  checked={layers.political}
+                  disabled={!politicalAvailable}
+                  onChange={(event) => setLayers((current) => ({ ...current, political: event.target.checked }))}
+                />
+                <span className="switch" aria-hidden="true" />
+              </label>
               {([
                 ["grid", "Hex grid", "Map geometry"],
                 ["features", "Features", "Forest, jungle, ice"],
@@ -1804,18 +2011,22 @@ export function Civ5MapViewer() {
                   <div><i className="legend-icon icon-jungle" aria-hidden="true">●●●</i><span><strong>Jungle</strong><small>Clustered green canopy</small></span></div>
                   <div><i className="legend-icon icon-marsh" aria-hidden="true">〽</i><span><strong>Marsh</strong><small>Dark reeds</small></span></div>
                   <div><i className="legend-icon icon-ice" aria-hidden="true">◆</i><span><strong>Ice</strong><small>Pale angular field</small></span></div>
+                  <div><i className="legend-icon icon-fallout" aria-hidden="true">☢</i><span><strong>Fallout</strong><small>Irradiated terrain</small></span></div>
                 </div>
               </section>
 
               <section>
                 <h3>Map symbols</h3>
                 <div className="map-symbol-list">
+                  <div><i className="legend-icon icon-political" aria-hidden="true" /><span><strong>Political territory</strong><small>Civilization color with an ownership border</small></span></div>
                   <div><i className="legend-icon icon-resource" aria-hidden="true"><b /></i><span><strong>Resource</strong><small>Dark badge with a type-colored center</small></span></div>
                   <div><i className="legend-icon icon-wonder" aria-hidden="true">★</i><span><strong>Natural wonder</strong><small>Gold star</small></span></div>
                   <div><i className="legend-icon icon-major-start" aria-hidden="true">1</i><span><strong>Major start</strong><small>Gold numbered marker</small></span></div>
                   <div><i className="legend-icon icon-city-state" aria-hidden="true">CS</i><span><strong>City-state start</strong><small>Blue CS marker</small></span></div>
                   <div><i className="legend-icon icon-camp" aria-hidden="true">×</i><span><strong>Barbarian camp</strong><small>Red crossed circle</small></span></div>
                   <div><i className="legend-icon icon-ruin" aria-hidden="true">⌂</i><span><strong>Ancient ruin</strong><small>Pale hut</small></span></div>
+                  <div><i className="legend-icon icon-road" aria-hidden="true">━</i><span><strong>Abandoned road</strong><small>Broken ochre route</small></span></div>
+                  <div><i className="legend-icon icon-city-ruin" aria-hidden="true">▥</i><span><strong>Ruined city</strong><small>Collapsed settlement</small></span></div>
                 </div>
               </section>
 

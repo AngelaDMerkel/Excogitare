@@ -6,6 +6,10 @@ I owe the greatest thanks to [samuelyuan/Civ5MapImage](https://github.com/samuel
 
 Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/terrain-diffusion)'s coarse-conditioning and refinement structure into a lightweight deterministic browser implementation with coupled elevation, temperature, and precipitation fields. Its climate model uses softened regional temperature variation and west-to-east wind carrying moisture over terrain to create windward precipitation and persistent eastern rain shadows. It does not bundle or claim to run the repository's pretrained neural diffusion models.
 
+## AI Disclosure
+
+AI was relied upon heavily for the production of this tool. Often I performed manual review, but more often I did not; although, most of the architecture and logic is my own making—  not always. This was meant to be a quick and dirty tool for making fun makes so that I can while away my waking hours unproductively. None of this is tested for security and if you decide to host this and expose it publicly, you do so at your own risk. 
+
 ## Current features
 
 - Open local `.Civ5Map` files

@@ -64,7 +64,7 @@ export const WORLD_MODIFIERS: ReadonlyArray<{ id: WorldModifier; label: string; 
   { id: "NONE", label: "None", description: "Use the selected map type without an additional world rule." },
   { id: "STRATEGIC_DEPTH", label: "Strategic Depth", description: "Builds long mountain systems, narrow passes, defended basins, and invasion corridors." },
   { id: "FRACTURED", label: "Fractured World", description: "Breaks land and water into smaller contested regions with abundant chokepoints." },
-  { id: "DOOMSDAY", label: "Doomsday", description: "Creates scarred highlands, barren regions, fallout pockets, and harsh starts." },
+  { id: "DOOMSDAY", label: "Doomsday", description: "Creates scarred highlands, sparse fallout, ruined cities, and fragments of an abandoned road network." },
 ];
 
 export type MapGenerationOptions = {
@@ -1076,12 +1076,16 @@ function applyResourceRules(
   place(waterCandidates, [8], offshoreOil);
 
   const luxuryIndices = Array.from({ length: RESOURCES.length - 11 }, (_, index) => index + 11);
+  const waterLuxuryIndices = luxuryIndices.filter((index) => RESOURCES[index].includes("PEARLS") || RESOURCES[index].includes("WHALE"));
+  const landLuxuryIndices = luxuryIndices.filter((index) => !waterLuxuryIndices.includes(index));
   const luxuryCount = Math.round(landCandidates.length * 0.018 * abundance[options.luxuryAbundance]);
-  place(landCandidates, luxuryIndices, luxuryCount, (index) => {
-    if (!options.luxuryRegional) return luxuryIndices[Math.floor(random() * luxuryIndices.length)];
+  const waterLuxuryCount = Math.min(waterCandidates.length, Math.round(luxuryCount * 0.14));
+  place(landCandidates, landLuxuryIndices, luxuryCount - waterLuxuryCount, (index) => {
+    if (!options.luxuryRegional) return landLuxuryIndices[Math.floor(random() * landLuxuryIndices.length)];
     const x = index % width;
-    return luxuryIndices[Math.min(luxuryIndices.length - 1, Math.floor(x / Math.max(1, width) * luxuryIndices.length))];
+    return landLuxuryIndices[Math.min(landLuxuryIndices.length - 1, Math.floor(x / Math.max(1, width) * landLuxuryIndices.length))];
   });
+  place(waterCandidates, waterLuxuryIndices, waterLuxuryCount);
 
   const majorStarts = starts.filter((start) => !start.cityState);
   const guarantee = (start: Civ5StartLocation, resource: number) => {
@@ -1098,7 +1102,7 @@ function applyResourceRules(
       guarantee(start, 5);
       guarantee(start, 6);
     }
-    if (options.luxuryStartGuarantee) guarantee(start, luxuryIndices[index % luxuryIndices.length]);
+    if (options.luxuryStartGuarantee) guarantee(start, landLuxuryIndices[index % landLuxuryIndices.length]);
   }
 }
 
@@ -1113,13 +1117,22 @@ function placeWondersAndSites(
 ) {
   const startPoints = starts.map((start) => [start.x, start.y] as [number, number]);
   const selectedWonders: Array<[number, number]> = [];
-  const candidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 ? [index] : []).sort(() => random() - 0.5);
-  for (const index of candidates) {
-    if (selectedWonders.length >= Math.max(0, Math.min(WONDERS.length, Math.round(options.wonderCount)))) break;
+  const landCandidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 ? [index] : []);
+  const waterCandidates = tiles.flatMap((tile, index) => tile.terrain < 2 ? [index] : []);
+  const wonderCount = Math.max(0, Math.min(WONDERS.length, Math.round(options.wonderCount)));
+  for (let wonderIndex = 0; wonderIndex < wonderCount; wonderIndex += 1) {
+    const waterWonder = WONDERS[wonderIndex].includes("KRAKATOA") || WONDERS[wonderIndex].includes("BARRIER_REEF");
+    const candidates = [...(waterWonder ? waterCandidates : landCandidates)].sort(() => random() - 0.5);
+    const index = candidates.find((candidate) => {
+      const tile = tiles[candidate];
+      if (tile.wonder !== 255 || tile.improvement) return false;
+      const point: [number, number] = [candidate % width, Math.floor(candidate / width)];
+      if (startPoints.some((start) => hexDistance(point, start, width, wraps) < options.wonderStartBuffer)) return false;
+      return !selectedWonders.some((wonder) => hexDistance(point, wonder, width, wraps) < options.wonderMinSpacing);
+    });
+    if (index === undefined) continue;
     const point: [number, number] = [index % width, Math.floor(index / width)];
-    if (startPoints.some((start) => hexDistance(point, start, width, wraps) < options.wonderStartBuffer)) continue;
-    if (selectedWonders.some((wonder) => hexDistance(point, wonder, width, wraps) < options.wonderMinSpacing)) continue;
-    tiles[index].wonder = selectedWonders.length;
+    tiles[index].wonder = wonderIndex;
     tiles[index].feature = 255;
     tiles[index].resource = 255;
     tiles[index].resourceAmount = 0;
@@ -1130,7 +1143,7 @@ function placeWondersAndSites(
   const placeSites = (kind: Civ5Tile["improvement"], setting: SiteAbundance, startDistance: number) => {
     const desired = Math.round(tiles.length * siteDensity[setting]);
     const selected: Array<[number, number]> = [];
-    for (const index of [...candidates].sort(() => random() - 0.5)) {
+    for (const index of [...landCandidates].sort(() => random() - 0.5)) {
       if (selected.length >= desired) break;
       const tile = tiles[index];
       if (tile.wonder !== 255 || tile.improvement) continue;
@@ -1143,6 +1156,97 @@ function placeWondersAndSites(
   };
   placeSites("IMPROVEMENT_BARBARIAN_CAMP", options.barbarianAbundance, options.barbarianStartDistance);
   placeSites("IMPROVEMENT_GOODY_HUT", options.ruinAbundance, options.ruinStartDistance);
+}
+
+function shortestDoomsdayPath(
+  origin: number,
+  target: number,
+  tiles: Civ5Tile[],
+  width: number,
+  height: number,
+  wraps: boolean,
+) {
+  const parents = new Int32Array(tiles.length);
+  parents.fill(-2);
+  parents[origin] = -1;
+  const queue = [origin];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor];
+    if (current === target) break;
+    const x = current % width;
+    const y = Math.floor(current / width);
+    for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+      const next = ny * width + nx;
+      const tile = tiles[next];
+      if (parents[next] !== -2 || tile.terrain < 2 || tile.elevation === 2 || tile.wonder !== 255) continue;
+      if (tile.improvement && next !== target) continue;
+      parents[next] = current;
+      queue.push(next);
+    }
+  }
+  if (parents[target] === -2) return [];
+  const path: number[] = [];
+  for (let current = target; current >= 0; current = parents[current]) path.push(current);
+  return path.reverse();
+}
+
+function applyDoomsdayTheme(
+  tiles: Civ5Tile[],
+  starts: Civ5StartLocation[],
+  width: number,
+  height: number,
+  wraps: boolean,
+  random: () => number,
+) {
+  const startPoints = starts.filter((start) => !start.cityState).map((start) => [start.x, start.y] as [number, number]);
+  const candidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 && tile.wonder === 255 && tile.resource === 255 && !tile.improvement ? [index] : []);
+  const desiredRuins = Math.max(2, Math.min(10, Math.round(candidates.length * 0.0016)));
+  const ruins: number[] = [];
+  for (const index of [...candidates].sort(() => random() - 0.5)) {
+    if (ruins.length >= desiredRuins) break;
+    const point: [number, number] = [index % width, Math.floor(index / width)];
+    if (startPoints.some((start) => hexDistance(point, start, width, wraps) < 5)) continue;
+    if (ruins.some((ruin) => hexDistance(point, [ruin % width, Math.floor(ruin / width)], width, wraps) < 8)) continue;
+    tiles[index].improvement = "IMPROVEMENT_CITY_RUINS";
+    tiles[index].route = "ROUTE_ROAD";
+    tiles[index].feature = 255;
+    ruins.push(index);
+  }
+
+  const startIndices = starts.filter((start) => !start.cityState).map((start) => start.y * width + start.x);
+  for (const [ruinNumber, ruin] of ruins.entries()) {
+    const possibleTargets = [...startIndices, ...ruins.slice(0, ruinNumber)];
+    if (!possibleTargets.length) continue;
+    const origin: [number, number] = [ruin % width, Math.floor(ruin / width)];
+    const target = possibleTargets.reduce((nearest, candidate) => {
+      const candidatePoint: [number, number] = [candidate % width, Math.floor(candidate / width)];
+      const nearestPoint: [number, number] = [nearest % width, Math.floor(nearest / width)];
+      return hexDistance(origin, candidatePoint, width, wraps) < hexDistance(origin, nearestPoint, width, wraps) ? candidate : nearest;
+    });
+    const path = shortestDoomsdayPath(ruin, target, tiles, width, height, wraps);
+    const survivingLength = Math.min(path.length, 18 + Math.floor(random() * 7));
+    for (const index of path.slice(0, survivingLength)) tiles[index].route = "ROUTE_ROAD";
+  }
+}
+
+function enforceGeneratedPlacementLegality(map: Civ5Map) {
+  for (const tile of map.tiles) {
+    if (!featurePlacementVerdict(map, tile).valid) tile.feature = 255;
+    if (!resourcePlacementVerdict(map, tile).valid) {
+      tile.resource = 255;
+      tile.resourceAmount = 0;
+    }
+    if (!wonderPlacementVerdict(map, tile).valid) tile.wonder = 255;
+    if (tile.wonder !== 255 && tile.resource !== 255) {
+      tile.resource = 255;
+      tile.resourceAmount = 0;
+    }
+    if (tile.terrain < 2 || tile.elevation === 2) {
+      if (tile.improvement) tile.improvement = undefined;
+      if (tile.route) tile.route = undefined;
+    }
+  }
+  return map;
 }
 
 export function balanceMapStarts(map: Civ5Map, options: MapGenerationOptions) {
@@ -1313,15 +1417,15 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       let terrain = land ? 2 : adjacentLand ? 1 : 0;
       if (land) terrain = chooseTerrain(climateValue, moisture, biomeVariation, dominantTerrains, resolved.style === "BRUTAL");
 
+      const elevation = elevations[index];
       let feature = 255;
       if (!land && latitude > 0.9 && random() > 0.25) feature = 3;
-      else if (land && resolved.modifier === "DOOMSDAY" && random() > 0.87) feature = 5;
-      else if (land && terrain === 4 && moisture < 0.25 && random() > 0.95) feature = 4;
-      else if (land && climateValue > 0.72 && moisture > 0.66) feature = 1;
-      else if (land && terrain === 2 && moisture > 0.83) feature = 2;
-      else if (land && terrain !== 4 && terrain !== 6 && moisture > 0.61) feature = 0;
+      else if (land && resolved.modifier === "DOOMSDAY" && random() > 0.972) feature = 5;
+      else if (land && elevation === 0 && terrain === 4 && moisture < 0.25 && random() > 0.95) feature = 4;
+      else if (land && elevation < 2 && climateValue > 0.72 && moisture > 0.66 && terrain !== 4 && terrain !== 5 && terrain !== 6) feature = 1;
+      else if (land && elevation === 0 && terrain === 2 && moisture > 0.83) feature = 2;
+      else if (land && elevation < 2 && terrain !== 4 && terrain !== 6 && moisture > 0.61) feature = 0;
 
-      const elevation = elevations[index];
       const resource = 255;
 
       tiles.push({
@@ -1347,12 +1451,13 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   const startLocations = [...majorStarts, ...cityStates];
   applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random);
   placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
+  if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
   const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random);
   for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
   const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
   const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
 
-  return {
+  return enforceGeneratedPlacementLegality({
     name: `${presetName} — ${resolved.seed}`,
     description: `A seeded ${resolved.style.toLowerCase()} ${presetName.toLowerCase()} map${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}, targeting ${Math.round(waterPercent)}% water and ${Math.round(effectiveMountainPercent)}% mountains.`,
     worldSize: size.id,
@@ -1369,5 +1474,5 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
     startLocations,
     source: "generated",
     generation: { ...resolved, waterPercent, mountainPercent: effectiveMountainPercent },
-  };
+  });
 }

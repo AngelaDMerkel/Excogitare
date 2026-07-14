@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata, type Civ5Map, type Civ5Tile } from "../lib/civ5-map.ts";
 import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
-import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
+import { createLuaMapScript, mapExportBaseName, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "../lib/generation-history.ts";
 import { applyRepairIssues, buildRepairIssues } from "../lib/map-repair.ts";
-import { isPassableLand, resourcePlacementVerdict } from "../lib/civ5-rules.ts";
+import { featurePlacementVerdict, isPassableLand, resourcePlacementVerdict, wonderPlacementVerdict } from "../lib/civ5-rules.ts";
+import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "../lib/political-map.ts";
 
 const encoder = new TextEncoder();
 
@@ -215,6 +216,7 @@ function createScenarioMap() {
 
   view.setUint8(scenarioOffset + 80, 1);
   bytes.set(encoder.encode("CIVILIZATION_TEST"), playerOffset + 160);
+  bytes.set(encoder.encode("PLAYERCOLOR_RED"), playerOffset + 224);
   view.setUint32(playerOffset + 424, 1, true);
   view.setUint32(playerOffset + 428, 0, true);
   view.setUint8(playerOffset + 432, 2);
@@ -223,8 +225,9 @@ function createScenarioMap() {
     const improvement = playerOffset + 436 + tile * 8;
     view.setUint16(improvement, 0xffff, true);
     view.setUint16(improvement + 2, 0xffff, true);
+    view.setUint8(improvement + 4, tile < 2 ? 0 : 0xff);
     view.setUint8(improvement + 5, 0xff);
-    view.setUint8(improvement + 6, 0xff);
+    view.setUint8(improvement + 6, tile === 0 ? 0 : 0xff);
     view.setUint8(improvement + 7, 0xff);
   }
   return buffer;
@@ -310,10 +313,40 @@ test("rewrites map metadata without disturbing scenario data", () => {
     player: 0,
     civilization: "CIVILIZATION_TEST",
     leader: "",
+    teamColor: "PLAYERCOLOR_RED",
     team: 2,
     playable: true,
     cityState: false,
   }]);
+});
+
+test("parses scenario political ownership, player colors, and routes", () => {
+  const parsed = parseCiv5Map(createScenarioMap(), "political.Civ5Map");
+  assert.deepEqual(parsed.tiles.map((tile) => tile.owner), [0, 0, undefined, undefined]);
+  assert.equal(parsed.tiles[0].route, "ROUTE_ROAD");
+  assert.equal(parsed.startLocations[0].teamColor, "PLAYERCOLOR_RED");
+  assert.equal(hasPoliticalLayer(parsed), true);
+  assert.deepEqual([...buildPoliticalOwnership(parsed)], [0, 0, -1, -1]);
+  assert.match(politicalColors(parsed, 0).fill, /^#[0-9a-f]{6}$/i);
+});
+
+test("projects generated-map political influence onto land around starts", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 2, seed: "political-influence" });
+  const ownership = buildPoliticalOwnership(generated);
+  assert.equal(hasPoliticalLayer(generated), true);
+  assert.ok([...ownership].some((owner) => owner >= 0));
+  for (let index = 0; index < generated.tiles.length; index += 1) {
+    const terrain = generated.terrains[generated.tiles[index].terrain] ?? "";
+    if (terrain.includes("OCEAN") || terrain.includes("COAST")) assert.equal(ownership[index], -1);
+  }
+});
+
+test("export filenames follow the current editor map name", () => {
+  const map = createScenarioMap();
+  map.name = "  Ashes & Empires: Redux / 2  ";
+  assert.equal(mapExportBaseName(map), "ashes-empires-redux-2");
+  map.name = "!?";
+  assert.equal(mapExportBaseName(map), "excogitare-map");
 });
 
 test("exports tile edits while preserving imported scenario starts", () => {
@@ -610,6 +643,34 @@ test("Randomise produces complete valid settings and wrap choices control export
   assert.equal(presetFlat.wraps, false);
 });
 
+test("Create output passes Repair correctness checks across styles, presets, and geometry", () => {
+  const styles = ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const;
+  const presets = ["CONTINENTS", "ARCHIPELAGO", "INLAND_SEAS", "WILD_REGIONS"] as const;
+  const geometries = ["STANDARD", "TALL", "RIBBON", "NEEDLE"] as const;
+  for (let index = 0; index < 16; index += 1) {
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      size: "DUEL",
+      players: 2,
+      cityStates: 4,
+      style: styles[index % styles.length],
+      preset: presets[Math.floor(index / 4) % presets.length],
+      geometry: geometries[(index * 3) % geometries.length],
+      wonderCount: 10,
+      seed: `create-correctness-${index}`,
+    });
+    const issues = buildRepairIssues(map).filter((issue) => issue.id !== "clean");
+    assert.deepEqual(issues, [], `${map.name} unexpectedly required Repair: ${issues.map((issue) => issue.detail).join("; ")}`);
+    for (const tile of map.tiles) {
+      assert.equal(featurePlacementVerdict(map, tile).valid, true);
+      assert.equal(resourcePlacementVerdict(map, tile).valid, true);
+      assert.equal(wonderPlacementVerdict(map, tile).valid, true);
+      assert.equal(tile.wonder !== 255 && tile.resource !== 255, false, "a generated wonder overlapped a resource");
+      assert.equal(Boolean(tile.improvement) && (tile.terrain < 2 || tile.elevation === 2), false, "a generated site occupied impassable terrain");
+    }
+  }
+});
+
 test("generation styles honor requested water and mountain percentages", () => {
   for (const style of ["REALISTIC", "FANTASTICAL", "MUNDANE"] as const) {
     const map = generateMap({
@@ -813,8 +874,33 @@ test("generated maps serialize to a readable Civ5Map geography file", () => {
   assert.deepEqual(parsed.tiles, generated.tiles.map((tile) => {
     const geography = { ...tile };
     delete geography.improvement;
+    delete geography.route;
     return geography;
   }));
+});
+
+test("Doomsday adds restrained fallout, ruined cities, and surviving road fragments", () => {
+  const generated = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    modifier: "DOOMSDAY",
+    barbarianAbundance: "NONE",
+    ruinAbundance: "NONE",
+    seed: "doomsday-infrastructure",
+  });
+  const land = generated.tiles.filter((tile) => tile.terrain >= 2);
+  const fallout = generated.tiles.filter((tile) => generated.features[tile.feature]?.includes("FALLOUT"));
+  const cityRuins = generated.tiles.filter((tile) => tile.improvement === "IMPROVEMENT_CITY_RUINS");
+  const roads = generated.tiles.filter((tile) => tile.route === "ROUTE_ROAD");
+  assert.ok(fallout.length / land.length > 0.01 && fallout.length / land.length < 0.05, `fallout covered ${(fallout.length / land.length * 100).toFixed(1)}% of land`);
+  assert.ok(cityRuins.length >= 2, "Doomsday did not place ruined cities");
+  assert.ok(roads.length > cityRuins.length, "Doomsday did not form surviving road fragments");
+  for (const tile of cityRuins) assert.equal(tile.route, "ROUTE_ROAD");
+  for (const tile of roads) assert.ok(tile.terrain >= 2 && tile.elevation < 2, "a Doomsday road crossed impassable terrain");
+  assert.deepEqual(buildRepairIssues(generated).filter((issue) => issue.id !== "clean"), []);
+
+  const ordinary = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", modifier: "NONE", seed: "no-doomsday-infrastructure" });
+  assert.equal(ordinary.tiles.some((tile) => tile.improvement === "IMPROVEMENT_CITY_RUINS" || tile.route), false);
 });
 
 test("content rules place wonders, guaranteed resources, camps, and ruins", () => {
