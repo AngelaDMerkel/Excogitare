@@ -120,15 +120,39 @@ function writeTiles(view: DataView, offset: number, map: Civ5Map) {
   }
 }
 
+function writeScenarioStarts(buffer: ArrayBuffer, map: Civ5Map) {
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  const scenarioOffset = tileDataOffset(buffer) + map.width * map.height * TILE_SIZE;
+  if (scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE > bytes.byteLength) return;
+  const playerCount = view.getUint8(scenarioOffset + 80);
+  const cityStateCount = view.getUint8(scenarioOffset + 81);
+  const recordCount = playerCount + cityStateCount;
+  if (!recordCount || recordCount > 128) return;
+  const improvementDataSize = map.width * map.height * TILE_SIZE;
+  const playerDataOffset = bytes.byteLength - improvementDataSize - recordCount * PLAYER_RECORD_SIZE;
+  if (playerDataOffset < scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE) return;
+  for (const start of map.startLocations) {
+    if (start.player < 0 || start.player >= recordCount || start.x < 0 || start.y < 0 || start.x >= map.width || start.y >= map.height) continue;
+    const offset = playerDataOffset + start.player * PLAYER_RECORD_SIZE;
+    view.setUint32(offset + 424, start.x, true);
+    view.setUint32(offset + 428, start.y, true);
+    view.setUint8(offset + 432, Math.max(0, Math.min(255, start.team)));
+    view.setUint8(offset + 433, start.playable ? 1 : 0);
+  }
+}
+
 export function updateCiv5Map(buffer: ArrayBuffer, map: Civ5Map) {
   const original = parseCiv5Map(buffer, map.name);
   if (original.width !== map.width || original.height !== map.height || map.tiles.length !== original.tiles.length) {
     throw new Error("Imported maps cannot be resized during export.");
   }
   const output = updateCiv5MapMetadata(buffer, map.name, map.description);
+  new DataView(output).setUint8(9, Math.max(0, Math.min(255, map.players)));
   const offset = tileDataOffset(output);
   if (offset + map.tiles.length * TILE_SIZE > output.byteLength) throw new Error("The map tile section is incomplete.");
   writeTiles(new DataView(output), offset, map);
+  writeScenarioStarts(output, map);
   return output;
 }
 
@@ -323,6 +347,83 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     startLocations,
     source: "file",
   };
+}
+
+export type RepairParseResult = {
+  map: Civ5Map;
+  salvaged: boolean;
+  diagnostics: string[];
+};
+
+export function parseCiv5MapForRepair(buffer: ArrayBuffer, fallbackName: string): RepairParseResult {
+  try {
+    return { map: parseCiv5Map(buffer, fallbackName), salvaged: false, diagnostics: ["The file structure parsed normally."] };
+  } catch (error) {
+    const diagnostics = [error instanceof Error ? error.message : "The normal parser rejected this file."];
+    if (buffer.byteLength < HEADER_SIZE) throw new Error("The file is too short to contain a recoverable Civ5Map header.");
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+    const version = view.getUint8(0) & 0x0f;
+    const width = view.getUint32(1, true);
+    const height = view.getUint32(5, true);
+    if (!width || !height || width > MAX_DIMENSION || height > MAX_DIMENSION) throw new Error(`The damaged map declares unsafe dimensions: ${width} × ${height}.`);
+    const sizes = [14, 18, 22, 26, 30, 34, 38].map((offset) => view.getUint32(offset, true));
+    let offset = HEADER_SIZE;
+    const take = (size: number, label: string) => {
+      const available = Math.max(0, Math.min(size, bytes.byteLength - offset));
+      if (available < size) diagnostics.push(`${label} was truncated from ${size} to ${available} bytes.`);
+      const result = bytes.subarray(offset, offset + available);
+      offset += available;
+      return result;
+    };
+    const terrains = readStringList(take(sizes[0], "Terrain definitions"));
+    const features = readStringList(take(sizes[1], "Feature definitions"));
+    const wonders = readStringList(take(sizes[2], "Wonder definitions"));
+    const resources = readStringList(take(sizes[3], "Resource definitions"));
+    take(sizes[4], "Mod data");
+    const mapName = cleanText(take(sizes[5], "Map name"));
+    const description = cleanText(take(sizes[6], "Map description"));
+    let worldSize = "Custom";
+    if (version >= 11 && offset + 4 <= bytes.byteLength) {
+      const length = view.getUint32(offset, true);
+      offset += 4;
+      worldSize = cleanText(take(length, "World size")) || "Custom";
+    }
+    if (!terrains.length) {
+      terrains.push("TERRAIN_OCEAN", "TERRAIN_COAST", "TERRAIN_GRASS", "TERRAIN_PLAINS", "TERRAIN_DESERT", "TERRAIN_TUNDRA", "TERRAIN_SNOW");
+      diagnostics.push("Default terrain definitions were supplied so the map can render.");
+    }
+    const tiles: Civ5Tile[] = [];
+    const expectedTiles = width * height;
+    const readableTiles = Math.min(expectedTiles, Math.floor((bytes.byteLength - offset) / TILE_SIZE));
+    for (let index = 0; index < readableTiles; index += 1) {
+      tiles.push({ terrain: view.getUint8(offset), resource: view.getUint8(offset + 1), feature: view.getUint8(offset + 2), river: view.getUint8(offset + 3), elevation: view.getUint8(offset + 4), continent: view.getUint8(offset + 5), wonder: view.getUint8(offset + 6), resourceAmount: view.getUint8(offset + 7) });
+      offset += TILE_SIZE;
+    }
+    while (tiles.length < expectedTiles) tiles.push({ terrain: 0, resource: 255, feature: 255, river: 0, elevation: 0, continent: 0, wonder: 255, resourceAmount: 0 });
+    if (readableTiles < expectedTiles) diagnostics.push(`${expectedTiles - readableTiles} missing tiles were replaced with empty ocean tiles.`);
+    return {
+      map: {
+        name: mapName || fallbackName.replace(/\.civ5map$/i, ""),
+        description,
+        worldSize: worldSize.replace(/^WORLDSIZE_/i, "").replaceAll("_", " "),
+        version,
+        width,
+        height,
+        players: view.getUint8(9),
+        wraps: Boolean(view.getUint8(10) & 1),
+        terrains,
+        features,
+        wonders,
+        resources,
+        tiles,
+        startLocations: [],
+        source: "file",
+      },
+      salvaged: true,
+      diagnostics,
+    };
+  }
 }
 
 function noise(x: number, y: number) {

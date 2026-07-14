@@ -22,13 +22,14 @@ test("server-renders the Civ5 map viewer shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Excogitare — Civ5 Map Viewer &amp; Editor<\/title>/i);
   assert.match(html, /Excogitare/);
-  assert.match(html, /v0\.1\.2/);
+  assert.match(html, /v0\.4\.8/);
   assert.match(html, /The Twin Continents/);
   assert.match(html, /Start locations/);
   assert.match(html, /4 positions/);
   assert.match(html, /Export Civ5Map/);
   assert.match(html, />Explore</);
   assert.match(html, />Create</);
+  assert.match(html, />Repair</);
   assert.match(html, />Lua</);
   assert.match(html, /Edit map name and description/);
   assert.doesNotMatch(html, /Files stay on this device/);
@@ -43,7 +44,7 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /if \(canvas\.height !== backingHeight\) canvas\.height = backingHeight/);
   assert.match(source, /renderCanvasRef = useRef<HTMLCanvasElement \| null>\(null\)/);
   assert.match(source, /const paintedTiles = drawMap\(renderContext/);
-  assert.match(source, /if \(map\.tiles\.length && paintedTiles === 0\) return/);
+  assert.match(source, /if \(canvasMap\.tiles\.length && paintedTiles === 0\) return/);
   assert.match(source, /context\.drawImage\(renderCanvas, 0, 0\)/);
   assert.match(source, /\[4, 5, 1\]/);
   assert.match(source, /\[3, 4, 2\]/);
@@ -58,6 +59,11 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, />Analyze</);
   assert.match(source, /Multiplayer balance/);
   assert.match(source, /Civ5 validation/);
+  assert.match(source, /Automated repair/);
+  assert.match(source, /Start-location tests included/);
+  assert.match(source, /Bounds · land access · mountain safety · duplicates · spacing · player count · city-state flags/);
+  assert.match(source, /ORIGINAL", "CORRECTED", "DIFFERENCE/);
+  assert.match(source, /parseCiv5MapForRepair/);
   assert.match(source, /Flood fill/);
   assert.match(source, /Region/);
   assert.match(source, /Barbarians/);

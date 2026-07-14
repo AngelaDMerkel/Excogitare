@@ -198,6 +198,7 @@ button { color: inherit; }
 .edit-mode-prompt > div { display: flex; justify-content: flex-end; gap: 7px; }
 
 .creator-panel,
+.repair-panel,
 .script-panel {
   display: grid;
   gap: 11px;
@@ -207,6 +208,7 @@ button { color: inherit; }
   border-bottom: 1px solid var(--line);
 }
 .creator-panel .section-title,
+.repair-panel .section-title,
 .script-panel .section-title,
 .tile-editor .section-title { margin-bottom: 0; }
 .randomise-world-button { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; padding: 8px 11px; border: 1px solid rgba(239, 209, 138, .28); border-radius: 6px; background: linear-gradient(135deg, rgba(217, 185, 111, .16), rgba(24, 53, 58, .68)); color: var(--gold-bright); cursor: pointer; }
@@ -346,6 +348,36 @@ button { color: inherit; }
 .validation-issue.severity-error { border-color: rgba(215, 101, 81, .28); }
 .validation-issue.severity-warning { border-color: rgba(210, 174, 110, .25); }
 .validation-prompt ul { margin: 0 0 10px; padding-left: 15px; color: #8fa39d; font-size: 8px; line-height: 1.45; }
+.repair-intro { margin: 0; color: #80958f; font-size: 9px; line-height: 1.5; }
+.repair-profile,
+.repair-view-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.repair-profile button,
+.repair-view-tabs button { min-height: 31px; border: 1px solid var(--line); border-radius: 4px; background: rgba(8, 24, 28, .32); color: #748b85; font-size: 8px; text-transform: capitalize; cursor: pointer; }
+.repair-profile button.is-active,
+.repair-view-tabs button.is-active { border-color: rgba(239, 209, 138, .34); background: rgba(217, 185, 111, .1); color: var(--gold-bright); }
+.repair-profile-note { margin-top: -6px; color: #6d837e; font-size: 8px; line-height: 1.4; }
+.repair-diagnostics { border: 1px solid rgba(210, 174, 110, .18); border-radius: 5px; background: rgba(76, 55, 25, .12); }
+.repair-diagnostics summary { padding: 8px 9px; color: #bba66f; font-size: 8px; cursor: pointer; }
+.repair-diagnostics ul { margin: 0; padding: 0 22px 9px; color: #869a94; font-size: 8px; line-height: 1.45; }
+.start-test-summary { display: grid; gap: 4px; padding: 9px; border: 1px solid rgba(108, 178, 158, .2); border-radius: 5px; background: rgba(27, 73, 62, .16); }
+.start-test-summary strong { color: #a9cbb9; font-size: 9px; }
+.start-test-summary span { color: #738b84; font-size: 8px; line-height: 1.4; }
+.repair-issue-list { display: grid; gap: 6px; max-height: 430px; overflow: auto; padding-right: 2px; }
+.repair-issue { display: grid; gap: 6px; padding: 9px; border: 1px solid var(--line); border-radius: 5px; background: rgba(8, 24, 28, .25); }
+.repair-issue.severity-error { border-color: rgba(215, 101, 81, .27); }
+.repair-issue.severity-warning { border-color: rgba(210, 174, 110, .23); }
+.repair-issue.is-selected { background: rgba(217, 185, 111, .055); }
+.repair-issue label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.repair-issue input { margin: 2px 0 0; accent-color: var(--gold); }
+.repair-issue label > span { display: grid; gap: 2px; }
+.repair-issue strong { color: #b8c8c2; font-size: 9px; }
+.repair-issue small { color: #687f79; font-size: 7px; text-transform: capitalize; }
+.repair-issue p { margin: 0 0 0 21px; color: #869b95; font-size: 8px; line-height: 1.45; }
+.repair-issue > button { justify-self: end; padding: 0; border: 0; background: transparent; color: #c2aa6f; font-size: 7px; cursor: pointer; }
+.repair-actions { position: sticky; bottom: -20px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 6px; margin: 2px -3px -20px; padding: 11px 3px 20px; background: linear-gradient(180deg, rgba(16, 37, 42, 0), #10252a 12px); }
+.repair-actions button { min-height: 36px; border: 1px solid var(--line); border-radius: 4px; background: #183238; color: #aebfba; font-size: 8px; cursor: pointer; }
+.repair-actions button:disabled { opacity: .4; cursor: not-allowed; }
+.repair-actions .repair-export { border-color: transparent; background: var(--gold); color: #172622; font-weight: 750; }
 .script-panel > p { margin: 0; color: #80958f; font-size: 10px; line-height: 1.5; }
 .lua-open-button { width: 100%; }
 .lua-report { padding: 11px; border: 1px solid rgba(218, 149, 111, .22); border-radius: 5px; background: rgba(71, 35, 25, .16); }

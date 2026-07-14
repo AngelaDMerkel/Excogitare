@@ -15,6 +15,7 @@ import {
 import {
   createDemoMap,
   parseCiv5Map,
+  parseCiv5MapForRepair,
   serializeCiv5Map,
   updateCiv5Map,
   type Civ5Map,
@@ -22,6 +23,7 @@ import {
   type Civ5Tile,
 } from "@/lib/civ5-map";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "@/lib/map-analysis";
+import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile, type RepairIssue, type RepairProfile } from "@/lib/map-repair";
 import {
   DEFAULT_GENERATION_OPTIONS,
   DOMINANT_TERRAINS,
@@ -47,18 +49,19 @@ const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
 const MAP_MARGIN = 16;
 const ISOMETRIC_RELIEF_MARGIN = 52;
-const APP_VERSION = "0.1.2";
+const APP_VERSION = "0.4.8";
 
 type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
 type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
-type ImportedMapSource = { fileName: string; buffer: ArrayBuffer };
-type WorkspaceMode = "VIEW" | "CREATE" | "SCRIPT";
+type ImportedMapSource = { fileName: string; buffer: ArrayBuffer; salvaged?: boolean };
+type WorkspaceMode = "VIEW" | "CREATE" | "REPAIR" | "SCRIPT";
 type Brush = { terrain: number | null; elevation: number | null; feature: number | null; resource: number | null };
 type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
 type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
 type Projection = "FLAT" | "ISOMETRIC";
+type RepairView = "ORIGINAL" | "CORRECTED" | "DIFFERENCE";
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 
 const TERRAIN_COLORS: Record<string, string> = {
@@ -354,14 +357,25 @@ function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, 
     [2, 3, 4],
   ];
   context.save();
-  context.strokeStyle = "rgba(91, 185, 211, .9)";
-  context.lineWidth = 2.4;
   context.lineCap = "round";
-  for (const [start, end, bit] of edges) {
-    if (!(river & bit)) continue;
+  context.lineJoin = "round";
+  for (const pass of [
+    { color: "rgba(7, 31, 39, .58)", width: 4.4 },
+    { color: "rgba(91, 185, 211, .94)", width: 2.35 },
+    { color: "rgba(184, 230, 233, .45)", width: 0.7 },
+  ]) {
+    context.strokeStyle = pass.color;
+    context.lineWidth = pass.width;
     context.beginPath();
-    context.moveTo(points[start].x, points[start].y);
-    context.lineTo(points[end].x, points[end].y);
+    for (const [start, end, bit] of edges) {
+      if (!(river & bit)) continue;
+      const one = points[start];
+      const two = points[end];
+      const middleX = (one.x + two.x) / 2;
+      const middleY = (one.y + two.y) / 2;
+      context.moveTo(one.x, one.y);
+      context.quadraticCurveTo(middleX + (x - middleX) * 0.14, middleY + (y - middleY) * 0.14, two.x, two.y);
+    }
     context.stroke();
   }
   context.restore();
@@ -415,6 +429,7 @@ function drawMap(
   projection: ProjectionTransform,
   selection: TileSelection | null,
   focusedStart: Civ5StartLocation | null,
+  highlightedRepairs: ReadonlySet<number>,
 ) {
   let paintedTiles = 0;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -512,6 +527,15 @@ function drawMap(
         context.fill();
         context.strokeStyle = "rgba(126, 220, 220, .82)";
         context.lineWidth = 1.6 / Math.max(view.zoom, 0.5);
+        context.stroke();
+      }
+      const sourceIndex = sourceY * map.width + col;
+      if (highlightedRepairs.has(sourceIndex)) {
+        hexPath(context, center.x, center.y);
+        context.fillStyle = "rgba(222, 119, 78, .34)";
+        context.fill();
+        context.strokeStyle = "#efb06f";
+        context.lineWidth = 2.1 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
   }
@@ -653,6 +677,12 @@ export function Civ5MapViewer() {
   const [isPasting, setIsPasting] = useState(false);
   const [focusedStart, setFocusedStart] = useState<Civ5StartLocation | null>(null);
   const [showExportValidation, setShowExportValidation] = useState(false);
+  const [repairBaseline, setRepairBaseline] = useState<Civ5Map | null>(null);
+  const [repairIssues, setRepairIssues] = useState<RepairIssue[]>([]);
+  const [repairSelected, setRepairSelected] = useState<Set<string>>(new Set());
+  const [repairProfile, setRepairProfile] = useState<RepairProfile>("STANDARD");
+  const [repairView, setRepairView] = useState<RepairView>("CORRECTED");
+  const [repairDiagnostics, setRepairDiagnostics] = useState<string[]>([]);
   const [luaReport, setLuaReport] = useState<LuaCompatibilityReport | null>(null);
   const [luaFileName, setLuaFileName] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
@@ -696,6 +726,26 @@ export function Civ5MapViewer() {
     setMap(resolved);
   }, []);
 
+  const beginRepair = useCallback((target: Civ5Map, diagnostics: string[] = []) => {
+    const baseline = cloneMap(target);
+    const issues = buildRepairIssues(baseline);
+    setRepairBaseline(baseline);
+    setRepairIssues(issues);
+    setRepairSelected(new Set(issues.filter((issue) => issueSelectedByProfile(issue, "STANDARD")).map((issue) => issue.id)));
+    setRepairProfile("STANDARD");
+    setRepairView("CORRECTED");
+    setRepairDiagnostics(diagnostics);
+    setSelection(null);
+  }, []);
+
+  const repairPreviewMap = useMemo(() => repairBaseline ? applyRepairIssues(repairBaseline, repairIssues, repairSelected) : map, [repairBaseline, repairIssues, repairSelected, map]);
+  const canvasMap = mode === "REPAIR" && repairBaseline
+    ? repairView === "ORIGINAL" ? repairBaseline : repairPreviewMap
+    : map;
+  const repairHighlights = useMemo(() => mode === "REPAIR" && repairView === "DIFFERENCE"
+    ? new Set(repairIssues.filter((issue) => repairSelected.has(issue.id) && issue.tileIndex !== undefined).map((issue) => issue.tileIndex!))
+    : new Set<number>(), [mode, repairView, repairIssues, repairSelected]);
+
   const undo = () => {
     const previous = pastMaps.at(-1);
     if (!previous) return;
@@ -703,6 +753,7 @@ export function Civ5MapViewer() {
     mapRef.current = previous;
     setMap(previous);
     setPastMaps((past) => past.slice(0, -1));
+    if (mode === "REPAIR") beginRepair(previous, repairDiagnostics);
   };
 
   const redo = () => {
@@ -712,9 +763,10 @@ export function Civ5MapViewer() {
     mapRef.current = next;
     setMap(next);
     setFutureMaps((future) => future.slice(1));
+    if (mode === "REPAIR") beginRepair(next, repairDiagnostics);
   };
 
-  const mapProjection = useMemo(() => projectionTransform(map, projection), [map, projection]);
+  const mapProjection = useMemo(() => projectionTransform(canvasMap, projection), [canvasMap, projection]);
   const bounds = useMemo(() => ({ width: mapProjection.width, height: mapProjection.height }), [mapProjection]);
   const fitMap = useCallback((targetSize: Size, targetBounds = bounds) => {
     const zoom = Math.max(0.16, Math.min(1.7, Math.min((targetSize.width - 44) / targetBounds.width, (targetSize.height - 44) / targetBounds.height)));
@@ -735,7 +787,7 @@ export function Civ5MapViewer() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => fitMap(size));
     return () => window.cancelAnimationFrame(frame);
-  }, [map, size, fitMap]);
+  }, [canvasMap, size, fitMap]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -763,14 +815,14 @@ export function Civ5MapViewer() {
     // Complete the next frame away from the visible canvas. If a transient
     // layout state culls every tile, retain the last valid map frame instead
     // of replacing it with the blue canvas background.
-    const paintedTiles = drawMap(renderContext, map, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart);
-    if (map.tiles.length && paintedTiles === 0) return;
+    const paintedTiles = drawMap(renderContext, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights);
+    if (canvasMap.tiles.length && paintedTiles === 0) return;
     context.save();
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.globalCompositeOperation = "copy";
     context.drawImage(renderCanvas, 0, 0);
     context.restore();
-  }, [map, layers, hovered, view, size, mapProjection, selection, focusedStart]);
+  }, [canvasMap, layers, hovered, view, size, mapProjection, selection, focusedStart, repairHighlights]);
 
   const terrainBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
@@ -815,15 +867,22 @@ export function Civ5MapViewer() {
     try {
       setMessage("Reading map…");
       const buffer = await file.arrayBuffer();
-      const parsed = parseCiv5Map(buffer, file.name);
-      replaceMap(parsed, { fileName: file.name, buffer });
+      if (mode === "REPAIR") {
+        const parsed = parseCiv5MapForRepair(buffer, file.name);
+        replaceMap(parsed.map, { fileName: file.name, buffer, salvaged: parsed.salvaged });
+        beginRepair(parsed.map, parsed.diagnostics);
+        setMessage(parsed.salvaged ? `${file.name} · damaged data recovered for repair` : `${file.name} · repair tests complete`);
+      } else {
+        const parsed = parseCiv5Map(buffer, file.name);
+        replaceMap(parsed, { fileName: file.name, buffer });
+        setMessage(`${file.name} · rendered locally`);
+      }
       setShowEditPrompt(false);
       setIsEditingMetadata(false);
-      setMessage(`${file.name} · rendered locally`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "That map could not be read.");
     }
-  }, [replaceMap]);
+  }, [beginRepair, mode, replaceMap]);
 
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -856,10 +915,10 @@ export function Civ5MapViewer() {
       y: (event.clientY - rect.top - view.y) / view.zoom,
     };
     if (projection === "ISOMETRIC") {
-      setHovered(closestIsometricTile(map, projectedPoint.x, projectedPoint.y, mapProjection, layers.elevation));
+      setHovered(closestIsometricTile(canvasMap, projectedPoint.x, projectedPoint.y, mapProjection, layers.elevation));
     } else {
       const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
-      setHovered(closestTile(map, worldPoint.x, worldPoint.y));
+      setHovered(closestTile(canvasMap, worldPoint.x, worldPoint.y));
     }
   };
 
@@ -1021,11 +1080,12 @@ export function Civ5MapViewer() {
     setMessage(sourceFile ? "Map details edited · ready to export" : "Demo map details edited");
   };
 
-  const performCiv5MapExport = () => {
+  const performCiv5MapExport = (targetMap = map, repaired = false) => {
     try {
-      const exported = sourceFile ? updateCiv5Map(sourceFile.buffer, map) : serializeCiv5Map(map);
-      const baseName = sourceFile?.fileName.replace(/\.civ5map$/i, "") ?? mapExportBaseName(map);
-      const downloadName = `${baseName}${sourceFile ? "-edited" : ""}.Civ5Map`;
+      const exported = sourceFile && !sourceFile.salvaged ? updateCiv5Map(sourceFile.buffer, targetMap) : serializeCiv5Map(targetMap);
+      const baseName = sourceFile?.fileName.replace(/\.civ5map$/i, "") ?? mapExportBaseName(targetMap);
+      const suffix = repaired ? "-repaired" : sourceFile ? "-edited" : "";
+      const downloadName = `${baseName}${suffix}.Civ5Map`;
       download(exported, downloadName);
       setMessage(`${downloadName} · exported`);
     } catch (error) {
@@ -1040,6 +1100,42 @@ export function Civ5MapViewer() {
       return;
     }
     performCiv5MapExport();
+  };
+
+  const selectRepairProfile = (profile: RepairProfile) => {
+    setRepairProfile(profile);
+    setRepairSelected(new Set(repairIssues.filter((issue) => issueSelectedByProfile(issue, profile)).map((issue) => issue.id)));
+  };
+
+  const toggleRepairIssue = (issue: RepairIssue) => {
+    if (!issue.mutation) return;
+    setRepairSelected((current) => {
+      const next = new Set(current);
+      if (next.has(issue.id)) next.delete(issue.id);
+      else next.add(issue.id);
+      return next;
+    });
+  };
+
+  const focusRepairIssue = (issue: RepairIssue) => {
+    if (issue.x === undefined || issue.y === undefined) return;
+    setRepairView("DIFFERENCE");
+    setSelection({ minX: issue.x, minY: issue.y, maxX: issue.x, maxY: issue.y });
+  };
+
+  const applySelectedRepairs = () => {
+    if (!repairBaseline) return;
+    const repaired = applyRepairIssues(repairBaseline, repairIssues, repairSelected);
+    const appliedCount = repairIssues.filter((issue) => repairSelected.has(issue.id) && issue.mutation).length;
+    commitMap(repaired);
+    beginRepair(repaired, repairDiagnostics);
+    setMessage(`${appliedCount} automated repairs applied · undo available`);
+  };
+
+  const enterRepairMode = () => {
+    setMode("REPAIR");
+    beginRepair(mapRef.current);
+    setMessage("Repair tests complete · review the proposed corrections");
   };
 
   const copySelection = () => {
@@ -1134,9 +1230,9 @@ export function Civ5MapViewer() {
           </div>
         </div>
         <nav className="mode-tabs" aria-label="Workspace mode">
-          {(["VIEW", "CREATE", "SCRIPT"] as const).map((item) => (
-            <button key={item} type="button" className={mode === item ? "is-active" : ""} onClick={() => setMode(item)}>
-              {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : "Lua"}
+          {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
+            <button key={item} type="button" className={mode === item ? "is-active" : ""} onClick={() => item === "REPAIR" ? enterRepairMode() : setMode(item)}>
+              {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}
             </button>
           ))}
         </nav>
@@ -1226,6 +1322,54 @@ export function Civ5MapViewer() {
               <div>
                 <button type="button" onClick={() => { setShowExportValidation(false); setMode("CREATE"); setCreateView("ANALYZE"); }}>Open report</button>
                 <button className="confirm-edit" type="button" onClick={() => { setShowExportValidation(false); performCiv5MapExport(); }}>Export anyway</button>
+              </div>
+            </div>
+          )}
+
+          {mode === "REPAIR" && repairBaseline && (
+            <div className="repair-panel">
+              <div className="section-title"><h3>Automated repair</h3><span>{repairIssues.filter((issue) => issue.severity !== "INFO").length} findings</span></div>
+              <p className="repair-intro">Checks file structure, legal terrain content, river geometry, scenario records, and start locations before export.</p>
+
+              <div className="repair-profile" role="group" aria-label="Repair profile">
+                {(["SAFE", "STANDARD", "COMPETITIVE"] as const).map((profile) => (
+                  <button key={profile} type="button" className={repairProfile === profile ? "is-active" : ""} onClick={() => selectRepairProfile(profile)}>{profile.toLowerCase()}</button>
+                ))}
+              </div>
+              <small className="repair-profile-note">{repairProfile === "SAFE" ? "Only certain structural and scenario corrections." : repairProfile === "STANDARD" ? "Safe fixes plus legal placement and disconnected-river corrections." : "All automated fixes plus competitive start-location review."}</small>
+
+              <div className="repair-view-tabs" role="tablist" aria-label="Repair comparison view">
+                {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
+              </div>
+
+              {repairDiagnostics.length > 0 && (
+                <details className="repair-diagnostics">
+                  <summary>File recovery report</summary>
+                  <ul>{repairDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul>
+                </details>
+              )}
+
+              <div className="start-test-summary">
+                <strong>Start-location tests included</strong>
+                <span>Bounds · land access · mountain safety · duplicates · spacing · player count · city-state flags</span>
+              </div>
+
+              <div className="repair-issue-list">
+                {repairIssues.map((issue) => (
+                  <div key={issue.id} className={`repair-issue severity-${issue.severity.toLowerCase()}${repairSelected.has(issue.id) ? " is-selected" : ""}`}>
+                    <label>
+                      <input type="checkbox" checked={repairSelected.has(issue.id)} disabled={!issue.mutation} onChange={() => toggleRepairIssue(issue)} />
+                      <span><strong>{issue.title}</strong><small>{issue.category.toLowerCase()} · {issue.confidence.toLowerCase()}</small></span>
+                    </label>
+                    <p>{issue.detail}</p>
+                    {issue.x !== undefined && issue.y !== undefined && <button type="button" onClick={() => focusRepairIssue(issue)}>Show tile {issue.x}, {issue.y}</button>}
+                  </div>
+                ))}
+              </div>
+
+              <div className="repair-actions">
+                <button type="button" disabled={!repairSelected.size} onClick={applySelectedRepairs}>Apply selected</button>
+                <button className="repair-export" type="button" onClick={() => performCiv5MapExport(repairPreviewMap, true)}>Export repaired Civ5Map</button>
               </div>
             </div>
           )}
@@ -1551,7 +1695,7 @@ export function Civ5MapViewer() {
         >
           <canvas
             ref={canvasRef}
-            aria-label={`Interactive physical map of ${map.name}`}
+            aria-label={`Interactive physical map of ${canvasMap.name}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -1574,16 +1718,16 @@ export function Civ5MapViewer() {
 
           {activeTile && hovered ? (
             <div className="tile-card">
-              <p className="eyebrow">Tile {hovered.col}, {map.height - 1 - hovered.row}</p>
-              <h3>{friendlyName(map.terrains[activeTile.terrain], "TERRAIN_")}</h3>
+              <p className="eyebrow">Tile {hovered.col}, {canvasMap.height - 1 - hovered.row}</p>
+              <h3>{friendlyName(canvasMap.terrains[activeTile.terrain], "TERRAIN_")}</h3>
               <div className="tile-details">
-                <span>Feature<strong>{friendlyName(map.features[activeTile.feature], "FEATURE_")}</strong></span>
+                <span>Feature<strong>{friendlyName(canvasMap.features[activeTile.feature], "FEATURE_")}</strong></span>
                 <span>Elevation<strong>{["Flat", "Hills", "Mountain"][activeTile.elevation] ?? `Level ${activeTile.elevation}`}</strong></span>
-                <span>Resource<strong>{friendlyName(map.resources[activeTile.resource], "RESOURCE_")}</strong></span>
+                <span>Resource<strong>{friendlyName(canvasMap.resources[activeTile.resource], "RESOURCE_")}</strong></span>
               </div>
             </div>
           ) : (
-            <div className="map-hint">{mode === "CREATE" && createView === "EDIT" ? "Click to edit" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
+            <div className="map-hint">{mode === "CREATE" && createView === "EDIT" ? "Click to edit" : mode === "REPAIR" ? "Review proposed corrections" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
           )}
 
           {isDraggingFile && (

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCiv5Map, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata } from "../lib/civ5-map.ts";
+import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata, type Civ5Map, type Civ5Tile } from "../lib/civ5-map.ts";
 import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
+import { applyRepairIssues, buildRepairIssues } from "../lib/map-repair.ts";
+import { isPassableLand, resourcePlacementVerdict } from "../lib/civ5-rules.ts";
 
 const encoder = new TextEncoder();
 
@@ -212,6 +214,93 @@ test("exports tile edits while preserving imported scenario starts", () => {
   assert.equal(parsed.tiles[0].river, 4);
   assert.equal(parsed.startLocations.length, 1);
   assert.equal(parsed.startLocations[0].x, 1);
+});
+
+test("exports repaired start coordinates and scenario flags into player records", () => {
+  const original = createScenarioMap();
+  new DataView(original).setUint8(9, 8);
+  const repaired = parseCiv5Map(original, "test.Civ5Map");
+  repaired.startLocations[0] = { ...repaired.startLocations[0], x: 0, y: 1, team: 4, playable: false };
+  const issues = buildRepairIssues(repaired);
+  const fixed = applyRepairIssues(repaired, issues, new Set(issues.filter((issue) => issue.mutation).map((issue) => issue.id)));
+  const parsed = parseCiv5Map(updateCiv5Map(original, fixed), "test.Civ5Map");
+
+  assert.equal(parsed.startLocations[0].x, 0);
+  assert.equal(parsed.startLocations[0].y, 1);
+  assert.equal(parsed.startLocations[0].team, 4);
+  assert.equal(parsed.startLocations[0].playable, false);
+  assert.equal(parsed.players, 1);
+});
+
+test("repair parser recovers truncated geography into a complete renderable grid", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "repair-salvage" });
+  const serialized = serializeCiv5Map(generated);
+  const truncated = serialized.slice(0, serialized.byteLength - 8);
+  const recovered = parseCiv5MapForRepair(truncated, "damaged.Civ5Map");
+
+  assert.equal(recovered.salvaged, true);
+  assert.equal(recovered.map.tiles.length, generated.width * generated.height);
+  assert.ok(recovered.diagnostics.some((diagnostic) => /missing tiles/i.test(diagnostic)));
+});
+
+test("repair tests correct illegal resources, features, and river bytes", () => {
+  const tile = (terrain = 2, elevation = 0): Civ5Tile => ({ terrain, resource: 255, feature: 255, river: 0, elevation, continent: 0, wonder: 255, resourceAmount: 0 });
+  const map: Civ5Map = {
+    name: "Broken placements", description: "", worldSize: "Custom", version: 12, width: 4, height: 3, players: 0, wraps: false,
+    terrains: ["TERRAIN_OCEAN", "TERRAIN_COAST", "TERRAIN_GRASS", "TERRAIN_PLAINS", "TERRAIN_DESERT"],
+    features: ["FEATURE_FOREST", "FEATURE_OASIS"], wonders: [], resources: ["RESOURCE_FISH", "RESOURCE_GOLD"],
+    tiles: Array.from({ length: 12 }, () => tile()), startLocations: [], source: "file",
+  };
+  map.tiles[0] = { ...tile(0), feature: 0 };
+  map.tiles[1] = tile(1);
+  map.tiles[4] = { ...tile(2), resource: 0, resourceAmount: 1 };
+  map.tiles[5] = { ...tile(2, 2), resource: 1, resourceAmount: 1 };
+  map.tiles[6] = { ...tile(2), feature: 1 };
+  map.tiles[8].river = 128;
+
+  const issues = buildRepairIssues(map);
+  assert.ok(issues.some((issue) => issue.category === "RESOURCES" && issue.severity === "ERROR"));
+  assert.ok(issues.some((issue) => issue.category === "FEATURES" && issue.severity === "ERROR"));
+  assert.ok(issues.some((issue) => issue.category === "RIVERS" && issue.severity === "ERROR"));
+  const selected = new Set(issues.filter((issue) => issue.mutation).map((issue) => issue.id));
+  const repaired = applyRepairIssues(map, issues, selected);
+  for (const repairedTile of repaired.tiles) assert.equal(resourcePlacementVerdict(repaired, repairedTile).valid, true);
+  assert.equal(repaired.tiles[0].feature, 255);
+  assert.equal(repaired.tiles[6].feature, 255);
+  assert.equal(repaired.tiles[8].river, 0);
+});
+
+test("start-location repair tests cover passability, duplicates, counts, city-state flags, and reachability", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 4, cityStates: 1, seed: "broken-starts" });
+  const map: Civ5Map = { ...generated, players: 9, tiles: generated.tiles.map((item) => ({ ...item })), startLocations: generated.startLocations.map((start) => ({ ...start })) };
+  const invalidIndex = map.startLocations[0].y * map.width + map.startLocations[0].x;
+  map.tiles[invalidIndex].terrain = 0;
+  map.tiles[invalidIndex].elevation = 0;
+  map.startLocations[1].x = map.startLocations[0].x;
+  map.startLocations[1].y = map.startLocations[0].y;
+  map.startLocations.at(-1)!.playable = true;
+
+  const issues = buildRepairIssues(map);
+  assert.ok(issues.some((issue) => issue.category === "STARTS" && issue.severity === "ERROR"));
+  assert.ok(issues.some((issue) => issue.id === "player-count"));
+  assert.ok(issues.some((issue) => issue.id.startsWith("city-state-playable-")));
+  const selected = new Set(issues.filter((issue) => issue.mutation).map((issue) => issue.id));
+  const repaired = applyRepairIssues(map, issues, selected);
+  const positions = repaired.startLocations.map((start) => `${start.x},${start.y}`);
+  assert.equal(new Set(positions).size, positions.length);
+  for (const start of repaired.startLocations) assert.equal(isPassableLand(repaired, repaired.tiles[start.y * repaired.width + start.x]), true);
+  assert.equal(repaired.startLocations.find((start) => start.cityState)?.playable, false);
+  assert.equal(repaired.players, repaired.startLocations.filter((start) => !start.cityState).length);
+
+  const pocketTile = (): Civ5Tile => ({ terrain: 2, resource: 255, feature: 255, river: 0, elevation: 0, continent: 0, wonder: 255, resourceAmount: 0 });
+  const pocket: Civ5Map = {
+    name: "Pocket", description: "", worldSize: "Custom", version: 12, width: 5, height: 4, players: 1, wraps: false,
+    terrains: ["TERRAIN_OCEAN", "TERRAIN_COAST", "TERRAIN_GRASS"], features: [], wonders: [], resources: [],
+    tiles: Array.from({ length: 20 }, pocketTile),
+    startLocations: [{ x: 2, y: 1, player: 0, civilization: "", leader: "", team: 0, playable: true, cityState: false }], source: "file",
+  };
+  for (const neighbor of adjacentIndices(7, pocket.width, pocket.height, false)) pocket.tiles[neighbor].elevation = 2;
+  assert.ok(buildRepairIssues(pocket).some((issue) => issue.id === "start-access-0" && issue.mutation?.kind === "MOVE_START"));
 });
 
 test("seeded generation is deterministic and uses standard map sizes", () => {
