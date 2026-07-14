@@ -72,9 +72,9 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /exported with transparent background/);
   assert.match(source, /const baseName = mapExportBaseName\(targetMap\)/);
   assert.doesNotMatch(source, /sourceFile\?\.fileName\.replace\(\/\\\.civ5map/);
-  assert.match(source, /\[4, 5, 1\]/);
-  assert.match(source, /\[3, 4, 2\]/);
-  assert.match(source, /\[2, 3, 4\]/);
+  assert.match(source, /\[1, 2, 1\]/);
+  assert.match(source, /\[2, 3, 2\]/);
+  assert.match(source, /\[3, 4, 4\]/);
   assert.match(source, /tileCenter\(col, row, map\.height - 1 - row\)/);
   assert.match(source, />Randomise</);
   assert.match(source, /Generation history/);

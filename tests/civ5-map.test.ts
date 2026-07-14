@@ -9,6 +9,7 @@ import { applyRepairIssues, buildRepairIssues } from "../lib/map-repair.ts";
 import { featurePlacementVerdict, isPassableLand, resourcePlacementVerdict, wonderPlacementVerdict } from "../lib/civ5-rules.ts";
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "../lib/political-map.ts";
 import { fitViewport, minimumViewportZoom } from "../lib/map-viewport.ts";
+import { RIVER_DATA_MASK, riverEdgeDefinitions, riverFlowsFromAToB } from "../lib/rivers.ts";
 
 const encoder = new TextEncoder();
 
@@ -73,36 +74,32 @@ function assertMountainPassability(map: ReturnType<typeof generateMap>) {
 function assertRiverNetworks(map: ReturnType<typeof generateMap>) {
   const vertexTiles = new Map<string, Set<number>>();
   const riverNeighbors = new Map<string, Set<string>>();
+  const riverFlow = new Map<string, { incoming: number; outgoing: number }>();
   let riverEdges = 0;
   const addTile = (vertex: string, tile: number) => {
     if (!vertexTiles.has(vertex)) vertexTiles.set(vertex, new Set());
     vertexTiles.get(vertex)!.add(tile);
   };
-  const addRiverEdge = (a: string, b: string) => {
+  const addRiverEdge = (a: string, b: string, fromAToB: boolean) => {
     if (!riverNeighbors.has(a)) riverNeighbors.set(a, new Set());
     if (!riverNeighbors.has(b)) riverNeighbors.set(b, new Set());
     riverNeighbors.get(a)!.add(b);
     riverNeighbors.get(b)!.add(a);
+    const from = fromAToB ? a : b;
+    const to = fromAToB ? b : a;
+    const fromFlow = riverFlow.get(from) ?? { incoming: 0, outgoing: 0 };
+    const toFlow = riverFlow.get(to) ?? { incoming: 0, outgoing: 0 };
+    fromFlow.outgoing += 1;
+    toFlow.incoming += 1;
+    riverFlow.set(from, fromFlow);
+    riverFlow.set(to, toFlow);
     riverEdges += 1;
   };
 
   for (let y = 0; y < map.height; y += 1) {
     for (let x = 0; x < map.width; x += 1) {
       const owner = y * map.width + x;
-      const centerX = x * 2 + (y & 1);
-      const centerY = y * 3;
-      const definitions = y % 2 === 0
-        ? [
-            { bit: 1, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
-            { bit: 2, dx: -1, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
-            { bit: 4, dx: 0, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
-          ]
-        : [
-            { bit: 1, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
-            { bit: 2, dx: 0, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
-            { bit: 4, dx: 1, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
-          ];
-      for (const definition of definitions) {
+      for (const definition of riverEdgeDefinitions(x, y)) {
         let nextX = x + definition.dx;
         const nextY = y + definition.dy;
         if (map.wraps) nextX = (nextX + map.width) % map.width;
@@ -114,13 +111,15 @@ function assertRiverNetworks(map: ReturnType<typeof generateMap>) {
         }
         if (map.tiles[owner].river & definition.bit) {
           assert.ok(map.tiles[owner].terrain >= 2 && map.tiles[neighbor].terrain >= 2, "a river occupied an ocean or shoreline edge");
-          addRiverEdge(definition.a, definition.b);
+          addRiverEdge(definition.a, definition.b, riverFlowsFromAToB(map.tiles[owner].river, definition.bit));
         }
       }
     }
   }
 
   assert.ok(riverEdges > 0, "the generated map did not contain a river network");
+  assert.equal(map.tiles.some((tile) => Boolean(tile.river & ~RIVER_DATA_MASK)), false, "the generator emitted unsupported river bits");
+  assert.ok(map.tiles.some((tile) => Boolean(tile.river & 0x38)), "the generator omitted every river flow direction bit");
   const assigned = new Set<string>();
   for (const origin of riverNeighbors.keys()) {
     if (assigned.has(origin)) continue;
@@ -151,6 +150,10 @@ function assertRiverNetworks(map: ReturnType<typeof generateMap>) {
     assert.ok(touchesWater, "a river network did not terminate in water");
     assert.ok(endpoints.every((vertex) => vertexTouchesMountain(vertex) || vertexTouchesWater(vertex)), "a river network ended inland away from a mountain");
     assert.ok(componentVertices.filter(vertexTouchesWater).every((vertex) => riverNeighbors.get(vertex)!.size === 1), "a river continued through an ocean or lake outlet");
+    for (const vertex of componentVertices.filter((candidate) => riverNeighbors.get(candidate)!.size > 1)) {
+      const flow = riverFlow.get(vertex)!;
+      assert.ok(flow.incoming > 0 && flow.outgoing > 0, "adjacent river edges had contradictory flow directions");
+    }
   }
 }
 
@@ -159,20 +162,7 @@ function riverEdgeRecords(map: Civ5Map) {
   for (let y = 0; y < map.height; y += 1) {
     for (let x = 0; x < map.width; x += 1) {
       const owner = y * map.width + x;
-      const centerX = x * 2 + (y & 1);
-      const centerY = y * 3;
-      const definitions = y % 2 === 0
-        ? [
-            { bit: 1 as const, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
-            { bit: 2 as const, dx: -1, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
-            { bit: 4 as const, dx: 0, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
-          ]
-        : [
-            { bit: 1 as const, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
-            { bit: 2 as const, dx: 0, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
-            { bit: 4 as const, dx: 1, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
-          ];
-      for (const definition of definitions) {
+      for (const definition of riverEdgeDefinitions(x, y)) {
         let nextX = x + definition.dx;
         const nextY = y + definition.dy;
         if (map.wraps) nextX = (nextX + map.width) % map.width;
@@ -1145,6 +1135,9 @@ test("Excogitare Lua exports retain safe native generation settings", () => {
   const source = createLuaMapScript(generated);
   const imported = mapFromLuaScript(source).map;
 
+  assert.match(source, /bit\.band\(river, 8\).*FLOWDIRECTION_NORTH.*FLOWDIRECTION_SOUTH/);
+  assert.match(source, /bit\.band\(river, 16\).*FLOWDIRECTION_NORTHEAST.*FLOWDIRECTION_SOUTHWEST/);
+  assert.match(source, /bit\.band\(river, 32\).*FLOWDIRECTION_NORTHWEST.*FLOWDIRECTION_SOUTHEAST/);
   assert.equal(imported.source, "script");
   assert.deepEqual(imported.generation, generated.generation);
   assert.deepEqual(imported.tiles, generated.tiles);

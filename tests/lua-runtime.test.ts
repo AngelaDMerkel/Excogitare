@@ -58,7 +58,11 @@ function AddFeatures()
   Map.GetPlot(3,3):SetImprovementType(GameInfo.Improvements.IMPROVEMENT_CITY_RUINS.ID)
   Players[0]:SetStartingPlot(Map.GetPlot(1,1))
 end
-function AddRivers() Map.GetPlot(2,2):SetWOfRiver(true,FlowDirectionTypes.FLOWDIRECTION_SOUTH) end
+function AddRivers()
+  Map.GetPlot(2,2):SetWOfRiver(true,FlowDirectionTypes.FLOWDIRECTION_SOUTH)
+  Map.GetPlot(3,2):SetNWOfRiver(true,FlowDirectionTypes.FLOWDIRECTION_NORTHEAST)
+  Map.GetPlot(4,2):SetNEOfRiver(true,FlowDirectionTypes.FLOWDIRECTION_NORTHWEST)
+end
 `,
         dependencies: [{ name: "TerrainHelpers.lua", source: "function PaintBonus(plot) plot:SetFeatureType(FeatureTypes.FEATURE_FOREST) plot:SetResourceType(GameInfo.Resources.RESOURCE_IRON.ID,2) end" }],
         postProcessSource: "Map.GetPlot(4,4):SetTerrainType(TerrainTypes.TERRAIN_DESERT) Map.GetPlot(4,4):SetRouteType(GameInfo.Routes.ROUTE_RAILROAD.ID)",
@@ -96,6 +100,8 @@ function AddRivers() Map.GetPlot(2,2):SetWOfRiver(true,FlowDirectionTypes.FLOWDI
   assert.equal(result.tiles[1 * 12 + 1].resource, 5);
   assert.equal(result.tiles[1 * 12 + 1].resourceAmount, 2);
   assert.equal(result.tiles[2 * 12 + 2].river, 1);
+  assert.equal(result.tiles[2 * 12 + 3].river, 18);
+  assert.equal(result.tiles[2 * 12 + 4].river, 36);
   assert.equal(result.tiles[3 * 12 + 3].route, "ROUTE_ROAD");
   assert.equal(result.tiles[3 * 12 + 3].improvement, "IMPROVEMENT_CITY_RUINS");
   assert.equal(result.tiles[4 * 12 + 4].terrain, 4);

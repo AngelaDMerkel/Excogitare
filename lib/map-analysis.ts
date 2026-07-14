@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5StartLocation } from "./civ5-map.ts";
+import { RIVER_DATA_MASK, RIVER_EDGE_MASK } from "./rivers.ts";
 
 export type ValidationIssue = {
   severity: "ERROR" | "WARNING" | "INFO";
@@ -104,18 +105,18 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
     const tile = map.tiles[index];
     if (tile.resource !== 255 && (tile.resource < 0 || tile.resource >= map.resources.length)) invalidResources += 1;
     if (tile.wonder !== 255 && (tile.wonder < 0 || tile.wonder >= map.wonders.length)) invalidWonders += 1;
-    if (tile.river & ~7) invalidRiverBits += 1;
+    if (tile.river & ~RIVER_DATA_MASK) invalidRiverBits += 1;
     if (tile.improvement) previewSites += 1;
     if (tile.route) previewRoutes += 1;
-    if (tile.river & 7) {
+    if (tile.river & RIVER_EDGE_MASK) {
       const x = index % map.width;
       const y = Math.floor(index / map.width);
-      if (!neighbors(x, y, map.width, map.height, map.wraps).some(([nx, ny]) => map.tiles[ny * map.width + nx].river & 7)) isolatedRivers += 1;
+      if (!neighbors(x, y, map.width, map.height, map.wraps).some(([nx, ny]) => map.tiles[ny * map.width + nx].river & RIVER_EDGE_MASK)) isolatedRivers += 1;
     }
   }
   if (invalidResources) issues.push({ severity: "ERROR", category: "RESOURCES", message: `${invalidResources} tiles reference missing resource definitions.` });
   if (invalidWonders) issues.push({ severity: "ERROR", category: "RESOURCES", message: `${invalidWonders} tiles reference missing wonder definitions.` });
-  if (invalidRiverBits) issues.push({ severity: "ERROR", category: "RIVERS", message: `${invalidRiverBits} tiles contain unsupported river-edge flags.` });
+  if (invalidRiverBits) issues.push({ severity: "ERROR", category: "RIVERS", message: `${invalidRiverBits} tiles contain unsupported river-data flags.` });
   if (isolatedRivers) issues.push({ severity: "WARNING", category: "RIVERS", message: `${isolatedRivers} river tiles appear disconnected and should be inspected.` });
   if (previewSites || previewRoutes) issues.push({ severity: "WARNING", category: "SCENARIO", message: `${previewSites} scenario sites and ${previewRoutes} road tiles are previewed; geography-only Civ5Map export does not retain scenario improvements or routes.` });
   if (!issues.length) issues.push({ severity: "INFO", category: "STRUCTURE", message: "No structural Civ5Map problems were detected." });

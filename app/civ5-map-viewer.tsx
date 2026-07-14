@@ -463,9 +463,9 @@ function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, 
     return { x: x + HEX_RADIUS * Math.cos(angle), y: y + HEX_RADIUS * Math.sin(angle) };
   });
   const edges = [
-    [4, 5, 1],
-    [3, 4, 2],
-    [2, 3, 4],
+    [1, 2, 1], // plot is west of the river: east edge
+    [2, 3, 2], // plot is northwest of the river: southeast edge
+    [3, 4, 4], // plot is northeast of the river: southwest edge
   ];
   context.save();
   context.lineCap = "round";

@@ -1,6 +1,7 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 import { cloneGenerationStructure } from "./generation-structure.ts";
 import { generateRiverNetwork } from "./map-generator.ts";
+import { RIVER_DATA_MASK, riverEdgeDefinitions } from "./rivers.ts";
 import {
   adjacentCoordinates,
   featurePlacementVerdict,
@@ -63,25 +64,13 @@ function hexDistance(a: [number, number], b: [number, number], width: number, wr
   return Math.min(direct(a, b), direct([a[0] - width, a[1]], b), direct([a[0] + width, a[1]], b));
 }
 
-function riverNeighbor(map: Civ5Map, index: number, bit: number) {
-  const x = index % map.width;
-  const y = Math.floor(index / map.width);
-  const [dx, dy] = bit === 1 ? [-1, 0] : bit === 2 ? (y % 2 === 0 ? [-1, -1] : [0, -1]) : (y % 2 === 0 ? [0, -1] : [1, -1]);
-  let nx = x + dx;
-  const ny = y + dy;
-  if (map.wraps) nx = (nx + map.width) % map.width;
-  if (nx < 0 || nx >= map.width || ny < 0 || ny >= map.height) return null;
-  if (Math.abs(nx - x) > 1) return null;
-  return ny * map.width + nx;
-}
-
 type RepairRiverEdge = { a: string; b: string; tiles: [number, number] };
 
 function rebuildLogicalRivers(map: Civ5Map) {
   const edges: RepairRiverEdge[] = [];
   const adjacency = new Map<string, number[]>();
   const vertexTiles = new Map<string, Set<number>>();
-  let invalidEdges = map.tiles.filter((tile) => Boolean(tile.river & ~7)).length;
+  let invalidEdges = map.tiles.filter((tile) => Boolean(tile.river & ~RIVER_DATA_MASK)).length;
   const addVertexEdge = (vertex: string, edge: number) => adjacency.set(vertex, [...(adjacency.get(vertex) ?? []), edge]);
   const addVertexTiles = (vertex: string, tiles: [number, number]) => {
     const values = vertexTiles.get(vertex) ?? new Set<number>();
@@ -91,20 +80,16 @@ function rebuildLogicalRivers(map: Civ5Map) {
   for (let y = 0; y < map.height; y += 1) {
     for (let x = 0; x < map.width; x += 1) {
       const owner = y * map.width + x;
-      const centerX = x * 2 + (y & 1);
-      const centerY = y * 3;
-      const definitions = [
-        { bit: 1, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
-        { bit: 2, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
-        { bit: 4, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
-      ];
-      for (const definition of definitions) {
+      for (const definition of riverEdgeDefinitions(x, y)) {
         const enabled = Boolean(map.tiles[owner].river & definition.bit);
-        const neighbor = riverNeighbor(map, owner, definition.bit);
-        if (neighbor === null) {
+        let nextX = x + definition.dx;
+        const nextY = y + definition.dy;
+        if (map.wraps) nextX = (nextX + map.width) % map.width;
+        if (nextX < 0 || nextX >= map.width || nextY < 0 || nextY >= map.height || Math.abs(nextX - x) > 1) {
           if (enabled) invalidEdges += 1;
           continue;
         }
+        const neighbor = nextY * map.width + nextX;
         addVertexTiles(definition.a, [owner, neighbor]);
         addVertexTiles(definition.b, [owner, neighbor]);
         // Civ5 rivers occupy edges between two land plots. Their mouth is the

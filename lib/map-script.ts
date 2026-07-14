@@ -169,9 +169,18 @@ end
 function AddRivers()
   eachPlot(function(plot, index)
     local river = riverData[index]
-    if bit.band(river, 1) ~= 0 then plot:SetWOfRiver(true, FlowDirectionTypes.FLOWDIRECTION_SOUTH) end
-    if bit.band(river, 2) ~= 0 then plot:SetNWOfRiver(true, FlowDirectionTypes.FLOWDIRECTION_NORTHEAST) end
-    if bit.band(river, 4) ~= 0 then plot:SetNEOfRiver(true, FlowDirectionTypes.FLOWDIRECTION_SOUTHEAST) end
+    if bit.band(river, 1) ~= 0 then
+      local flow = bit.band(river, 8) ~= 0 and FlowDirectionTypes.FLOWDIRECTION_NORTH or FlowDirectionTypes.FLOWDIRECTION_SOUTH
+      plot:SetWOfRiver(true, flow)
+    end
+    if bit.band(river, 2) ~= 0 then
+      local flow = bit.band(river, 16) ~= 0 and FlowDirectionTypes.FLOWDIRECTION_NORTHEAST or FlowDirectionTypes.FLOWDIRECTION_SOUTHWEST
+      plot:SetNWOfRiver(true, flow)
+    end
+    if bit.band(river, 4) ~= 0 then
+      local flow = bit.band(river, 32) ~= 0 and FlowDirectionTypes.FLOWDIRECTION_NORTHWEST or FlowDirectionTypes.FLOWDIRECTION_SOUTHEAST
+      plot:SetNEOfRiver(true, flow)
+    end
   end)
 end
 `;

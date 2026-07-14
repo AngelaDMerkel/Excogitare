@@ -209,10 +209,19 @@ self.onmessage = async (event: MessageEvent<Request>) => {
       tiles[indexOf(x, y)].resource = resource < 0 || internal === undefined ? 255 : internal;
       tiles[indexOf(x, y)].resourceAmount = resource < 0 ? 0 : Math.max(1, amount);
     });
-    lua.global.set("__set_river", (x: number, y: number, bit: number, enabled: boolean) => {
+    lua.global.set("__set_river", (x: number, y: number, bit: number, enabled: boolean, flow = -1) => {
       if (!valid(x, y)) return;
-      if (enabled) tiles[indexOf(x, y)].river |= bit;
-      else tiles[indexOf(x, y)].river &= ~bit;
+      const tile = tiles[indexOf(x, y)];
+      const flowBit = bit << 3;
+      if (!enabled) {
+        tile.river &= ~bit;
+        tile.river &= ~flowBit;
+        return;
+      }
+      tile.river |= bit;
+      const directionSet = (bit === 1 && flow === 0) || (bit === 2 && flow === 1) || (bit === 4 && flow === 5);
+      if (directionSet) tile.river |= flowBit;
+      else tile.river &= ~flowBit;
     });
     lua.global.set("__set_continent", (x: number, y: number, continent: number) => {
       if (valid(x, y)) tiles[indexOf(x, y)].continent = Math.max(0, Math.min(255, Number(continent) || 0));
@@ -293,9 +302,9 @@ local function getPlot(x,y)
   function plot:SetTerrainType(value) __set_terrain(self.__x,self.__y,value) end
   function plot:SetFeatureType(value) __set_feature(self.__x,self.__y,value) end
   function plot:SetResourceType(value,amount) __set_resource(self.__x,self.__y,value,amount or 1) end
-  function plot:SetWOfRiver(enabled) __set_river(self.__x,self.__y,1,enabled) end
-  function plot:SetNWOfRiver(enabled) __set_river(self.__x,self.__y,2,enabled) end
-  function plot:SetNEOfRiver(enabled) __set_river(self.__x,self.__y,4,enabled) end
+  function plot:SetWOfRiver(enabled,flow) __set_river(self.__x,self.__y,1,enabled,flow or -1) end
+  function plot:SetNWOfRiver(enabled,flow) __set_river(self.__x,self.__y,2,enabled,flow or -1) end
+  function plot:SetNEOfRiver(enabled,flow) __set_river(self.__x,self.__y,4,enabled,flow or -1) end
   function plot:SetContinentArtType(value) __set_continent(self.__x,self.__y,value) end
   function plot:SetRouteType(value) __set_route(self.__x,self.__y,value) end
   function plot:SetImprovementType(value) __set_improvement(self.__x,self.__y,value) end

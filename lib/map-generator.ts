@@ -3,6 +3,7 @@ import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdi
 import { attachRiverSystems, connectedLinearFeatures, connectedTileObjects, type GenerationStructure } from "./generation-structure.ts";
 import { generatePhysicalGeography } from "./physical-generator.ts";
 import { generateRegionGraphGeography } from "./region-graph-generator.ts";
+import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 4 },
@@ -643,7 +644,7 @@ type RiverEdge = {
   a: number;
   b: number;
   owner: number;
-  bit: 1 | 2 | 4;
+  bit: RiverEdgeBit;
   tiles: [number, number];
 };
 
@@ -687,20 +688,6 @@ function popDrainageHeap(heap: DrainageHeapItem[]) {
   return first;
 }
 
-function riverNeighbor(x: number, y: number, direction: 0 | 2 | 3, width: number, height: number, wraps: boolean) {
-  const offsets = y % 2 === 0
-    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
-    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
-  let nextX = x + offsets[direction][0];
-  const nextY = y + offsets[direction][1];
-  if (wraps) nextX = (nextX + width) % width;
-  if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height) return null;
-  // Do not route a visual river across the rendered map seam. It can still
-  // terminate on either coast, while the land itself remains cylindrical.
-  if (Math.abs(nextX - x) > 1) return null;
-  return [nextX, nextY] as const;
-}
-
 export function generateRiverNetwork(
   tiles: Civ5Tile[],
   reliefValues: number[],
@@ -732,20 +719,18 @@ export function generateRiverNetwork(
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const owner = y * width + x;
-      const centerX = x * 2 + (y & 1);
-      const centerY = y * 3;
-      const definitions = [
-        { bit: 1 as const, direction: 0 as const, start: `${centerX - 1},${centerY + 1}`, end: `${centerX - 1},${centerY - 1}` },
-        { bit: 2 as const, direction: 2 as const, start: `${centerX - 1},${centerY - 1}`, end: `${centerX},${centerY - 2}` },
-        { bit: 4 as const, direction: 3 as const, start: `${centerX},${centerY - 2}`, end: `${centerX + 1},${centerY - 1}` },
-      ];
-      for (const definition of definitions) {
-        const neighbor = riverNeighbor(x, y, definition.direction, width, height, wraps);
-        if (!neighbor) continue;
-        const neighborIndex = neighbor[1] * width + neighbor[0];
+      for (const definition of riverEdgeDefinitions(x, y)) {
+        let nextX = x + definition.dx;
+        const nextY = y + definition.dy;
+        if (wraps) nextX = (nextX + width) % width;
+        if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height) continue;
+        // Do not route a visual river across the rendered map seam. It can
+        // still terminate on either coast while the land remains cylindrical.
+        if (Math.abs(nextX - x) > 1) continue;
+        const neighborIndex = nextY * width + nextX;
         const adjacentTiles: [number, number] = [owner, neighborIndex];
-        const a = vertexIndex(definition.start, adjacentTiles);
-        const b = vertexIndex(definition.end, adjacentTiles);
+        const a = vertexIndex(definition.a, adjacentTiles);
+        const b = vertexIndex(definition.b, adjacentTiles);
         // A river mouth ends at a coastal/lake vertex. It never occupies the
         // shoreline edge itself, which would render as a river in the water.
         if (isWaterTile(owner) || isWaterTile(neighborIndex)) continue;
@@ -845,6 +830,7 @@ export function generateRiverNetwork(
   const selectedMountains: Array<[number, number]> = [];
   const networkVertices = new Set<number>();
   const networkEdges = new Set<number>();
+  const edgeFlowFromAToB = new Map<number, boolean>();
 
   for (const candidate of candidates) {
     if (selectedMountains.length >= desiredSources) break;
@@ -862,6 +848,8 @@ export function generateRiverNetwork(
       const edgeIndex = parentEdge[current];
       const next = parentVertex[current];
       pathEdges.push(edgeIndex);
+      const edge = edges[edgeIndex];
+      edgeFlowFromAToB.set(edgeIndex, edge.a === current && edge.b === next);
       pathVertices.push(next);
       current = next;
       if (isWater[current]) {
@@ -884,7 +872,7 @@ export function generateRiverNetwork(
   const rivers = new Uint8Array(tiles.length);
   for (const edgeIndex of networkEdges) {
     const edge = edges[edgeIndex];
-    rivers[edge.owner] |= edge.bit;
+    rivers[edge.owner] = setRiverEdge(rivers[edge.owner], edge.bit, edgeFlowFromAToB.get(edgeIndex) ?? true);
   }
   return rivers;
 }
