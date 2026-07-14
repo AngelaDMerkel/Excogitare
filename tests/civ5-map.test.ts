@@ -3,6 +3,7 @@ import test from "node:test";
 import { parseCiv5Map, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata } from "../lib/civ5-map.ts";
 import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
+import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
 
 const encoder = new TextEncoder();
 
@@ -475,7 +476,51 @@ test("generated maps serialize to a readable Civ5Map geography file", () => {
   assert.equal(parsed.worldSize, "DUEL");
   assert.equal(parsed.width, generated.width);
   assert.equal(parsed.height, generated.height);
-  assert.deepEqual(parsed.tiles, generated.tiles);
+  assert.deepEqual(parsed.tiles, generated.tiles.map((tile) => {
+    const geography = { ...tile };
+    delete geography.improvement;
+    return geography;
+  }));
+});
+
+test("content rules place wonders, guaranteed resources, camps, and ruins", () => {
+  const generated = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    players: 6,
+    cityStates: 8,
+    wonderCount: 7,
+    wonderMinSpacing: 6,
+    strategicStartGuarantee: true,
+    luxuryStartGuarantee: true,
+    barbarianAbundance: "RAGING",
+    ruinAbundance: "RAGING",
+    seed: "content-rules",
+  });
+  assert.equal(generated.tiles.filter((tile) => tile.wonder !== 255).length, 7);
+  assert.ok(generated.tiles.filter((tile) => tile.improvement === "IMPROVEMENT_BARBARIAN_CAMP").length > 10);
+  assert.ok(generated.tiles.filter((tile) => tile.improvement === "IMPROVEMENT_GOODY_HUT").length > 10);
+  for (const start of generated.startLocations.filter((item) => !item.cityState)) {
+    const nearby = generated.tiles.filter((_tile, index) => {
+      const x = index % generated.width;
+      const y = Math.floor(index / generated.width);
+      return Math.abs(x - start.x) <= 4 && Math.abs(y - start.y) <= 4;
+    });
+    assert.ok(nearby.some((tile) => tile.resource >= 5 && tile.resource <= 10));
+    assert.ok(nearby.some((tile) => tile.resource >= 11 && tile.resource !== 255));
+  }
+});
+
+test("analysis reports player balance and export validation problems", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 4, seed: "analyze-this" });
+  const report = analyzeMultiplayerBalance(generated);
+  assert.equal(report.players.length, 4);
+  assert.match(report.summary, /major starts/);
+  const broken = { ...generated, players: 7, tiles: generated.tiles.map((tile) => ({ ...tile })) };
+  broken.tiles[0].river = 128;
+  const issues = validateCiv5Map(broken);
+  assert.ok(issues.some((issue) => issue.category === "RIVERS" && issue.severity === "ERROR"));
+  assert.ok(issues.some((issue) => issue.category === "SCENARIO" && issue.severity === "WARNING"));
 });
 
 test("Excogitare Lua exports retain safe native generation settings", () => {

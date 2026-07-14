@@ -7,6 +7,7 @@ export type Civ5Tile = {
   continent: number;
   wonder: number;
   resourceAmount: number;
+  improvement?: "IMPROVEMENT_BARBARIAN_CAMP" | "IMPROVEMENT_GOODY_HUT";
 };
 
 export type Civ5StartLocation = {

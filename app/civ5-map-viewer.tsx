@@ -18,8 +18,10 @@ import {
   serializeCiv5Map,
   updateCiv5Map,
   type Civ5Map,
+  type Civ5StartLocation,
   type Civ5Tile,
 } from "@/lib/civ5-map";
+import { analyzeMultiplayerBalance, validateCiv5Map } from "@/lib/map-analysis";
 import {
   DEFAULT_GENERATION_OPTIONS,
   DOMINANT_TERRAINS,
@@ -54,6 +56,8 @@ type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer };
 type WorkspaceMode = "VIEW" | "CREATE" | "SCRIPT";
 type Brush = { terrain: number | null; elevation: number | null; feature: number | null; resource: number | null };
+type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
+type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
 type Projection = "FLAT" | "ISOMETRIC";
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 
@@ -285,6 +289,59 @@ function drawFeature(context: CanvasRenderingContext2D, name: string, x: number,
   context.restore();
 }
 
+function drawMapContent(context: CanvasRenderingContext2D, tile: Civ5Tile, x: number, y: number) {
+  if (tile.wonder !== 255) {
+    context.save();
+    context.fillStyle = "#f2d17f";
+    context.strokeStyle = "rgba(20, 35, 34, .9)";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    for (let point = 0; point < 10; point += 1) {
+      const radius = point % 2 ? 4 : 9;
+      const angle = -Math.PI / 2 + point * Math.PI / 5;
+      const px = x + Math.cos(angle) * radius;
+      const py = y + Math.sin(angle) * radius;
+      if (!point) context.moveTo(px, py); else context.lineTo(px, py);
+    }
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.restore();
+  }
+  if (tile.improvement === "IMPROVEMENT_BARBARIAN_CAMP") {
+    context.save();
+    context.fillStyle = "rgba(76, 39, 33, .94)";
+    context.strokeStyle = "#d28468";
+    context.lineWidth = 1.8;
+    context.beginPath();
+    context.arc(x, y, 7, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(x - 4, y - 4);
+    context.lineTo(x + 4, y + 4);
+    context.moveTo(x + 4, y - 4);
+    context.lineTo(x - 4, y + 4);
+    context.stroke();
+    context.restore();
+  } else if (tile.improvement === "IMPROVEMENT_GOODY_HUT") {
+    context.save();
+    context.fillStyle = "#d8c08a";
+    context.strokeStyle = "#4d493a";
+    context.lineWidth = 1.4;
+    context.fillRect(x - 5, y - 3, 10, 8);
+    context.strokeRect(x - 5, y - 3, 10, 8);
+    context.beginPath();
+    context.moveTo(x - 7, y - 3);
+    context.lineTo(x, y - 9);
+    context.lineTo(x + 7, y - 3);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.restore();
+  }
+}
+
 function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, y: number) {
   if (!(river & 7)) return;
   const points = Array.from({ length: 6 }, (_, index) => {
@@ -356,6 +413,8 @@ function drawMap(
   size: Size,
   pixelRatio: number,
   projection: ProjectionTransform,
+  selection: TileSelection | null,
+  focusedStart: Civ5StartLocation | null,
 ) {
   let paintedTiles = 0;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -411,6 +470,7 @@ function drawMap(
       if (layers.features && tile.feature !== 255) {
         drawFeature(context, map.features[tile.feature] ?? "", center.x, center.y);
       }
+      if (layers.features && (tile.wonder !== 255 || tile.improvement)) drawMapContent(context, tile, center.x, center.y);
 
       if (layers.elevation && tile.elevation > 0) {
         if (isometric) drawIsometricRelief(context, center, tile.elevation, projection);
@@ -445,9 +505,29 @@ function drawMap(
         context.lineWidth = 2.8 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
+      const sourceY = map.height - 1 - row;
+      if (selection && col >= selection.minX && col <= selection.maxX && sourceY >= selection.minY && sourceY <= selection.maxY) {
+        hexPath(context, center.x, center.y);
+        context.fillStyle = "rgba(94, 198, 205, .18)";
+        context.fill();
+        context.strokeStyle = "rgba(126, 220, 220, .82)";
+        context.lineWidth = 1.6 / Math.max(view.zoom, 0.5);
+        context.stroke();
+      }
   }
   if ((layers.starts || layers.cityStates) && map.startLocations.length) {
     drawStartLocations(context, map, view, layers.starts, layers.cityStates, layers.elevation, projection);
+  }
+  if (focusedStart) {
+    const displayRow = map.height - 1 - focusedStart.y;
+    const baseCenter = tileCenter(focusedStart.x, displayRow, focusedStart.y);
+    const tile = map.tiles[focusedStart.y * map.width + focusedStart.x];
+    const center = liftPoint(baseCenter.x, baseCenter.y, tile ? tileReliefHeight(tile, layers.elevation, isometric) : 0, projection);
+    context.beginPath();
+    context.arc(center.x, center.y, 15 / Math.max(view.zoom, 0.4), 0, Math.PI * 2);
+    context.strokeStyle = "#7ed8d8";
+    context.lineWidth = 2.5 / Math.max(view.zoom, 0.5);
+    context.stroke();
   }
   context.restore();
   return paintedTiles;
@@ -512,6 +592,50 @@ function closestIsometricTile(
   return closest;
 }
 
+function editorNeighbors(x: number, y: number, width: number, height: number, wraps: boolean) {
+  const offsets = y % 2 === 0
+    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
+  return offsets.flatMap(([dx, dy]) => {
+    let nx = x + dx;
+    const ny = y + dy;
+    if (wraps) nx = (nx + width) % width;
+    return nx >= 0 && nx < width && ny >= 0 && ny < height ? [[nx, ny] as [number, number]] : [];
+  });
+}
+
+function editorArea(x: number, y: number, radius: number, width: number, height: number, wraps: boolean) {
+  const result: Array<[number, number]> = [[x, y]];
+  const seen = new Set([`${x},${y}`]);
+  let frontier: Array<[number, number]> = [[x, y]];
+  for (let distance = 0; distance < radius; distance += 1) {
+    const next: Array<[number, number]> = [];
+    for (const point of frontier) {
+      for (const neighbor of editorNeighbors(point[0], point[1], width, height, wraps)) {
+        const key = `${neighbor[0]},${neighbor[1]}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(neighbor);
+        next.push(neighbor);
+      }
+    }
+    frontier = next;
+  }
+  return result;
+}
+
+function paintedTile(source: Civ5Tile, brush: Brush) {
+  const tile = { ...source };
+  if (brush.terrain !== null) tile.terrain = brush.terrain;
+  if (brush.elevation !== null) tile.elevation = brush.elevation;
+  if (brush.feature !== null) tile.feature = brush.feature;
+  if (brush.resource !== null) {
+    tile.resource = brush.resource;
+    tile.resourceAmount = brush.resource === 255 ? 0 : Math.max(1, tile.resourceAmount);
+  }
+  return tile;
+}
+
 export function Civ5MapViewer() {
   const [map, setMap] = useState<Civ5Map>(() => createDemoMap());
   const [pastMaps, setPastMaps] = useState<Civ5Map[]>([]);
@@ -519,9 +643,16 @@ export function Civ5MapViewer() {
   const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("VIEW");
   const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
-  const [createView, setCreateView] = useState<"GENERATE" | "EDIT">("GENERATE");
+  const [createView, setCreateView] = useState<"GENERATE" | "EDIT" | "ANALYZE">("GENERATE");
   const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
-  const [editTool, setEditTool] = useState<"TILE" | "START">("TILE");
+  const [editTool, setEditTool] = useState<"TILE" | "FILL" | "SELECT" | "START">("TILE");
+  const [brushSize, setBrushSize] = useState(1);
+  const [selectionAnchor, setSelectionAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [selection, setSelection] = useState<TileSelection | null>(null);
+  const [tileClipboard, setTileClipboard] = useState<TileClipboard | null>(null);
+  const [isPasting, setIsPasting] = useState(false);
+  const [focusedStart, setFocusedStart] = useState<Civ5StartLocation | null>(null);
+  const [showExportValidation, setShowExportValidation] = useState(false);
   const [luaReport, setLuaReport] = useState<LuaCompatibilityReport | null>(null);
   const [luaFileName, setLuaFileName] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
@@ -550,6 +681,9 @@ export function Civ5MapViewer() {
     setFutureMaps([]);
     setSourceFile(source);
     setHovered(null);
+    setSelection(null);
+    setSelectionAnchor(null);
+    setFocusedStart(null);
   }, []);
 
   const commitMap = useCallback((next: Civ5Map | ((current: Civ5Map) => Civ5Map)) => {
@@ -629,14 +763,14 @@ export function Civ5MapViewer() {
     // Complete the next frame away from the visible canvas. If a transient
     // layout state culls every tile, retain the last valid map frame instead
     // of replacing it with the blue canvas background.
-    const paintedTiles = drawMap(renderContext, map, layers, hovered, view, size, pixelRatio, mapProjection);
+    const paintedTiles = drawMap(renderContext, map, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart);
     if (map.tiles.length && paintedTiles === 0) return;
     context.save();
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.globalCompositeOperation = "copy";
     context.drawImage(renderCanvas, 0, 0);
     context.restore();
-  }, [map, layers, hovered, view, size, mapProjection]);
+  }, [map, layers, hovered, view, size, mapProjection, selection, focusedStart]);
 
   const terrainBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
@@ -664,6 +798,8 @@ export function Civ5MapViewer() {
     const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
     return `${styleLabel} · ${presetLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
   }, [generationOptions]);
+  const validationIssues = useMemo(() => validateCiv5Map(map), [map]);
+  const balanceReport = useMemo(() => analyzeMultiplayerBalance(map), [map]);
 
   const majorStartCount = map.startLocations.filter((start) => !start.cityState).length;
   const cityStateCount = map.startLocations.filter((start) => start.cityState).length;
@@ -743,6 +879,34 @@ export function Civ5MapViewer() {
       : closestTile(map, worldPoint.x, worldPoint.y);
     if (!target) return;
     const sourceY = map.height - 1 - target.row;
+    if (editTool === "SELECT") {
+      if (isPasting && tileClipboard) {
+        commitMap((current) => {
+          const tiles = current.tiles.map((tile) => ({ ...tile }));
+          for (let dy = 0; dy < tileClipboard.height; dy += 1) {
+            for (let dx = 0; dx < tileClipboard.width; dx += 1) {
+              const x = target.col + dx;
+              const y = sourceY + dy;
+              if (x >= current.width || y >= current.height) continue;
+              tiles[y * current.width + x] = { ...tileClipboard.tiles[dy * tileClipboard.width + dx] };
+            }
+          }
+          return { ...current, tiles };
+        });
+        setSelection({ minX: target.col, minY: sourceY, maxX: Math.min(map.width - 1, target.col + tileClipboard.width - 1), maxY: Math.min(map.height - 1, sourceY + tileClipboard.height - 1) });
+        setIsPasting(false);
+        setMessage("Region pasted · undo available");
+      } else if (!selectionAnchor) {
+        setSelectionAnchor({ x: target.col, y: sourceY });
+        setSelection({ minX: target.col, minY: sourceY, maxX: target.col, maxY: sourceY });
+        setMessage("Region start selected · choose the opposite corner");
+      } else {
+        setSelection({ minX: Math.min(selectionAnchor.x, target.col), minY: Math.min(selectionAnchor.y, sourceY), maxX: Math.max(selectionAnchor.x, target.col), maxY: Math.max(selectionAnchor.y, sourceY) });
+        setSelectionAnchor(null);
+        setMessage("Region selected · copy or edit it");
+      }
+      return;
+    }
     if (editTool === "START") {
       commitMap((current) => {
         const existing = current.startLocations.findIndex((start) => start.x === target.col && start.y === sourceY);
@@ -751,33 +915,49 @@ export function Civ5MapViewer() {
         else startLocations.push({
           x: target.col,
           y: sourceY,
-          player: startLocations.length,
+          player: startLocations.filter((start) => !start.cityState).length,
           civilization: "",
           leader: "",
           team: generationOptions.balance === "TEAMS" ? Math.floor(startLocations.length / 2) : startLocations.length,
           playable: true,
           cityState: false,
         });
-        return { ...current, players: startLocations.length || current.players, startLocations };
+        return { ...current, players: startLocations.filter((start) => !start.cityState).length || current.players, startLocations };
       });
       setMessage("Start position updated · undo available");
       return;
     }
     commitMap((current) => {
-      const index = sourceY * current.width + target.col;
-      const tiles = [...current.tiles];
-      const tile = { ...tiles[index] };
-      if (brush.terrain !== null) tile.terrain = brush.terrain;
-      if (brush.elevation !== null) tile.elevation = brush.elevation;
-      if (brush.feature !== null) tile.feature = brush.feature;
-      if (brush.resource !== null) {
-        tile.resource = brush.resource;
-        tile.resourceAmount = brush.resource === 255 ? 0 : Math.max(1, tile.resourceAmount);
+      const tiles = current.tiles.map((tile) => ({ ...tile }));
+      if (editTool === "FILL") {
+        const origin = tiles[sourceY * current.width + target.col];
+        const matches = (tile: Civ5Tile) => (brush.terrain === null || tile.terrain === origin.terrain)
+          && (brush.elevation === null || tile.elevation === origin.elevation)
+          && (brush.feature === null || tile.feature === origin.feature)
+          && (brush.resource === null || tile.resource === origin.resource);
+        const queue: Array<[number, number]> = [[target.col, sourceY]];
+        const seen = new Set([`${target.col},${sourceY}`]);
+        for (let cursor = 0; cursor < queue.length; cursor += 1) {
+          const [x, y] = queue[cursor];
+          const index = y * current.width + x;
+          if (!matches(tiles[index])) continue;
+          tiles[index] = paintedTile(tiles[index], brush);
+          for (const [nx, ny] of editorNeighbors(x, y, current.width, current.height, current.wraps)) {
+            const key = `${nx},${ny}`;
+            if (seen.has(key) || !matches(tiles[ny * current.width + nx])) continue;
+            seen.add(key);
+            queue.push([nx, ny]);
+          }
+        }
+      } else {
+        for (const [x, y] of editorArea(target.col, sourceY, brushSize - 1, current.width, current.height, current.wraps)) {
+          const index = y * current.width + x;
+          tiles[index] = paintedTile(tiles[index], brush);
+        }
       }
-      tiles[index] = tile;
       return { ...current, tiles };
     });
-    setMessage(`Tile ${target.col}, ${sourceY} edited · undo available`);
+    setMessage(editTool === "FILL" ? "Connected terrain filled · undo available" : `${brushSize === 1 ? "Tile" : "Brush area"} edited · undo available`);
   };
 
   const zoomAt = (factor: number, screenX: number, screenY: number) => {
@@ -841,8 +1021,7 @@ export function Civ5MapViewer() {
     setMessage(sourceFile ? "Map details edited · ready to export" : "Demo map details edited");
   };
 
-  const exportCiv5Map = () => {
-    if (isEditingMetadata) return;
+  const performCiv5MapExport = () => {
     try {
       const exported = sourceFile ? updateCiv5Map(sourceFile.buffer, map) : serializeCiv5Map(map);
       const baseName = sourceFile?.fileName.replace(/\.civ5map$/i, "") ?? mapExportBaseName(map);
@@ -852,6 +1031,27 @@ export function Civ5MapViewer() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The edited map could not be exported.");
     }
+  };
+
+  const exportCiv5Map = () => {
+    if (isEditingMetadata) return;
+    if (validationIssues.some((issue) => issue.severity !== "INFO")) {
+      setShowExportValidation(true);
+      return;
+    }
+    performCiv5MapExport();
+  };
+
+  const copySelection = () => {
+    if (!selection) return;
+    const width = selection.maxX - selection.minX + 1;
+    const height = selection.maxY - selection.minY + 1;
+    const tiles: Civ5Tile[] = [];
+    for (let y = selection.minY; y <= selection.maxY; y += 1) {
+      for (let x = selection.minX; x <= selection.maxX; x += 1) tiles.push({ ...map.tiles[y * map.width + x] });
+    }
+    setTileClipboard({ width, height, tiles });
+    setMessage(`${width} × ${height} region copied`);
   };
 
   const generateNewMap = () => {
@@ -1018,11 +1218,24 @@ export function Civ5MapViewer() {
             </div>
           )}
 
+          {showExportValidation && (
+            <div className="edit-mode-prompt validation-prompt" role="dialog" aria-label="Civ5Map validation warnings">
+              <strong>Review before export</strong>
+              <p>{validationIssues.filter((issue) => issue.severity === "ERROR").length} errors and {validationIssues.filter((issue) => issue.severity === "WARNING").length} warnings were found.</p>
+              <ul>{validationIssues.filter((issue) => issue.severity !== "INFO").slice(0, 4).map((issue, index) => <li key={`${issue.category}-${index}`}>{issue.message}</li>)}</ul>
+              <div>
+                <button type="button" onClick={() => { setShowExportValidation(false); setMode("CREATE"); setCreateView("ANALYZE"); }}>Open report</button>
+                <button className="confirm-edit" type="button" onClick={() => { setShowExportValidation(false); performCiv5MapExport(); }}>Export anyway</button>
+              </div>
+            </div>
+          )}
+
           {mode === "CREATE" && (
             <div className="creator-panel">
               <div className="create-mode-tabs" role="tablist" aria-label="Create tools">
                 <button type="button" role="tab" aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Generate</button>
                 <button type="button" role="tab" aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
+                <button type="button" role="tab" aria-selected={createView === "ANALYZE"} className={createView === "ANALYZE" ? "is-active" : ""} onClick={() => setCreateView("ANALYZE")}>Analyze</button>
               </div>
 
               {createView === "GENERATE" ? (
@@ -1116,6 +1329,35 @@ export function Civ5MapViewer() {
                   </details>
 
                   <details className="creator-group">
+                    <summary><span>Resources and wonders</span><small>{generationOptions.wonderCount} wonders · {generationOptions.strategicAbundance.toLowerCase()} strategics</small></summary>
+                    <div className="creator-group-body">
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, bonusAbundance: DEFAULT_GENERATION_OPTIONS.bonusAbundance, luxuryAbundance: DEFAULT_GENERATION_OPTIONS.luxuryAbundance, luxuryRegional: DEFAULT_GENERATION_OPTIONS.luxuryRegional, luxuryStartGuarantee: DEFAULT_GENERATION_OPTIONS.luxuryStartGuarantee, strategicAbundance: DEFAULT_GENERATION_OPTIONS.strategicAbundance, strategicDistribution: DEFAULT_GENERATION_OPTIONS.strategicDistribution, strategicStartGuarantee: DEFAULT_GENERATION_OPTIONS.strategicStartGuarantee, offshoreOilPercent: DEFAULT_GENERATION_OPTIONS.offshoreOilPercent, wonderCount: DEFAULT_GENERATION_OPTIONS.wonderCount, wonderMinSpacing: DEFAULT_GENERATION_OPTIONS.wonderMinSpacing, wonderStartBuffer: DEFAULT_GENERATION_OPTIONS.wonderStartBuffer, barbarianAbundance: DEFAULT_GENERATION_OPTIONS.barbarianAbundance, barbarianStartDistance: DEFAULT_GENERATION_OPTIONS.barbarianStartDistance, ruinAbundance: DEFAULT_GENERATION_OPTIONS.ruinAbundance, ruinStartDistance: DEFAULT_GENERATION_OPTIONS.ruinStartDistance }))}>Reset content</button>
+                      <div className="control-grid three-controls">
+                        <label className="control-field"><span>Bonus resources</span><select value={generationOptions.bonusAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, bonusAbundance: event.target.value as MapGenerationOptions["bonusAbundance"] }))}><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="ABUNDANT">Abundant</option></select></label>
+                        <label className="control-field"><span>Luxuries</span><select value={generationOptions.luxuryAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryAbundance: event.target.value as MapGenerationOptions["luxuryAbundance"] }))}><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="ABUNDANT">Abundant</option></select></label>
+                        <label className="control-field"><span>Strategics</span><select value={generationOptions.strategicAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicAbundance: event.target.value as MapGenerationOptions["strategicAbundance"] }))}><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="ABUNDANT">Abundant</option></select></label>
+                      </div>
+                      <label className="control-field"><span>Strategic distribution</span><select value={generationOptions.strategicDistribution} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicDistribution: event.target.value as MapGenerationOptions["strategicDistribution"] }))}><option value="EVEN">Even</option><option value="REGIONAL">Regional types</option><option value="CLUSTERED">Clustered deposits</option></select></label>
+                      <label className="check-row"><input type="checkbox" checked={generationOptions.strategicStartGuarantee} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicStartGuarantee: event.target.checked }))} /><span>Guarantee iron and horses near every major start</span></label>
+                      <label className="check-row"><input type="checkbox" checked={generationOptions.luxuryStartGuarantee} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryStartGuarantee: event.target.checked }))} /><span>Guarantee a luxury near every major start</span></label>
+                      <label className="check-row"><input type="checkbox" checked={generationOptions.luxuryRegional} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryRegional: event.target.checked }))} /><span>Create regional luxury monopolies</span></label>
+                      <label className="control-field percentage-field"><span>Offshore oil <output>{generationOptions.offshoreOilPercent}%</output></span><input type="range" min="0" max="70" value={generationOptions.offshoreOilPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, offshoreOilPercent: Number(event.target.value) }))} /></label>
+                      <div className="control-grid three-controls">
+                        <label className="control-field"><span>Natural wonders</span><input type="number" min="0" max="12" value={generationOptions.wonderCount} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderCount: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>Wonder spacing</span><input type="number" min="3" max="20" value={generationOptions.wonderMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderMinSpacing: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>Start buffer</span><input type="number" min="0" max="15" value={generationOptions.wonderStartBuffer} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderStartBuffer: Number(event.target.value) }))} /></label>
+                      </div>
+                      <div className="control-grid">
+                        <label className="control-field"><span>Barbarians</span><select value={generationOptions.barbarianAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, barbarianAbundance: event.target.value as MapGenerationOptions["barbarianAbundance"] }))}><option value="NONE">None</option><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="RAGING">Raging</option></select></label>
+                        <label className="control-field"><span>Camp start distance</span><input type="number" min="2" max="15" value={generationOptions.barbarianStartDistance} onChange={(event) => setGenerationOptions((current) => ({ ...current, barbarianStartDistance: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>Ancient ruins</span><select value={generationOptions.ruinAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinAbundance: event.target.value as MapGenerationOptions["ruinAbundance"] }))}><option value="NONE">None</option><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="RAGING">Abundant</option></select></label>
+                        <label className="control-field"><span>Ruin start distance</span><input type="number" min="1" max="12" value={generationOptions.ruinStartDistance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinStartDistance: Number(event.target.value) }))} /></label>
+                      </div>
+                      <small className="content-note">Camps and ruins are scenario improvements. Excogitare previews and analyzes them; geography-only export reports that they cannot yet be embedded.</small>
+                    </div>
+                  </details>
+
+                  <details className="creator-group">
                     <summary><span>Climate and terrain</span><small>{generationOptions.climate.toLowerCase()} · {generationOptions.rainfall.toLowerCase()}</small></summary>
                     <div className="creator-group-body">
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, climate: DEFAULT_GENERATION_OPTIONS.climate, rainfall: DEFAULT_GENERATION_OPTIONS.rainfall, dominantTerrains: [] }))}>Reset climate</button>
@@ -1146,6 +1388,11 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Layout</span><select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}><option value="STANDARD">Equal separation</option><option value="TOURNAMENT">Tournament</option><option value="TEAMS">Paired teams</option></select></label>
                       </div>
                       <label className="control-field"><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select><small>{generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}</small></label>
+                      <div className="control-grid three-controls">
+                        <label className="control-field"><span>City-state spacing</span><input type="number" min="1" max="12" value={generationOptions.cityStateMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateMinSpacing: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>Distribution</span><select value={generationOptions.cityStateDistribution} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateDistribution: event.target.value as MapGenerationOptions["cityStateDistribution"] }))}><option value="EVEN">Even</option><option value="REGIONAL">Regional</option></select></label>
+                        <label className="control-field"><span>Coastal preference</span><select value={generationOptions.cityStateCoastalPreference} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateCoastalPreference: event.target.value as MapGenerationOptions["cityStateCoastalPreference"] }))}><option value="ANY">Any</option><option value="PREFER">Prefer coast</option><option value="REQUIRE">Require coast</option></select></label>
+                      </div>
                     </div>
                   </details>
 
@@ -1154,21 +1401,58 @@ export function Civ5MapViewer() {
                     <div className="generation-readout"><span>Current map</span><strong>{generationMetrics.water}% water · {generationMetrics.mountains}% mountains</strong></div>
                   </div>
                 </>
-              ) : (
+              ) : createView === "EDIT" ? (
                 <div className="tile-editor">
                   <div className="section-title"><h3>Edit map</h3><span>click a hex</span></div>
                   <div className="tool-tabs">
                     <button type="button" className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
+                    <button type="button" className={editTool === "FILL" ? "is-active" : ""} onClick={() => setEditTool("FILL")}>Flood fill</button>
+                    <button type="button" className={editTool === "SELECT" ? "is-active" : ""} onClick={() => setEditTool("SELECT")}>Region</button>
                     <button type="button" className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
                   </div>
-                  {editTool === "TILE" ? (
+                  {editTool === "TILE" || editTool === "FILL" ? (
                     <div className="brush-grid">
+                      {editTool === "TILE" && <label className="control-field"><span>Brush size</span><select value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))}><option value="1">1 hex</option><option value="2">7 hexes</option><option value="3">19 hexes</option></select></label>}
                       <label className="control-field"><span>Terrain</span><select value={brush.terrain ?? ""} onChange={(event) => setBrush((current) => ({ ...current, terrain: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option>{map.terrains.map((name, index) => <option key={name} value={index}>{friendlyName(name, "TERRAIN_")}</option>)}</select></label>
                       <label className="control-field"><span>Elevation</span><select value={brush.elevation ?? ""} onChange={(event) => setBrush((current) => ({ ...current, elevation: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="0">Flat</option><option value="1">Hills</option><option value="2">Mountain</option></select></label>
                       <label className="control-field"><span>Feature</span><select value={brush.feature ?? ""} onChange={(event) => setBrush((current) => ({ ...current, feature: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.features.map((name, index) => <option key={name} value={index}>{friendlyName(name, "FEATURE_")}</option>)}</select></label>
                       <label className="control-field"><span>Resource</span><select value={brush.resource ?? ""} onChange={(event) => setBrush((current) => ({ ...current, resource: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.resources.map((name, index) => <option key={name} value={index}>{friendlyName(name, "RESOURCE_")}</option>)}</select></label>
+                      {editTool === "FILL" && <p className="editor-note">Click a connected region to replace every matching tile using the active fields.</p>}
                     </div>
-                  ) : <p className="editor-note">Click a hex to add or remove a numbered start. Team Mode pairs consecutive players.</p>}
+                  ) : editTool === "SELECT" ? (
+                    <div className="region-tools">
+                      <p className="editor-note">Choose two opposite corners to select a rectangular terrain region.</p>
+                      {selection && <strong>{selection.maxX - selection.minX + 1} × {selection.maxY - selection.minY + 1} tiles selected</strong>}
+                      <div>
+                        <button type="button" disabled={!selection} onClick={copySelection}>Copy</button>
+                        <button type="button" disabled={!tileClipboard} className={isPasting ? "is-active" : ""} onClick={() => setIsPasting((current) => !current)}>Paste</button>
+                        <button type="button" disabled={!selection} onClick={() => { setSelection(null); setSelectionAnchor(null); setIsPasting(false); }}>Clear</button>
+                      </div>
+                      {isPasting && <small>Click the destination tile for the copied region&apos;s lower-left corner.</small>}
+                    </div>
+                  ) : <p className="editor-note">Click a hex to add or remove a numbered major start. Team Mode pairs consecutive players.</p>}
+                </div>
+              ) : (
+                <div className="analysis-panel">
+                  <div className="analysis-summary">
+                    <span className={`analysis-grade grade-${balanceReport.grade.toLowerCase()}`}>{balanceReport.grade}</span>
+                    <div><h3>Multiplayer balance</h3><p>{balanceReport.summary}</p></div>
+                  </div>
+                  <div className="player-balance-list">
+                    {balanceReport.players.map((player) => (
+                      <button type="button" key={player.player} className={focusedStart?.player === player.player ? "is-active" : ""} onClick={() => setFocusedStart(map.startLocations.find((start) => !start.cityState && start.player === player.player) ?? null)}>
+                        <span className={`player-grade grade-${player.grade.toLowerCase()}`}>{player.grade}</span>
+                        <strong>Player {player.player + 1}<small>Score {player.score}</small></strong>
+                        <dl><div><dt>Land</dt><dd>{player.workableLand}</dd></div><div><dt>Strategic</dt><dd>{player.strategicResources}</dd></div><div><dt>Luxury</dt><dd>{player.luxuries}</dd></div><div><dt>Opponent</dt><dd>{player.nearestOpponent ?? "—"}</dd></div></dl>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="validation-section">
+                    <div className="section-title"><h3>Civ5 validation</h3><span>{validationIssues.filter((issue) => issue.severity !== "INFO").length} findings</span></div>
+                    <div className="validation-list">
+                      {validationIssues.map((issue, index) => <div key={`${issue.category}-${index}`} className={`validation-issue severity-${issue.severity.toLowerCase()}`}><span>{issue.severity}</span><p>{issue.message}</p></div>)}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

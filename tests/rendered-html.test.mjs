@@ -54,6 +54,14 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /World shape/);
   assert.match(source, /Climate and terrain/);
   assert.match(source, /Players and starts/);
+  assert.match(source, /Resources and wonders/);
+  assert.match(source, />Analyze</);
+  assert.match(source, /Multiplayer balance/);
+  assert.match(source, /Civ5 validation/);
+  assert.match(source, /Flood fill/);
+  assert.match(source, /Region/);
+  assert.match(source, /Barbarians/);
+  assert.match(source, /Ancient ruins/);
   assert.match(source, /<span>Wrap type<\/span>/);
   assert.match(source, /<span>Geometry<\/span>/);
   assert.match(source, /<span>City states<\/span>/);

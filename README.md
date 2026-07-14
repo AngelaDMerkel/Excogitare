@@ -2,6 +2,10 @@
 
 A platform-agnostic, browser-based viewer and basic map editor for Civilization V `.Civ5Map` files. Excogitare parses, renders, generates and edits physical maps directly in the browser.
 
+I owe the greatest thanks to [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage) who did all the real research and provided all the documentation necessary for me to produce this tool. The native generator's presets take high-level inspiration from [mirror's Fantastical Map Script](https://steamcommunity.com/sharedfiles/filedetails/?id=310024314) broad range of world shapes while using an independent implementation. Lua previews run in an isolated worker with a strict timeout and a growing compatibility layer for `Map`, `GameInfo`, plot mutation, enums, database iteration, and common map-generator helpers. Scripts that depend on unsupported Civ V internals receive a compatibility report.
+
+Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/terrain-diffusion)'s coarse-conditioning and refinement structure into a lightweight deterministic browser implementation with coupled elevation, temperature, and precipitation fields. Its climate model uses softened regional temperature variation and west-to-east wind carrying moisture over terrain to create windward precipitation and persistent eastern rain shadows. It does not bundle or claim to run the repository's pretrained neural diffusion models.
+
 ## Current features
 
 - Open local `.Civ5Map` files
@@ -19,16 +23,11 @@ A platform-agnostic, browser-based viewer and basic map editor for Civilization 
 - Built-in sample map so the interface is useful before a file is selected
 - Multi-stage Alpine Linux container
 
-I owe the greatest thanks to [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage) who did all the real research and provided all the documentation necessary for me to produce this tool. The native generator's presets take high-level inspiration from [mirror's Fantastical Map Script](https://steamcommunity.com/sharedfiles/filedetails/?id=310024314) broad range of world shapes while using an independent implementation. Lua previews run in an isolated worker with a strict timeout and a growing compatibility layer for `Map`, `GameInfo`, plot mutation, enums, database iteration, and common map-generator helpers. Scripts that depend on unsupported Civ V internals receive a compatibility report.
-
-Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/terrain-diffusion)'s coarse-conditioning and refinement structure into a lightweight deterministic browser implementation with coupled elevation, temperature, and precipitation fields. Its climate model uses softened regional temperature variation and west-to-east wind carrying moisture over terrain to create windward precipitation and persistent eastern rain shadows. It does not bundle or claim to run the repository's pretrained neural diffusion models.
-
 ## Docker
 
 `docker-compose` is the recommended deployment method for Excogitare.
 
 ## ToDo
 
-- Isometric map viewer
 - Emulated API endpoints for Civ5 to read and generate maps based on the Lua
 - Modal popup with generation walkthough(?)
