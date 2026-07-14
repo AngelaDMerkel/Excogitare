@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata, type Civ5Map, type Civ5Tile } from "../lib/civ5-map.ts";
-import { DEFAULT_GENERATION_OPTIONS, generateMap, MAP_PRESETS, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, GAME_BREAKING_GEOMETRIES, generateMap, MAP_PRESETS, randomGenerationOptions, resolveMapDimensions, SAFE_MAP_GEOMETRIES } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapExportBaseName, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "../lib/generation-history.ts";
@@ -10,8 +10,34 @@ import { featurePlacementVerdict, isPassableLand, resourcePlacementVerdict, wond
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "../lib/political-map.ts";
 import { fitViewport, minimumViewportZoom } from "../lib/map-viewport.ts";
 import { RIVER_DATA_MASK, riverEdgeDefinitions, riverFlowsFromAToB } from "../lib/rivers.ts";
+import { poleProximity } from "../lib/climate-projection.ts";
 
 const encoder = new TextEncoder();
+
+test("climate projections relocate the poles without changing map geometry", () => {
+  const width = 101;
+  const height = 61;
+  const centerX = (width - 1) / 2;
+  const centerY = (height - 1) / 2;
+
+  assert.equal(poleProximity(centerX, 0, width, height, "NORTH_SOUTH"), 1);
+  assert.equal(poleProximity(centerX, centerY, width, height, "NORTH_SOUTH"), 0);
+  assert.equal(poleProximity(centerX, centerY, width, height, "POLAR_CENTERED"), 1);
+  assert.equal(poleProximity(0, centerY, width, height, "POLAR_CENTERED"), 0);
+  assert.equal(poleProximity(centerX, centerY, width, height, "EQUATORIAL_POLE"), 1);
+  assert.equal(poleProximity(centerX, 0, width, height, "EQUATORIAL_POLE"), 0);
+});
+
+test("generation records and applies alternate climate projections", () => {
+  const conventional = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", waterPercent: 0, seed: "projection-audit", projectionType: "NORTH_SOUTH" });
+  const centered = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", waterPercent: 0, seed: "projection-audit", projectionType: "POLAR_CENTERED" });
+  const equatorialPole = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", waterPercent: 0, seed: "projection-audit", projectionType: "EQUATORIAL_POLE" });
+
+  assert.equal(centered.generation?.projectionType, "POLAR_CENTERED");
+  assert.equal(equatorialPole.generation?.projectionType, "EQUATORIAL_POLE");
+  assert.notDeepEqual(centered.tiles.map((tile) => tile.terrain), conventional.tiles.map((tile) => tile.terrain));
+  assert.notDeepEqual(equatorialPole.tiles.map((tile) => tile.terrain), conventional.tiles.map((tile) => tile.terrain));
+});
 
 test("Fit keeps extreme horizontal and vertical maps inside the visible viewport", () => {
   const viewport = { width: 1000, height: 600 };
@@ -768,6 +794,7 @@ test("Randomise produces complete valid settings and wrap choices control export
   };
   const wrapTypes = new Set<string>();
   const geometries = new Set<string>();
+  const gameBreakingGeometries = new Set<string>();
   const engines = new Set<string>();
   for (let index = 0; index < 60; index += 1) {
     const options = randomGenerationOptions(random);
@@ -782,8 +809,10 @@ test("Randomise produces complete valid settings and wrap choices control export
     if (options.modifier === "STRATEGIC_DEPTH") assert.ok(options.mountainPercent >= 22);
     if (options.modifier === "DOOMSDAY" || options.style === "BRUTAL") assert.ok(options.mountainPercent >= 18);
   }
+  for (let index = 0; index < 120; index += 1) gameBreakingGeometries.add(randomGenerationOptions(random, true).geometry);
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
-  assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "PIN", "STRING", "SQUARE"]));
+  assert.deepEqual(geometries, new Set(SAFE_MAP_GEOMETRIES));
+  assert.deepEqual(gameBreakingGeometries, new Set([...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES]));
   assert.deepEqual(engines, new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });

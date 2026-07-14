@@ -4,7 +4,7 @@
 
 A platform-agnostic, browser-based viewer and basic map editor for Civilization V `.Civ5Map` files. Excogitare parses, renders, generates and edits physical maps directly in the browser.
 
-I owe the greatest thanks to [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage) who did all the real research and provided all the documentation necessary for me to produce this tool. The native generator's presets take high-level inspiration from [mirror's Fantastical Map Script](https://steamcommunity.com/sharedfiles/filedetails/?id=310024314) broad range of world shapes while using an independent implementation. Lua previews run in an isolated worker with a strict timeout and a growing compatibility layer for `Map`, `GameInfo`, plot mutation, enums, database iteration, and common map-generator helpers. Scripts that depend on unsupported Civ V internals receive a compatibility report.
+I owe the greatest thanks to [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage) who did all the real research and provided all the documentation necessary for me to produce this tool. The native generator's presets take high-level inspiration from [mirror's Fantastical Map Script](https://steamcommunity.com/sharedfiles/filedetails/?id=310024314)'s broad range of world shapes while using an independent implementation. The Physical engine likewise takes high-level inspiration from [Cephalo's PerfectWorld3](https://steamcommunity.com/sharedfiles/filedetails/?id=79814583), particularly its elevation-led landforms, simplified wind climate and drainage governed by the elevation map; Excogitare does not copy or execute its source.
 
 Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/terrain-diffusion)'s coarse-conditioning and refinement structure into a lightweight deterministic browser implementation with coupled elevation, temperature, and precipitation fields. Its climate model uses softened regional temperature variation and west-to-east wind carrying moisture over terrain to create windward precipitation and persistent eastern rain shadows. It does not bundle or claim to run the repository's pretrained neural diffusion models.
 
@@ -14,39 +14,210 @@ AI was relied upon heavily for the production of this tool. Often I performed ma
 
 ## Explore
 
-Explore is the sober and consequently most dependable part of Excogitare. It opens a local `.Civ5Map` and renders terrain, coasts, rivers, features, resources, natural wonders, relief, roads, improvements, start locations and city states. Layers can be hidden when they get in the way; the legend explains the less obvious marks; the political layer uses stored scenario ownership where it exists; and the isometric view adds some theatrical height without pretending to be Civ V's renderer. Dragging pans, scrolling zooms, and neither should now be forgotten merely because a tile changed.
+Open a local `.Civ5Map` with **Open map** or drag one onto the canvas; the parser reads the physical map and whatever scenario records it recognizes, then renders the result without uploading the file. Drag to pan, scroll to zoom, use **Fit** to recover the whole map, and use **ISO 3D** to exchange the normal 2D view for a decorative relief projection. The isometric view has raised hills and mountains, but it remains a renderer rather than a miniature Civ V engine.
 
-The map name and description can be edited, imported scenario data is preserved where the parser understands it, and the result can be exported as `.Civ5Map` or as a transparent PNG of the current view. The binary format is not blessed with a complete public specification, so unusual versions and heavily modded maps may contain data Excogitare does not recognize. Political colour is inferred from civilization and team identifiers rather than loaded from Civ V's XML database; generated maps show projected start influence, not genuine borders. Isometric mode is decorative. It is not a miniature game engine, however charming that would be.
+The controls in the top bar remain available in every menu:
+
+- **Undo / Redo** move through edits made during the current session. View position is independent of map state, so an edit should not throw away the current pan or zoom.
+- **Export PNG** captures the rendered map with a transparent background. It exports the map, not the surrounding interface.
+- **Export Civ5Map** writes the current map using its edited name as the filename. Imported scenario records are preserved where the parser understands them. A confirmation modal appears if validation finds material problems.
+- **Open map** loads another `.Civ5Map`. Unsaved in-memory history is not a substitute for keeping the original file.
+- Clicking the **map name** or **description** offers Edit Mode. Saving changes updates the metadata used by subsequent Civ5Map and PNG exports.
+
+### Layers and map information
+
+The sidebar reports dimensions, Civ V world-size label, tile count, wrap state and a terrain census. Its layer switches affect only the view; they do not delete anything from the map.
+
+- **Political** draws scenario territories and borders when ownership records exist. On generated maps it may instead show projected influence around starts. The colours are inferred from stored civilization or team identifiers, not read from Civ V's complete XML database.
+- **Hex grid** shows the underlying hex geometry.
+- **Features** shows forests, jungles, marshes, ice, oases, fallout and other known feature marks.
+- **Resources** shows bonus, luxury and strategic resource icons.
+- **Elevation** shows hills and mountains and supplies the relief used by ISO 3D.
+- **Start locations** shows numbered major-civilization starts when the file stores them.
+- **City states** independently shows minor-civilization starts. This is deliberately separate from the major-start layer.
+- **Terrain** is a read-only count of the terrain types actually present in the current map.
+- **Reset to sample map** discards the current in-memory map and restores Excogitare's demonstration map.
+
+The **Legend** overlay explains terrain colour, coast and river marks, elevation, known features, political and settlement symbols, resources present on the current map, selections and repair highlights. It is descriptive, not an editor, and closes when changing workspace so it cannot sit invisibly over another menu's controls.
+
+The binary format is not blessed with a complete public specification. Unusual versions and heavily modded maps may contain data Excogitare does not recognize, and a successful render proves less than a successful load in Civ V. That distinction is tedious but important.
 
 ## Create
 
-Create produces deterministic maps from a seed, the standard Civ V sizes, several landmass presets and four broad styles: Realistic, Fantastical, Mundane and Brutal. World geometry can be sensible or square, with Needle, Ribbon, Pin and String for increasingly absurd vertical and horizontal extremes. Controls cover water, mountains, climate, terrain dominance, wrapping, wonders, luxuries, strategic resources, barbarians, ruins, players, city states and multiplayer start balance. Randomise ignores good taste on the user's behalf. The latest thirty generations remain available for the current browser session.
+Create contains three submenus: **Generate**, **Edit** and **Analyze**. Generate builds a deterministic map from a seed and a set of constraints; Edit changes the result directly; Analyze reports whether that result is plausible, legal and remotely fair. **Randomise** at the top chooses a new combination of generation settings and immediately produces a map. It excludes the known game-breaking geometries unless their separate risk control has been enabled.
 
-There are three generation engines, and they are not aliases for three tasteful labels. Excogitare is the original native generator: quick, expressive warped fields with the broadest range of mundane, fantastical and deliberately hostile shapes. Region-Graph independently reconstructs the central geographic hierarchy that makes Fantastical interesting without copying its Lua: relaxed subregions are joined into polygons; polygon graphs become oceans, continents, inland basins and rifts; land is divided again into climate provinces; mountain chains follow selected boundaries; and accumulated drainage produces mountain-fed rivers and tributaries. Living World, Tectonic Continents, Great Watersheds, Shattered Basins and Mythic Regions expose different versions of that architecture. Granularity, basin count, polar land, coastal ranges, regional climate contrast and river density remain adjustable rather than vanishing into the preset.
+### Generate: projection and world concept
 
-Physical is a separate PerfectWorld-like simulation rather than the Realistic style wearing a false moustache. It assigns moving continental and oceanic plates, distinguishes convergent and divergent boundaries, uplifts and rifts their margins, erodes the resulting relief, derives sea level from the requested water share, and couples temperature and atmospheric moisture to latitude, altitude, oceans and west-to-east winds. Dynamic Earth, Colliding Plates and Ancient Cratons provide active, violent and mature starting conditions; plate activity and erosion remain exposed. It borrows principles from PerfectWorld3 and terrain-diffusion, not their source code or pretrained model.
+**Projection Type** is the first control because it changes the climate coordinate system used by every generation engine:
 
-The Create sidebar follows the order in which a person actually invents a world: engine and concept, shape, climate, content, then players and starts. Generation and selective reruns execute in a disposable worker, so an ambitious Huge world, an ill-advised batch or a climate reconsideration can be cancelled without freezing the rest of the page. Progress reports the actual pass currently running. History, selective reruns, ranked candidate batches and checkpoints sit after the initial generation controls because one cannot sensibly revise a world before it exists.
+- **North / south poles** is the conventional layout: cold poles at the top and bottom with an equator through the middle.
+- **Polar centered** places a pole at the centre and radiates climate outward toward an equatorial perimeter.
+- **Equatorial pole** treats the horizontal middle axis as the pole and warms toward the top and bottom edges.
 
-Generated maps should contain legal terrain and features, passable landmasses, continuous mountain-fed rivers and reasonably separated starts. The editor supplies tile brushes, several brush sizes, flood fill, region selection, copy and paste, and direct start-position editing. Analyze provides a multiplayer balance report and a Civ V-oriented validation pass. Undo and redo exist because even deliberate mountain ranges become regrettable.
+Projection affects temperature, biome placement, ice, polar-land rules and deterministic seeding. It does not change the rectangular Civ V hex grid, invent spherical adjacency, or turn the exported file into a new geometric format. “Projection” is useful shorthand here, not a claim that Civ V has suddenly learned cartography.
 
-Design iterations need not begin again from bare ocean. Selective regeneration can rerun the world, climate, river, content or start-placement pass; compatible layers survive the operation. Candidate batches generate and rank several related seeds by validation and multiplayer balance, while team games can arrange two-, three- or four-player teams as clusters, opposing fronts or deliberately distributed allies. The world-structure editor reshapes selected regions as plates, sea basins, mountain chains, climate regions or watersheds. Named checkpoints preserve deliberate revisions and can be restored or compared through a changed-tile overlay.
+**Generation engine** chooses the architecture that constructs the world:
 
-This generator is an independent approximation of Civ V's rules, not Firaxis code, and “balanced” remains a heuristic rather than a theorem. Region-Graph reproduces Fantastical's broad geographic architecture, not its exact tables, authored vocabulary, random sequence or every eccentric special case. Generated maps now retain their plates, subregions, polygons, continents, basins, climate provinces, mountain ranges and river systems as named structural objects, but the visual editor does not yet manipulate all of those objects directly and `.Civ5Map` has nowhere standard to store that private model. The renderer does not yet draw a separate geographic label layer. Generation history disappears when the page is reloaded. More importantly, newly generated `.Civ5Map` exports are still geography-first: scenario-only material such as player and city-state records, camps, ruins, ruined cities and roads can be previewed and analyzed but is not yet fully embedded in a fresh scenario section. Imported maps fare better because their existing scenario structure can be amended instead of invented.
+- **Excogitare** is the original field generator: fast warped noise, dramatic coastlines and the broadest stylistic range.
+- **Region-Graph** independently recreates the useful geographic hierarchy behind Fantastical-style maps. Relaxed subregions become polygons; polygon graphs become continents, oceans, inland basins and rifts; climate provinces and mountain boundaries are resolved over that structure; drainage then builds mountain-fed river systems and tributaries.
+- **Physical** is a separate PerfectWorld-like simulation rather than Realistic wearing a false moustache. It assigns moving continental and oceanic plates, resolves convergent and divergent boundaries, uplifts and erodes their margins, derives sea level from the requested water share, and couples temperature and atmospheric moisture to projection, altitude, ocean exposure and west-to-east wind.
+
+**World character** is independent of engine:
+
+- **Realistic** favours coupled elevation, temperature, precipitation, softened biome transitions and west-to-east rain shadows.
+- **Fantastical** permits stronger warping, stranger regions and less obedient climate.
+- **Mundane** keeps shapes and variation closer to an ordinary Civ-like map.
+- **Brutal** raises the competitive difficulty with scarce opportunities, hostile relief, narrow routes and tournament-oriented starts. It enforces at least 18% mountains.
+
+**Map type** supplies the initial geography and sensible defaults. Selecting one also selects its owning engine.
+
+| Engine | Map type | Result |
+| --- | --- | --- |
+| Excogitare | Convoluted Continents | Broad asymmetric continents, hooked peninsulas and broken inland coasts. |
+| Excogitare | Broken Pangaea | One dominant landmass cut by gulfs, rifts and difficult interiors. |
+| Excogitare | Shattered Isles | Dense island chains, coastal empires and narrow naval routes. |
+| Excogitare | Inland Kingdoms | A land-heavy, non-wrapping realm punctured by lakes and irregular inland seas. |
+| Excogitare | Earthsea Realms | Numerous irregular continents, isolated minor islands and long voyages. |
+| Excogitare | Astronomy Rifts | Fantastical basins divided by deep scars and isolated shelves. |
+| Excogitare | Labyrinth Realm | A non-wrapping maze of land bridges, inland channels, chambers and chokepoints. |
+| Excogitare | Fantastical Regions | Violently warped coasts and climate regions with little concern for restraint. |
+| Region-Graph | Living World | Coherent continents, climate provinces, watersheds and open oceans. |
+| Region-Graph | Tectonic Continents | Coastal arcs, interior boundaries, long ranges and sheltered basins. |
+| Region-Graph | Great Watersheds | Land-heavy river basins, inland lakes, wet lowlands and mountain drainage. |
+| Region-Graph | Shattered Basins | Deep oceans dividing broken continents, island chains and long rifts. |
+| Region-Graph | Mythic Regions | Deliberately composed climate realms, epic ranges and implausible transitions. |
+| Physical | Dynamic Earth | Mixed moving plates, convergence, rifting, moderate erosion and coupled climate. |
+| Physical | Colliding Plates | Young violent collision belts, high ranges, rain shadows and hard interiors. |
+| Physical | Ancient Cratons | Quiet old plates, broad river country, subdued uplands and mature coasts. |
+
+**Map size** provides Civ V's standard budgets: Duel `40×24`, Tiny `56×36`, Small `66×42`, Standard `80×52`, Large `104×64` and Huge `128×80`. Changing size also restores its recommended major- and city-state counts. **Seed** makes a configuration repeatable; **Shuffle** changes only the seed. The configuration summary states the active projection, engine, character, map type, size, final dimensions and player count. When structural metadata exists, **World structure** reports its retained geographic objects and diagnostics.
+
+### Generate: World shape
+
+- **World modifier** applies a second rule over the chosen map type. **None** leaves the preset alone; **Strategic Depth** builds long ranges, narrow passes, defended basins and invasion corridors; **Fractured World** breaks land and water into smaller contested regions; **Doomsday** adds scarred highlands, sparse fallout, ruined cities and remnants of roads.
+- **Wrap type** uses the map type's default, forces east-west wrapping, or disables wrapping. It affects adjacency, pathfinding and the exported map flag.
+- **Geometry** redistributes the chosen size's approximate tile budget. **Standard** keeps normal proportions; **Tall**, **Wide** and **Square** provide safe alternate shapes. **Needle**, **Ribbon**, **Pin** and **String** are progressively more extreme vertical or horizontal ratios known to crash Civ V. They remain hidden until **Show game-breaking geometry** is checked and a second modal is confirmed. Only then may Randomise select them.
+- **Water percent** ranges from 0% to 90%. Zero is intentionally valid. **Mountain percent** ranges from 0% to 38%, except Strategic Depth, Doomsday and Brutal impose their own minimums. The generator opens passes after relief creation so mountains may make travel miserable without sealing land behind an impassable wall.
+- **World age** shifts relief toward younger, hillier terrain; normal mature relief; or older, more eroded terrain.
+- **Region-Graph controls** expose geographic granularity from vast to very fractured forms, one to five ocean basins, whether land may occupy the selected projection's poles, the share of mountain ranges placed along coasts, and sparse, normal or dense river networks.
+- **Physical controls** set plate activity to quiet, normal or violent; erosion to light, moderate or strong; and river density to sparse, normal or dense. The retained structure records plate motion, crust, boundaries, continents, basins and major ranges for later inspection.
+- **Reset world shape** restores this group without changing the rest of the design.
+
+### Generate: Climate and terrain
+
+- **Climate** shifts the full temperature field toward Cool, Temperate or Hot.
+- **Rainfall** shifts moisture toward Arid, Normal or Wet. Realistic and Physical maps retain west-to-east atmospheric transport, orographic rainfall and eastern rain shadows.
+- **Climate logic** appears for Region-Graph. **Free regional climates** permits mythic regions without latitude discipline; **Latitude-informed climates** anchors regional temperatures to the selected Projection Type.
+- **Region contrast** blends climate borders, keeps varied provinces, or exaggerates them into extreme realms.
+- **Dominant terrain** biases generation toward any combination of Grassland, Plains, Desert and Tundra. Selecting nothing leaves the mix to climate. It is a bias rather than permission to put deserts under the sea or snow in a furnace.
+- **Reset climate** restores this group and clears terrain dominance.
+
+### Generate: Resources and wonders
+
+- **Bonus resources**, **Luxuries** and **Strategics** independently choose scarce, standard or abundant placement.
+- **Strategic distribution** spreads deposits evenly, assigns characteristic types to regions, or creates clusters.
+- **Guarantee iron and horses** and **Guarantee a luxury** place essential resources near every major start when legal tiles exist.
+- **Regional luxury monopolies** concentrates luxury families geographically instead of distributing every type everywhere.
+- **Offshore oil** sets the requested share of oil deposits placed at sea.
+- **Natural wonders** sets the target count; **Wonder spacing** separates wonders from one another; **Start buffer** keeps them away from major starts.
+- **Barbarians** selects none, scarce, standard or raging camps; **Camp start distance** keeps camps away from starts.
+- **Ancient ruins** selects none, scarce, standard or abundant ruins; **Ruin start distance** provides the equivalent buffer.
+- **Reset content** restores all resource, wonder, camp and ruin settings.
+
+Camps, ruins, ruined cities and roads are scenario content. Excogitare can preview and analyze them, but a newly generated geography-first Civ5Map does not yet embed every one of those records in a fresh scenario section. Imported maps fare better because their existing scenario structure can be amended rather than invented.
+
+### Generate: Players and starts
+
+- **Players** accepts 2–22 major civilizations; **City states** accepts 0–41 minor civilizations.
+- **Layout: Equal separation** spreads major starts apart. **Tournament** places them with a stricter competitive bias. **Paired teams** enables team controls.
+- **Team size** forms teams of two, three or four. **Cluster teammates** keeps allies near one another; **Opposing fronts** arranges teams across contested fronts; **Distributed teammates** separates allies around the world.
+- **Start quality: Standard** leaves nearby terrain alone. **Balanced strategic access** guarantees food, iron and horses. **Legendary Start** improves nearby terrain and adds six valuable resources.
+- **City-state spacing** defines their minimum separation. **Distribution** is even or regional. **Coastal preference** permits any tile, favours coasts, or requires coasts when enough legal positions exist.
+- **Reset players** restores the size's recommended counts and ordinary start rules.
+
+Generated starts are tested for bounds, passable land, duplicates, spacing, mountain isolation and access to the wider landmass. “Balanced” is nonetheless a heuristic, not a theorem and certainly not a tournament organizer willing to accept blame.
+
+### Generate: iteration and history
+
+- **Generate map** runs all passes in an isolated worker. While running, it becomes a **Cancel** button and reports the active stage.
+- **Generation history** keeps the latest 30 generated maps, including their options and seeds, for the current browser session. Opening an entry restores that snapshot. Reloading the page clears the history.
+- **Selective regeneration** reruns **World** and every dependent layer; **Climate** and biome features; **Rivers** on the current relief; **Content** such as resources and wonders; or **Starts** including majors, teams and city states.
+- **Candidate batch** creates 4, 8, 12 or 20 related seeds, validates them, scores multiplayer balance and ranks the results. Selecting a candidate opens it as the current map.
+- **Named checkpoints** save deliberate in-memory revisions. A checkpoint may be restored or compared with the current map; **Difference** highlights changed tiles when dimensions match.
+
+### Edit submenu
+
+- **Tile brush** paints terrain, flat/hill/mountain elevation, features and resources. Each field may be left at **No change**; feature and resource may explicitly be set to **None**. Brush sizes cover 1, 7 or 19 hexes.
+- **Flood fill** applies the active fields to a connected region of matching tiles.
+- **Region** selects two opposite corners, then copies, pastes or clears the rectangular selection. Paste uses the chosen destination as the copied region's lower-left anchor.
+- **World structure** applies a coherent operation to a selected rectangle: raise a tectonic plate, carve a sea basin, build a mountain chain, paint a climate region or rebuild a watershed. Strength may be Subtle, Pronounced or Extreme. Climate painting uses the first dominant terrain selected under Generate, or grassland if none is selected.
+- **Start positions** adds or removes numbered major starts by clicking hexes. Team mode groups consecutive player numbers according to the chosen team size.
+
+Edits participate in Undo and Redo, preserve pan and zoom, and are subject to the same export validation as generated content.
+
+### Analyze submenu
+
+**Multiplayer balance** grades the map and each major start. Player cards report a heuristic score, workable nearby land, strategic resources, luxuries and nearest-opponent distance; selecting a player focuses that start on the map. **Civ5 validation** lists errors, warnings and informational findings involving dimensions, tile legality, rivers, starts, resources and scenario data. Analyze reports problems but does not alter them; use Edit or Repair for that.
+
+The generator is an independent approximation of Civ V's rules, not Firaxis code. Region-Graph reproduces Fantastical's broad geographic architecture, not its exact tables, random sequence or every eccentric special case. Generated maps retain private plates, subregions, polygons, continents, basins, climate provinces, mountain ranges and river systems, but `.Civ5Map` has no standard place for all of that model and the renderer does not yet draw a geographic-label layer.
 
 ## Repair
 
-Repair loads a `.Civ5Map`, runs structural and rules-based tests, and presents the original, corrected and difference views before anything is applied. Safe, standard and aggressive profiles control how adventurous the proposed corrections may be. Checks cover malformed tile values, illegal terrain, feature, resource and wonder combinations, broken or aquatic rivers, cities on impossible tiles, start counts, duplicate starts, city-state flags, spacing, land access and mountain isolation. Resources may be relocated or deleted; rivers may be rebuilt so that they begin in high ground, remain continuous and eventually meet water.
+Repair examines the current map immediately upon entry. Open another `.Civ5Map` while remaining in Repair to run the same parser, salvage and rule checks on that file. Findings are proposals until they are applied or exported from the corrected preview.
 
-Repair is useful, but it is not an oracle. Its legality tables know the ordinary content bundled into Excogitare, not every rule added by every mod. Aggressive river correction may replace a designer's strange but intentional river with a more defensible one. Salvage mode can recover geography from some damaged files, but unsupported or corrupt scenario data may still be lost. Passing every test means that the map looks internally coherent to Excogitare; it does not amount to a blood oath that Civ V will load every possible file. Review the difference view and retain the original.
+### Repair profiles
+
+- **Safe** preselects the most mechanical corrections with an actual mutation: malformed values, incompatible features, broken city links, impossible city or start placement, city-state flags and player-count mismatches.
+- **Standard** includes Safe fixes, illegal resource and wonder cleanup, overlap correction, inaccessible-start relocation and complete river-network rebuilding. This is the ordinary choice.
+- **Competitive** retains every Standard fix and includes the more opinionated competitive review tier. Very-close starts and unplaced city records currently remain manual-review findings, so Competitive may select the same automated mutations as Standard on an otherwise sound map.
+
+Profiles control which findings are selected, not which tests run. Individual findings may still be checked or unchecked. Each card states its category and confidence, explains the proposed change and, when a tile is involved, offers **Show tile** to focus it.
+
+### Comparison views and actions
+
+- **Original** renders the untouched input.
+- **Corrected** is a live preview of all currently selected mutations.
+- **Difference** overlays the tiles affected by the proposed repair.
+- **File recovery report** appears when the tolerant parser had to salvage truncated or malformed geography. It records what was recovered rather than pretending the damage never existed.
+- **Apply selected** commits the checked mutations to the editable current map and makes them available to Undo.
+- **Export repaired Civ5Map** exports the corrected preview directly, without requiring the preview to be applied first.
+
+### Tests and corrections
+
+Repair checks dimensions, tile counts and malformed terrain values; illegal terrain, elevation, feature, resource and wonder combinations; fish on land and land resources in impossible terrain; rivers drawn in water, disconnected edge fragments, inland dead ends and drainage that fails to reach an ocean or lake; scenario cities with broken tile links, duplicate identifiers, missing records or impossible placement; and start locations outside the map, on blocked terrain, duplicated, too close, misflagged as major or city-state starts, isolated by mountains, or inconsistent with the stored player count.
+
+Illegal resources are relocated to a compatible nearby tile when a defensible destination exists and deleted when it does not. Illegal features and wonders are removed or corrected according to their rule. River repair may discard broken fragments and rebuild a continuous mountain-to-water network because preserving a nonsensical river more faithfully would still leave it nonsensical. Start repair may move starts, correct city-state flags and synchronize the logical player count.
+
+Repair is useful, but it is not an oracle. Its legality tables know the ordinary content bundled into Excogitare, not every rule introduced by every mod. A strange but intentional river may be replaced by a more conventional one; damaged scenario data may be beyond salvage; and passing every check means only that the map is internally coherent to Excogitare. It does not amount to a blood oath that Civ V will load every possible file. Review Difference and retain the original.
 
 ## Lua
 
-Lua remains the least finished menu, but it is now a project workspace rather than a hopeful file picker. A main map script can be loaded and edited in place; named `.lua` dependencies can be supplied alongside it; custom options returned by `GetMapScriptInfo()` become controls; and `GetMapInitData()` may choose the actual dimensions and east-west wrapping. The script then passes through explicit plot, terrain, feature, river and continent stages inside the isolated, time-limited WebAssembly worker. The resulting tiles, roads, improvements and any starts assigned through `Players:SetStartingPlot()` are captured as an ordinary editable Excogitare map.
+Lua is marked **Experimental** in red and presents an incomplete-feature warning before entry. That warning is not decorative legal compost: this is the least finished menu. It is a sandboxed compatibility workspace for trying Civ V map scripts, not a faithful copy of the game's Lua host.
 
-A second Lua editor provides a replayable post-process hook. It runs after the generator and can use the same `Map` and plot APIs to make deliberate programmatic alterations without vandalizing the original functions. The workspace reports which includes loaded, which remain missing, which stages ran and what the script printed. Common Civ V helpers receive built-in compatibility shims; in particular, Fantastical v31 can now complete its ordinary default generation path and expose its nine map options. Excogitare fills any major or city-state starts the script leaves unassigned.
+### Project and generation
 
-This is still a compatibility experiment, not a faithful Civ V Lua host. The database is skeletal, SQL supplied by a mod is not imported, dynamic or computed `include()` paths cannot be discovered in advance, the standard `AssignStartingPlots` machinery is only scaffolding, and many mod-specific APIs remain absent. Unsupported natural-wonder feature IDs and resources outside Excogitare's vocabulary may be discarded during capture. The Lua project itself is not yet saved as a portable bundle, and exporting an edited map as Lua still produces a static description of that map; it cannot reverse-engineer brush strokes into the procedural imagination of the original author. That would be alchemy, and this is merely software.
+- **Open main script / Replace main script** loads one `.lua` file as the project entry point. Its filename and line count are shown.
+- **Add dependencies** supplies named `.lua` files referenced by `include()`. Supplied files are listed individually and may be removed. Common helpers such as MapGenerator, bit operations, vectors and starting-plot scaffolding come from the compatibility runtime; mod-specific files do not.
+- **Generate map from Lua** runs the project for the first time. **Regenerate map from Lua** reruns it after source, option, dependency, runtime or hook changes. A successful result replaces the current map and becomes an ordinary editable Excogitare map.
+- The status line reports preparation, execution, conversion or failure. Execution occurs inside an isolated WebAssembly worker with a strict timeout.
+
+### Lua workspace submenus
+
+- **Source editor** edits the complete main script in place. This can change generator functions directly; editing clears stale runtime metadata so the next report describes the revised source.
+- **Dependencies** lists supplied include files and their line counts. **Add .lua files** may load several at once. Literal named includes can be matched; dynamic or computed include paths generally cannot be discovered in advance.
+- **Script options** appears when `GetMapScriptInfo()` returns custom options. Enumerated values become selects; unlabelled numeric choices become number inputs. The selected values are exposed to the script on every run.
+- **Runtime** provides a fallback Civ V size, 2–22 major players, 0–41 city states and a deterministic runtime seed. `GetMapInitData()` overrides the fallback dimensions and east-west wrap state. Excogitare fills major or city-state starts that the script leaves unassigned.
+- **Post-process hook** is a second Lua editor that runs after the main generator. It can call the same supported `Map` and plot APIs to make repeatable programmatic changes without rewriting the original functions.
+- **Execution pipeline** lists the discovered plot, terrain, feature, river, continent and related stages, marking each complete or skipped and explaining what occurred.
+- **Script console** shows captured output from the run. Missing includes and unsupported calls also feed the compatibility report rather than failing silently where the runtime can identify them.
+
+### Lua exports
+
+- **Export map Lua** emits a static Lua description of the current map. It is useful as generated data, not as a reconstruction of the original procedural algorithm.
+- **Export .modinfo** emits companion mod metadata for that exported script.
+- **Export Civ5Map** and **Export PNG** remain available in the top bar for the current Lua-generated result.
+
+The compatibility layer covers a growing subset of `Map`, `GameInfo`, plot mutation, enums, database iteration, `Players:SetStartingPlot()` and common map-generator helpers. Fantastical v31 can complete its ordinary default path and expose its nine options, but that does not imply universal Lua compatibility. The database is skeletal, SQL shipped by a mod is not imported, `AssignStartingPlots` remains scaffolding, and many game- or mod-specific APIs are absent. Unsupported natural-wonder feature IDs and resources outside Excogitare's vocabulary may be discarded during capture. Projects are not yet saved as portable multi-file bundles. Exporting an edited map as Lua cannot reverse-engineer brush strokes into the procedural imagination of the original author. That would be alchemy, and this is merely software.
 
 ## Docker
 

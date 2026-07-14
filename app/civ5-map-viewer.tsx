@@ -35,10 +35,12 @@ import {
   type StructureOperation,
 } from "@/lib/map-design";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "@/lib/generation-history";
+import { CLIMATE_PROJECTIONS } from "@/lib/climate-projection";
 import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile, type RepairIssue, type RepairProfile } from "@/lib/map-repair";
 import {
   DEFAULT_GENERATION_OPTIONS,
   DOMINANT_TERRAINS,
+  isGameBreakingGeometry,
   MAP_PRESETS,
   MAP_SIZES,
   randomGenerationOptions,
@@ -79,10 +81,22 @@ type RepairView = "ORIGINAL" | "CORRECTED" | "DIFFERENCE";
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 type GenerationWorkerMessage = { id: number; type: "PROGRESS"; stage: string } | { id: number; type: "COMPLETE"; map: Civ5Map } | { id: number; type: "ERROR"; message: string };
 
-function normalizeGenerationOptions(options: Partial<MapGenerationOptions>): MapGenerationOptions {
+function normalizeGenerationOptions(options: Partial<MapGenerationOptions>, allowGameBreakingGeometry = false): MapGenerationOptions {
   const legacyEngine = String(options.engine ?? "");
-  return { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: legacyEngine === "FIELD" ? "EXCOGITARE" : options.engine ?? DEFAULT_GENERATION_OPTIONS.engine, dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
+  const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: legacyEngine === "FIELD" ? "EXCOGITARE" : options.engine ?? DEFAULT_GENERATION_OPTIONS.engine, dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
+  return !allowGameBreakingGeometry && isGameBreakingGeometry(normalized.geometry) ? { ...normalized, geometry: "STANDARD" } : normalized;
 }
+
+const GEOMETRY_OPTIONS = [
+  { id: "STANDARD", label: "Standard proportions", gameBreaking: false },
+  { id: "TALL", label: "Very tall and narrow", gameBreaking: false },
+  { id: "WIDE", label: "Very thin and wide", gameBreaking: false },
+  { id: "SQUARE", label: "Perfectly square", gameBreaking: false },
+  { id: "NEEDLE", label: "Needle — extreme vertical", gameBreaking: true },
+  { id: "RIBBON", label: "Ribbon — extreme horizontal", gameBreaking: true },
+  { id: "PIN", label: "Pin — ultra-extreme vertical", gameBreaking: true },
+  { id: "STRING", label: "String — ultra-extreme horizontal", gameBreaking: true },
+] as const satisfies ReadonlyArray<{ id: MapGenerationOptions["geometry"]; label: string; gameBreaking: boolean }>;
 
 function generationEngineStage(engine: MapGenerationOptions["engine"]) {
   if (engine === "REGION_GRAPH") return "Preparing geographic regions";
@@ -907,6 +921,9 @@ export function Civ5MapViewer() {
   const [comparisonView, setComparisonView] = useState<"CURRENT" | "CHECKPOINT" | "DIFFERENCE">("CURRENT");
   const [focusedStart, setFocusedStart] = useState<Civ5StartLocation | null>(null);
   const [showExportValidation, setShowExportValidation] = useState(false);
+  const [allowGameBreakingGeometry, setAllowGameBreakingGeometry] = useState(false);
+  const [showGameBreakingGeometryConfirmation, setShowGameBreakingGeometryConfirmation] = useState(false);
+  const [showLuaExperimentalWarning, setShowLuaExperimentalWarning] = useState(false);
   const [repairBaseline, setRepairBaseline] = useState<Civ5Map | null>(null);
   const [repairIssues, setRepairIssues] = useState<RepairIssue[]>([]);
   const [repairSelected, setRepairSelected] = useState<Set<string>>(new Set());
@@ -939,6 +956,8 @@ export function Civ5MapViewer() {
   const renderCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const exportConfirmationCancelRef = useRef<HTMLButtonElement>(null);
+  const gameBreakingGeometryCancelRef = useRef<HTMLButtonElement>(null);
+  const luaExperimentalCancelRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
   const luaDependencyInputRef = useRef<HTMLInputElement>(null);
@@ -1137,6 +1156,32 @@ export function Civ5MapViewer() {
   }, [showExportValidation]);
 
   useEffect(() => {
+    if (!showGameBreakingGeometryConfirmation) return;
+    const frame = window.requestAnimationFrame(() => gameBreakingGeometryCancelRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowGameBreakingGeometryConfirmation(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showGameBreakingGeometryConfirmation]);
+
+  useEffect(() => {
+    if (!showLuaExperimentalWarning) return;
+    const frame = window.requestAnimationFrame(() => luaExperimentalCancelRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowLuaExperimentalWarning(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showLuaExperimentalWarning]);
+
+  useEffect(() => {
     const frame = window.requestAnimationFrame(() => fitMap(size));
     return () => window.cancelAnimationFrame(frame);
   }, [size, fitMap]);
@@ -1201,7 +1246,8 @@ export function Civ5MapViewer() {
     const styleLabel = generationOptions.style.toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
     const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
     const engineLabel = generationOptions.engine === "REGION_GRAPH" ? "Region-Graph" : generationOptions.engine === "PHYSICAL" ? "Physical" : "Excogitare";
-    return `${engineLabel} · ${styleLabel} · ${presetLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
+    const projectionLabel = CLIMATE_PROJECTIONS.find((item) => item.id === generationOptions.projectionType)?.label ?? generationOptions.projectionType;
+    return `${projectionLabel} · ${engineLabel} · ${styleLabel} · ${presetLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
   }, [generationOptions]);
   const validationIssues = useMemo(() => validateCiv5Map(map), [map]);
   const balanceReport = useMemo(() => analyzeMultiplayerBalance(map), [map]);
@@ -1501,6 +1547,10 @@ export function Civ5MapViewer() {
 
   const selectWorkspaceMode = (nextMode: WorkspaceMode) => {
     setShowLegend(false);
+    if (nextMode === "SCRIPT" && mode !== "SCRIPT") {
+      setShowLuaExperimentalWarning(true);
+      return;
+    }
     if (nextMode === "REPAIR") enterRepairMode();
     else setMode(nextMode);
   };
@@ -1517,16 +1567,32 @@ export function Civ5MapViewer() {
     setMessage(`${width} × ${height} region copied`);
   };
 
+  const disableGameBreakingGeometry = () => {
+    setAllowGameBreakingGeometry(false);
+    setShowGameBreakingGeometryConfirmation(false);
+    setGenerationOptions((current) => isGameBreakingGeometry(current.geometry) ? { ...current, geometry: "STANDARD" } : current);
+  };
+
+  const requestGameBreakingGeometry = () => setShowGameBreakingGeometryConfirmation(true);
+
+  const confirmGameBreakingGeometry = () => {
+    setShowGameBreakingGeometryConfirmation(false);
+    setAllowGameBreakingGeometry(true);
+    setMessage("Game-breaking geometry enabled · Civ V may crash when loading these maps");
+  };
+
   const generateNewMap = async () => {
     setShowLegend(false);
+    const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
+    if (options !== generationOptions) setGenerationOptions(options);
     try {
-      const generated = await generateMapAsync(generationOptions);
+      const generated = await generateMapAsync(options);
       replaceMap(generated);
       const id = ++generationIdRef.current;
       setGenerationHistory((history) => addGenerationToHistory(history, generated, id));
       setActiveGenerationId(id);
       setMode("CREATE");
-      setMessage(`${generated.name} · generated from seed ${generationOptions.seed}`);
+      setMessage(`${generated.name} · generated from seed ${options.seed}`);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) setMessage(error instanceof Error ? error.message : "Map generation failed.");
     }
@@ -1534,7 +1600,7 @@ export function Civ5MapViewer() {
 
   const randomiseWorld = async () => {
     setShowLegend(false);
-    const options = randomGenerationOptions();
+    const options = randomGenerationOptions(Math.random, allowGameBreakingGeometry);
     setGenerationOptions(options);
     try {
       const generated = await generateMapAsync(options);
@@ -1554,7 +1620,7 @@ export function Civ5MapViewer() {
     const restored = restoreGeneration(entry);
     replaceMap(restored);
     setActiveGenerationId(entry.id);
-    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation));
+    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
     setMode("CREATE");
     setCreateView("GENERATE");
     setMessage(`${restored.name} · restored from generation history`);
@@ -1567,10 +1633,12 @@ export function Civ5MapViewer() {
 
   const runSelectivePass = async (stage: RegenerationStage) => {
     const variation = ++regenerationIdRef.current;
+    const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
+    if (options !== generationOptions) setGenerationOptions(options);
     try {
-      const regenerated = await regenerateMapAsync(map, generationOptions, stage, variation);
+      const regenerated = await regenerateMapAsync(map, options, stage, variation);
       replaceMap(regenerated);
-      if (regenerated.generation) setGenerationOptions(normalizeGenerationOptions(regenerated.generation));
+      if (regenerated.generation) setGenerationOptions(normalizeGenerationOptions(regenerated.generation, allowGameBreakingGeometry));
       const id = ++generationIdRef.current;
       setGenerationHistory((history) => addGenerationToHistory(history, regenerated, id));
       setActiveGenerationId(id);
@@ -1589,10 +1657,12 @@ export function Civ5MapViewer() {
     setBatchCandidates([]);
     setBatchProgress(0);
     const candidates: BatchCandidate[] = [];
+    const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
+    if (options !== generationOptions) setGenerationOptions(options);
     try {
       for (let index = 0; index < batchCount; index += 1) {
-        const seed = `${generationOptions.seed}-${String(index + 1).padStart(2, "0")}`;
-        const generated = await generateMapAsync({ ...generationOptions, seed });
+        const seed = `${options.seed}-${String(index + 1).padStart(2, "0")}`;
+        const generated = await generateMapAsync({ ...options, seed });
         candidates.push(scoreBatchCandidate(generated, seed, index + 1));
         candidates.sort((one, two) => two.score - one.score || one.balance.spread - two.balance.spread);
         setBatchCandidates([...candidates]);
@@ -1610,7 +1680,7 @@ export function Civ5MapViewer() {
   const openBatchCandidate = (candidate: BatchCandidate) => {
     const restored = cloneMap(candidate.map);
     replaceMap(restored);
-    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation));
+    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
     const id = ++generationIdRef.current;
     setGenerationHistory((history) => addGenerationToHistory(history, restored, id));
     setActiveGenerationId(id);
@@ -1628,7 +1698,7 @@ export function Civ5MapViewer() {
   const restoreCheckpoint = (checkpoint: MapCheckpoint) => {
     const restored = restoreMapCheckpoint(checkpoint);
     replaceMap(restored);
-    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation));
+    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
     setComparisonCheckpointId(null);
     setComparisonView("CURRENT");
     setMessage(`${checkpoint.name} · checkpoint restored`);
@@ -1700,7 +1770,7 @@ export function Civ5MapViewer() {
       if (report.execution === "NATIVE" && !luaDependencies.length && !luaPostProcess.trim()) {
         const result = mapFromLuaScript(luaSource);
         replaceMap(result.map);
-        setGenerationOptions(result.map.generation ? normalizeGenerationOptions(result.map.generation) : generationOptions);
+        setGenerationOptions(result.map.generation ? normalizeGenerationOptions(result.map.generation, allowGameBreakingGeometry) : generationOptions);
         setLuaLogs([]);
         setLuaRunStatus("Map generated and opened in the editor.");
         setMessage(`${luaFileName} · safely regenerated from embedded settings`);
@@ -1754,8 +1824,9 @@ export function Civ5MapViewer() {
         </div>
         <nav className="mode-tabs" aria-label="Workspace mode">
           {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
-            <button key={item} type="button" className={mode === item ? "is-active" : ""} onClick={() => selectWorkspaceMode(item)}>
+            <button key={item} type="button" className={`${mode === item ? "is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`} onClick={() => selectWorkspaceMode(item)}>
               {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}
+              {item === "SCRIPT" && <span className="experimental-badge">Experimental</span>}
             </button>
           ))}
         </nav>
@@ -1764,7 +1835,7 @@ export function Civ5MapViewer() {
             <button type="button" onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
             <button type="button" onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
           </div>
-          <button className="button button-secondary button-export-view" type="button" onClick={exportView}>Export view</button>
+          <button className="button button-secondary button-export-view" type="button" onClick={exportView}>Export PNG</button>
           {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" onClick={exportLua}>Export Lua</button>}
           {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" onClick={exportModInfo}>Export .modinfo</button>}
           <button
@@ -1787,7 +1858,7 @@ export function Civ5MapViewer() {
         <aside className="sidebar" aria-label="Map information and layers">
           {mode === "CREATE" && (
             <button className="randomise-world-button" type="button" disabled={generationRunning} onClick={() => void randomiseWorld()}>
-              <span>Randomise</span><small>{generationRunning ? generationStage : "New map from every option"}</small>
+              <span>Randomise</span><small>{generationRunning ? generationStage : allowGameBreakingGeometry ? "New map from every option" : "New map from Civ V-safe options"}</small>
             </button>
           )}
           <div className="map-heading">
@@ -1970,11 +2041,13 @@ export function Civ5MapViewer() {
                     </div>
                   </details>
                   <div className="world-building-steps">
-                  <div className="world-builder-intro">
-                    <span>Build order</span>
-                    <ol><li>Concept</li><li>Shape</li><li>Climate</li><li>Life</li><li>Players</li></ol>
-                    <p>Begin with the kind of world you want. The later sections refine it without asking you to think like the generator.</p>
-                  </div>
+                  <label className="control-field projection-type-control">
+                    <span>Projection Type</span>
+                    <select value={generationOptions.projectionType} onChange={(event) => setGenerationOptions((current) => ({ ...current, projectionType: event.target.value as MapGenerationOptions["projectionType"] }))}>
+                      {CLIMATE_PROJECTIONS.map((projectionType) => <option key={projectionType.id} value={projectionType.id}>{projectionType.label}</option>)}
+                    </select>
+                    <small>{CLIMATE_PROJECTIONS.find((projectionType) => projectionType.id === generationOptions.projectionType)?.description}</small>
+                  </label>
                   <div className="section-title"><h3>World concept</h3><span>step 1</span></div>
                   <fieldset className="world-model-picker">
                     <legend>Generation engine</legend>
@@ -2075,16 +2148,17 @@ export function Civ5MapViewer() {
                       <label className="control-field">
                         <span>Geometry</span>
                         <select value={generationOptions.geometry} onChange={(event) => setGenerationOptions((current) => ({ ...current, geometry: event.target.value as MapGenerationOptions["geometry"] }))}>
-                          <option value="STANDARD">Standard proportions</option>
-                          <option value="TALL">Very tall and narrow</option>
-                          <option value="WIDE">Very thin and wide</option>
-                          <option value="NEEDLE">Needle — extreme vertical</option>
-                          <option value="RIBBON">Ribbon — extreme horizontal</option>
-                          <option value="PIN">Pin — ultra-extreme vertical</option>
-                          <option value="STRING">String — ultra-extreme horizontal</option>
-                          <option value="SQUARE">Perfectly square</option>
+                          {GEOMETRY_OPTIONS.filter((option) => allowGameBreakingGeometry || !option.gameBreaking).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                         </select>
                         <small>{(() => { const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry); return `${dimensions.width} × ${dimensions.height} tiles`; })()}</small>
+                      </label>
+                      <label className={`check-row game-breaking-geometry-toggle${allowGameBreakingGeometry ? " is-enabled" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={allowGameBreakingGeometry}
+                          onChange={(event) => event.target.checked ? requestGameBreakingGeometry() : disableGameBreakingGeometry()}
+                        />
+                        <span><strong>Show game-breaking geometry</strong><small>Unlock aspect ratios known to crash Civ V. Randomise will use them only while this is enabled.</small></span>
                       </label>
                       <div className="percentage-controls">
                         <label className="control-field percentage-field"><span>Water percent <output>{generationOptions.waterPercent}%</output></span><input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} /></label>
@@ -2580,6 +2654,50 @@ export function Civ5MapViewer() {
           )}
         </div>
       </section>
+
+      {showGameBreakingGeometryConfirmation && (
+        <div
+          className="export-confirmation-backdrop game-breaking-geometry-backdrop"
+          onPointerDown={(event) => { if (event.currentTarget === event.target) setShowGameBreakingGeometryConfirmation(false); }}
+        >
+          <section className="export-confirmation-modal game-breaking-geometry-modal" role="dialog" aria-modal="true" aria-labelledby="game-breaking-geometry-title" aria-describedby="game-breaking-geometry-summary">
+            <header>
+              <span>Second confirmation</span>
+              <h2 id="game-breaking-geometry-title">Enable game-breaking geometry?</h2>
+            </header>
+            <p id="game-breaking-geometry-summary">
+              Needle, Ribbon, Pin, and String use aspect ratios that Civ V does not reliably load. A generated Civ5Map may crash the game before the map opens.
+            </p>
+            <p>Enable these options only for renderer experiments or intentionally invalid map research. Randomise will also be permitted to select them.</p>
+            <div className="export-confirmation-actions">
+              <button ref={gameBreakingGeometryCancelRef} type="button" onClick={() => setShowGameBreakingGeometryConfirmation(false)}>Keep safe geometry</button>
+              <button className="confirm-export confirm-game-breaking" type="button" onClick={confirmGameBreakingGeometry}>I accept the crash risk</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showLuaExperimentalWarning && (
+        <div
+          className="export-confirmation-backdrop lua-experimental-backdrop"
+          onPointerDown={(event) => { if (event.currentTarget === event.target) setShowLuaExperimentalWarning(false); }}
+        >
+          <section className="export-confirmation-modal lua-experimental-modal" role="dialog" aria-modal="true" aria-labelledby="lua-experimental-title" aria-describedby="lua-experimental-summary">
+            <header>
+              <span>Experimental workspace</span>
+              <h2 id="lua-experimental-title">The Lua workspace is incomplete</h2>
+            </header>
+            <p id="lua-experimental-summary">
+              Lua compatibility is still partial. Many Civ V map scripts depend on engine APIs that Excogitare does not yet reproduce, so generation may fail or produce an incomplete map.
+            </p>
+            <p>You can inspect compatibility reports, edit scripts, and try supported generators, but do not treat the result as a faithful Civ V execution environment.</p>
+            <div className="export-confirmation-actions">
+              <button ref={luaExperimentalCancelRef} type="button" onClick={() => setShowLuaExperimentalWarning(false)}>Stay here</button>
+              <button className="confirm-export confirm-experimental" type="button" onClick={() => { setShowLuaExperimentalWarning(false); setMode("SCRIPT"); }}>Open experimental Lua</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {showExportValidation && (
         <div

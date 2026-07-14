@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
+import { poleProximity, type ClimateProjection } from "./climate-projection.ts";
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
 import { attachRiverSystems, connectedLinearFeatures, connectedTileObjects, type GenerationStructure } from "./generation-structure.ts";
 import { generatePhysicalGeography } from "./physical-generator.ts";
@@ -51,6 +52,11 @@ export type MapGeometry =
   | "PIN"
   | "STRING"
   | "SQUARE";
+export const GAME_BREAKING_GEOMETRIES = ["NEEDLE", "RIBBON", "PIN", "STRING"] as const satisfies ReadonlyArray<MapGeometry>;
+export const SAFE_MAP_GEOMETRIES = ["STANDARD", "TALL", "WIDE", "SQUARE"] as const satisfies ReadonlyArray<MapGeometry>;
+export function isGameBreakingGeometry(geometry: MapGeometry) {
+  return (GAME_BREAKING_GEOMETRIES as ReadonlyArray<MapGeometry>).includes(geometry);
+}
 export type AbundanceSetting = "SCARCE" | "STANDARD" | "ABUNDANT";
 export type ResourceDistribution = "EVEN" | "REGIONAL" | "CLUSTERED";
 export type CoastalPreference = "ANY" | "PREFER" | "REQUIRE";
@@ -122,6 +128,7 @@ export const WORLD_MODIFIERS: ReadonlyArray<{ id: WorldModifier; label: string; 
 ];
 
 export type MapGenerationOptions = {
+  projectionType: ClimateProjection;
   engine: GenerationEngine;
   preset: MapPresetId;
   size: MapSizeId;
@@ -173,6 +180,7 @@ export type MapGenerationOptions = {
 };
 
 export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
+  projectionType: "NORTH_SOUTH",
   engine: "EXCOGITARE",
   preset: "WILD_REGIONS",
   size: "STANDARD",
@@ -227,7 +235,7 @@ function randomItem<T>(items: readonly T[], random: () => number) {
   return items[Math.min(items.length - 1, Math.floor(random() * items.length))];
 }
 
-export function randomGenerationOptions(random: () => number = Math.random): MapGenerationOptions {
+export function randomGenerationOptions(random: () => number = Math.random, includeGameBreakingGeometry = false): MapGenerationOptions {
   const style = randomItem(["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const, random);
   const presetConfig = randomItem(MAP_PRESETS, random);
   const preset = presetConfig.id;
@@ -238,13 +246,14 @@ export function randomGenerationOptions(random: () => number = Math.random): Map
   const seedPart = () => Math.floor(random() * 0x100000000).toString(36).padStart(7, "0");
   return {
     ...DEFAULT_GENERATION_OPTIONS,
+    projectionType: randomItem(["NORTH_SOUTH", "POLAR_CENTERED", "EQUATORIAL_POLE"] as const, random),
     style,
     preset,
     size,
     modifier,
     engine: presetConfig.engine,
     wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
-    geometry: randomItem(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "PIN", "STRING", "SQUARE"] as const, random),
+    geometry: randomItem(includeGameBreakingGeometry ? [...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES] : SAFE_MAP_GEOMETRIES, random),
     waterPercent: Math.floor(random() * 91),
     mountainPercent: minimumMountains + Math.floor(random() * (39 - minimumMountains)),
     dominantTerrains,
@@ -1425,7 +1434,8 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
   const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
   const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
   const geometrySeed = resolved.geometry === "STANDARD" ? "" : `:${resolved.geometry}`;
-  const seed = seedHash(`${resolved.seed}:${resolved.engine}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}`);
+  const projectionSeed = resolved.projectionType === "NORTH_SOUTH" ? "" : `:${resolved.projectionType}`;
+  const seed = seedHash(`${resolved.seed}:${resolved.engine}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}${projectionSeed}`);
   const random = randomFactory(seed);
   const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
   const wraps = resolved.wrapType === "PRESET" ? presetWraps : resolved.wrapType === "EAST_WEST";
@@ -1532,7 +1542,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       let field = presetField(resolved.preset, nx, ny, noise, centers, wraps);
       field += fineDetail * (resolved.style === "FANTASTICAL" ? 0.2 : resolved.style === "REALISTIC" ? 0.08 : resolved.style === "BRUTAL" ? 0.13 : 0.035);
       if (resolved.modifier === "FRACTURED") field += (valueNoise(x, y, 2.1, seed + 1171) - 0.5) * 0.28;
-      const polarPenalty = wraps ? Math.max(0, Math.abs(y / Math.max(1, height - 1) - 0.5) - 0.43) * (resolved.style === "FANTASTICAL" ? 0.65 : 1.45) : 0;
+      const polarPenalty = wraps ? Math.max(0, poleProximity(x, y, width, height, resolved.projectionType) - 0.86) * (resolved.style === "FANTASTICAL" ? 0.325 : 0.725) : 0;
       if (!wraps) {
         const edge = Math.min(x / width, 1 - x / width, y / height, 1 - y / height);
         if (edge < 0.055) field -= (0.055 - edge) * 3.5;
@@ -1606,11 +1616,11 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
   onProgress?.("Resolving climate and rain shadows");
 
   for (let y = 0; y < height; y += 1) {
-    const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
     let airborneMoisture = clamp(0.6 - rainShift + (valueNoise(0, y + 43, 8, seed + 1741) - 0.5) * 0.18);
     let upwindRelief = reliefValues[y * width];
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
+      const latitude = poleProximity(x, y, width, height, resolved.projectionType);
       const regionalTemperature = (valueNoise(x + 311, y + 907, 11, seed + 2711) - 0.5)
         * (resolved.style === "FANTASTICAL" ? 0.62 : resolved.style === "REALISTIC" ? 0.34 : resolved.style === "BRUTAL" ? 0.3 : 0.25);
       const localTemperature = (fractalNoise(x + 389, y + 127, seed + 2203) - 0.5)
@@ -1641,7 +1651,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       const index = y * width + x;
       const land = landMask[index];
       const adjacentLand = neighbors(x, y, width, height, wraps).some(([nx, ny]) => landMask[ny * width + nx]);
-      const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
+      const latitude = poleProximity(x, y, width, height, resolved.projectionType);
       const climateValue = temperatures[index];
       const moisture = moistures[index];
       const biomeVariation = valueNoise(x + 733, y + 419, 6.5, seed + 3511) - 0.5;

@@ -27,6 +27,7 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.match(html, /Start locations/);
   assert.match(html, /4 positions/);
   assert.match(html, /Export Civ5Map/);
+  assert.match(html, /Export PNG/);
   assert.match(html, /Show map legend/);
   assert.match(html, />Explore</);
   assert.match(html, />Create</);
@@ -58,7 +59,10 @@ test("social artwork is a high-resolution render of a generated Excogitare map",
 });
 
 test("layer redraws preserve the existing canvas backing buffer", async () => {
-  const source = await readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8");
+  const [source, climateProjection] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/climate-projection.ts", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /useLayoutEffect\(\(\) => \{/);
   assert.match(source, /if \(canvas\.width !== backingWidth\) canvas\.width = backingWidth/);
   assert.match(source, /if \(canvas\.height !== backingHeight\) canvas\.height = backingHeight/);
@@ -118,6 +122,13 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Ruined city/);
   assert.match(source, /Fallout/);
   assert.match(source, /<span>Wrap type<\/span>/);
+  assert.match(source, /<span>Projection Type<\/span>/);
+  assert.match(climateProjection, /North \/ south poles/);
+  assert.match(climateProjection, /Polar centered/);
+  assert.match(climateProjection, /Equatorial pole/);
+  assert.ok(source.indexOf("Projection Type") < source.indexOf("World concept"));
+  assert.doesNotMatch(source, /Build order/);
+  assert.match(source, />Export PNG<\/button>/);
   assert.match(source, /<span>Geometry<\/span>/);
   assert.match(source, /Needle — extreme vertical/);
   assert.match(source, /Ribbon — extreme horizontal/);
@@ -170,6 +181,43 @@ test("export confirmation is a modal rather than a sidebar prompt", async () => 
   assert.match(source, />Open report<\/button>/);
   assert.match(source, />Export anyway<\/button>/);
   assert.match(css, /\.export-confirmation-backdrop \{\s*position: fixed;\s*inset: 0;\s*z-index: 100;/);
+});
+
+test("game-breaking geometry requires a checkbox and second modal confirmation", async () => {
+  const [source, generator, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/map-generator.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /Show game-breaking geometry/);
+  assert.match(source, /GEOMETRY_OPTIONS\.filter\(\(option\) => allowGameBreakingGeometry \|\| !option\.gameBreaking\)/);
+  assert.match(source, /showGameBreakingGeometryConfirmation/);
+  assert.match(source, /className="export-confirmation-modal game-breaking-geometry-modal" role="dialog" aria-modal="true"/);
+  assert.match(source, /Second confirmation/);
+  assert.match(source, /Enable game-breaking geometry\?/);
+  assert.match(source, /I accept the crash risk/);
+  assert.match(source, /gameBreakingGeometryCancelRef\.current\?\.focus\(\)/);
+  assert.match(source, /randomGenerationOptions\(Math\.random, allowGameBreakingGeometry\)/);
+  assert.match(generator, /includeGameBreakingGeometry \? \[\.\.\.SAFE_MAP_GEOMETRIES, \.\.\.GAME_BREAKING_GEOMETRIES\] : SAFE_MAP_GEOMETRIES/);
+  assert.match(css, /\.game-breaking-geometry-toggle/);
+  assert.match(css, /\.game-breaking-geometry-modal/);
+});
+
+test("Lua is visibly experimental and requires entry confirmation", async () => {
+  const [source, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /className="experimental-badge">Experimental<\/span>/);
+  assert.match(source, /nextMode === "SCRIPT" && mode !== "SCRIPT"/);
+  assert.match(source, /showLuaExperimentalWarning/);
+  assert.match(source, /The Lua workspace is incomplete/);
+  assert.match(source, /role="dialog" aria-modal="true" aria-labelledby="lua-experimental-title"/);
+  assert.match(source, /luaExperimentalCancelRef\.current\?\.focus\(\)/);
+  assert.match(source, />Stay here<\/button>/);
+  assert.match(source, />Open experimental Lua<\/button>/);
+  assert.match(css, /\.experimental-badge \{[^}]*background: #9f3028;/);
+  assert.match(css, /\.lua-experimental-modal/);
 });
 
 test("Lua uses an editable, staged, multi-file project workspace", async () => {

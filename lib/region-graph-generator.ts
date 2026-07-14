@@ -1,4 +1,5 @@
 import type { Civ5Tile } from "./civ5-map.ts";
+import { poleProximity } from "./climate-projection.ts";
 import { connectedLinearFeatures, connectedTileObjects, objectsFromAssignments, type GenerationStructure, type GeographicObject } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
 
@@ -366,8 +367,8 @@ export function generateRegionGraphGeography(
   }
   if (!options.landAtPoles && targetWater > 0) {
     for (let polygon = 0; polygon < polygonCount; polygon += 1) {
-      const latitude = polygonCenters[polygon].y / height;
-      if (latitude < 0.035 || latitude > 0.965) polygonLand[polygon] = false;
+      const center = polygonCenters[polygon];
+      if (poleProximity(center.x, center.y, width, height, options.projectionType) > 0.93) polygonLand[polygon] = false;
     }
   }
 
@@ -382,7 +383,7 @@ export function generateRegionGraphGeography(
   const polygonRegions = graphPartition(polygonAdjacency, polygonCenters, desiredRegions, width, height, wraps, random, landPolygons);
   const regionCenters = aggregateCenters(polygonRegions, polygonCenters, desiredRegions, width, wraps);
   const regionClimate = regionCenters.map((center, index) => {
-    const latitude = Math.abs(center.y / Math.max(1, height - 1) - 0.5) * 2;
+    const latitude = poleProximity(center.x, center.y, width, height, options.projectionType);
     const realism = options.climateRealism;
     const contrast = options.regionContrast === "EXTREME" ? 0.48 : options.regionContrast === "BLENDED" ? 0.16 : 0.3;
     const temperature = realism ? 0.12 + Math.cos(latitude * Math.PI / 2) * 0.78 + (random() - 0.5) * contrast : 0.1 + random() * 0.82;
@@ -487,11 +488,12 @@ export function generateRegionGraphGeography(
   }
 
   const tiles = landMask.map<Civ5Tile>((land, index) => {
+    const x = index % width;
     const y = Math.floor(index / width);
     const adjacentLand = hexNeighbors(index, width, height, wraps).some((neighbor) => landMask[neighbor]);
     let terrain = land ? chooseTerrain(temperatures[index], moistures[index], options.regionContrast, options.dominantTerrains) : adjacentLand ? 1 : 0;
     let feature = 255;
-    if (!land && Math.abs(y / Math.max(1, height - 1) - 0.5) > 0.43 && random() > 0.38) feature = 3;
+    if (!land && poleProximity(x, y, width, height, options.projectionType) > 0.86 && random() > 0.38) feature = 3;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && temperatures[index] > 0.72 && moistures[index] > 0.7) feature = 1;
     else if (land && elevations[index] === 0 && terrain === 2 && moistures[index] > 0.83) feature = 2;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && moistures[index] > 0.6) feature = 0;

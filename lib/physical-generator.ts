@@ -1,4 +1,5 @@
 import type { Civ5Tile } from "./civ5-map.ts";
+import { poleProximity } from "./climate-projection.ts";
 import { connectedLinearFeatures, connectedTileObjects, objectsFromAssignments, type GenerationStructure } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
 
@@ -176,11 +177,11 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   const climateShift = options.climate === "HOT" ? 0.14 : options.climate === "COOL" ? -0.14 : 0;
   const rainShift = options.rainfall === "WET" ? 0.14 : options.rainfall === "ARID" ? -0.16 : 0;
   for (let y = 0; y < height; y += 1) {
-    const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
     let airborne = clamp(0.58 + rainShift + (valueNoise(0, y + 17, 9, seed + 419) - 0.5) * 0.16);
     let upwind = reliefValues[y * width];
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
+      const latitude = poleProximity(x, y, width, height, options.projectionType);
       const altitude = landMask[index] ? Math.max(0, reliefValues[index] - 0.48) * 0.28 : 0;
       temperatures[index] = clamp(0.1 + Math.cos(latitude * Math.PI / 2) * 0.82 + climateShift + (valueNoise(x + 701, y + 503, 12, seed + 521) - 0.5) * 0.18 - altitude);
       if (!landMask[index]) airborne += (0.88 - airborne) * 0.36;
@@ -204,7 +205,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     const adjacentLand = neighbors(index, width, height, wraps).some((neighbor) => landMask[neighbor]);
     const terrain = land ? chooseTerrain(temperatures[index], moistures[index], options.dominantTerrains) : adjacentLand ? 1 : 0;
     let feature = 255;
-    if (!land && Math.abs(Math.floor(index / width) / Math.max(1, height - 1) - 0.5) > 0.44 && random() > 0.4) feature = 3;
+    if (!land && poleProximity(index % width, Math.floor(index / width), width, height, options.projectionType) > 0.88 && random() > 0.4) feature = 3;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && temperatures[index] > 0.72 && moistures[index] > 0.67) feature = 1;
     else if (land && elevations[index] === 0 && terrain === 2 && moistures[index] > 0.84) feature = 2;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && moistures[index] > 0.61) feature = 0;

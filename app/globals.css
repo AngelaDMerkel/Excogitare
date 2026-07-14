@@ -67,6 +67,8 @@ button { color: inherit; }
 }
 .mode-tabs button:hover { color: #c7d4cf; }
 .mode-tabs button.is-active { background: #1b383d; color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(239, 209, 138, .12); }
+.mode-tabs .lua-mode-tab { position: relative; }
+.experimental-badge { position: absolute; top: -9px; right: 2px; z-index: 1; padding: 2px 4px; border: 1px solid rgba(255, 158, 142, .42); border-radius: 3px; background: #9f3028; color: #ffe3dd; font-family: var(--font-geist-mono), monospace; font-size: 5px; font-weight: 750; letter-spacing: .06em; line-height: 1; text-transform: uppercase; box-shadow: 0 2px 6px rgba(0, 0, 0, .34); pointer-events: none; }
 
 .brand { display: flex; align-items: center; gap: 13px; min-width: 240px; }
 
@@ -231,11 +233,7 @@ button { color: inherit; }
 .world-building-steps .climate-group { order: 1; }
 .world-building-steps .content-group { order: 2; }
 .world-building-steps .players-group { order: 3; }
-.world-builder-intro { display: grid; gap: 7px; padding: 10px; border: 1px solid rgba(217, 185, 111, .18); border-radius: 5px; background: linear-gradient(135deg, rgba(217, 185, 111, .07), rgba(8, 24, 28, .24)); }
-.world-builder-intro > span { color: #bca768; font-family: var(--font-geist-mono), monospace; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
-.world-builder-intro ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 0; padding: 0; list-style: none; counter-reset: builder-step; }
-.world-builder-intro li { min-width: 0; padding: 5px 2px; border: 1px solid rgba(188, 207, 197, .1); border-radius: 3px; color: #869994; font-size: 6px; text-align: center; text-transform: uppercase; }
-.world-builder-intro p { margin: 0; color: #718681; font-size: 8px; line-height: 1.5; }
+.projection-type-control { padding: 10px; border: 1px solid rgba(217, 185, 111, .22); border-radius: 5px; background: linear-gradient(135deg, rgba(217, 185, 111, .08), rgba(8, 24, 28, .24)); }
 .world-model-picker { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; padding: 0; border: 0; }
 .world-model-picker legend { grid-column: 1 / -1; margin-bottom: 1px; color: #718984; font-family: var(--font-geist-mono), monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .world-model-picker button { min-width: 0; min-height: 78px; display: grid; align-content: start; gap: 5px; padding: 9px 8px; border: 1px solid var(--line); border-radius: 5px; background: rgba(9, 27, 31, .42); color: inherit; text-align: left; cursor: pointer; }
@@ -380,6 +378,12 @@ button { color: inherit; }
 .balance-check small { color: #6f8781; font-size: 8px; }
 .check-row { display: flex; align-items: flex-start; gap: 8px; color: #91a49e; font-size: 9px; line-height: 1.4; cursor: pointer; }
 .check-row input { margin: 1px 0 0; accent-color: var(--gold); }
+.game-breaking-geometry-toggle { padding: 9px; border: 1px solid rgba(211, 119, 91, .2); border-radius: 5px; background: rgba(95, 34, 24, .1); }
+.game-breaking-geometry-toggle > span { display: grid; gap: 3px; }
+.game-breaking-geometry-toggle strong { color: #cda58f; font-size: 9px; font-weight: 650; }
+.game-breaking-geometry-toggle small { color: #806f68; font-size: 8px; line-height: 1.45; }
+.game-breaking-geometry-toggle.is-enabled { border-color: rgba(224, 125, 91, .42); background: rgba(112, 39, 25, .2); }
+.game-breaking-geometry-toggle.is-enabled strong { color: #efa887; }
 .content-note { color: #6f8781; font-size: 8px; line-height: 1.45; }
 .seed-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
 .seed-row > button,
@@ -484,6 +488,12 @@ button { color: inherit; }
 .export-confirmation-actions button:hover { border-color: rgba(239, 209, 138, .3); color: #e8d7a3; }
 .export-confirmation-actions button:focus-visible { outline: 2px solid #f2cf7d; outline-offset: 2px; }
 .export-confirmation-actions .confirm-export { border-color: transparent; background: var(--gold); color: #172622; font-weight: 750; }
+.game-breaking-geometry-modal { border-color: rgba(224, 125, 91, .38); }
+.game-breaking-geometry-modal header span { color: #d18c72; }
+.game-breaking-geometry-modal .confirm-game-breaking { background: #c66f50; color: #1d1714; }
+.lua-experimental-modal { border-color: rgba(224, 91, 80, .42); }
+.lua-experimental-modal header span { color: #e17e72; }
+.lua-experimental-modal .confirm-experimental { background: #a83c32; color: #fff1ed; }
 .repair-intro { margin: 0; color: #80958f; font-size: 9px; line-height: 1.5; }
 .repair-profile,
 .repair-view-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
