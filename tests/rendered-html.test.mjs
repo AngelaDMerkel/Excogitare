@@ -59,6 +59,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /<span>City states<\/span>/);
   assert.match(source, /projection-button/);
   assert.match(source, /unprojectPoint/);
+  assert.match(source, /drawIsometricSidewalls/);
+  assert.match(source, /drawIsometricRelief/);
+  assert.match(source, /closestIsometricTile/);
+  assert.match(source, /ISO 3D/);
   assert.doesNotMatch(source, /canvas\.width = Math\.round\(size\.width \* pixelRatio\)/);
   assert.doesNotMatch(source, /canvas\.height = Math\.round\(size\.height \* pixelRatio\)/);
 });

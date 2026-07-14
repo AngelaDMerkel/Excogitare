@@ -44,6 +44,7 @@ import { runLuaMapScript } from "@/lib/lua-runtime";
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
 const MAP_MARGIN = 16;
+const ISOMETRIC_RELIEF_MARGIN = 52;
 const APP_VERSION = "0.1.2";
 
 type View = { zoom: number; x: number; y: number };
@@ -106,7 +107,7 @@ function projectionTransform(map: Civ5Map, projection: Projection): ProjectionTr
   const maxX = Math.max(...corners.map((point) => point.x));
   const minY = Math.min(...corners.map((point) => point.y));
   const maxY = Math.max(...corners.map((point) => point.y));
-  return { ...base, e: -minX, f: -minY, width: maxX - minX, height: maxY - minY };
+  return { ...base, e: -minX, f: -minY + ISOMETRIC_RELIEF_MARGIN, width: maxX - minX, height: maxY - minY + ISOMETRIC_RELIEF_MARGIN };
 }
 
 function projectPoint(x: number, y: number, transform: ProjectionTransform) {
@@ -121,6 +122,20 @@ function unprojectPoint(x: number, y: number, transform: ProjectionTransform) {
     x: (transform.d * shiftedX - transform.c * shiftedY) / determinant,
     y: (-transform.b * shiftedX + transform.a * shiftedY) / determinant,
   };
+}
+
+function liftPoint(x: number, y: number, height: number, transform: ProjectionTransform) {
+  if (!height) return { x, y };
+  const determinant = transform.a * transform.d - transform.b * transform.c;
+  return {
+    x: x + (transform.c * height) / determinant,
+    y: y - (transform.a * height) / determinant,
+  };
+}
+
+function tileReliefHeight(tile: Civ5Tile, showElevation: boolean, isometric: boolean) {
+  if (!isometric || !showElevation || tile.terrain < 2) return 0;
+  return tile.elevation === 2 ? 24 : tile.elevation === 1 ? 10 : 0;
 }
 
 function tileCenter(col: number, row: number, sourceRow = row) {
@@ -146,6 +161,77 @@ function hexPath(context: CanvasRenderingContext2D, x: number, y: number) {
     else context.lineTo(px, py);
   }
   context.closePath();
+}
+
+function hexPoints(x: number, y: number) {
+  return Array.from({ length: 6 }, (_, index) => {
+    const angle = ((60 * index - 90) * Math.PI) / 180;
+    return { x: x + HEX_RADIUS * Math.cos(angle), y: y + HEX_RADIUS * Math.sin(angle) };
+  });
+}
+
+function polygonPath(context: CanvasRenderingContext2D, points: Array<{ x: number; y: number }>) {
+  context.beginPath();
+  points.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y));
+  context.closePath();
+}
+
+function drawIsometricSidewalls(
+  context: CanvasRenderingContext2D,
+  baseCenter: { x: number; y: number },
+  topCenter: { x: number; y: number },
+  color: string,
+  projection: ProjectionTransform,
+) {
+  const base = hexPoints(baseCenter.x, baseCenter.y);
+  const top = hexPoints(topCenter.x, topCenter.y);
+  const projectedCenter = projectPoint(topCenter.x, topCenter.y, projection);
+  const visibleEdges = Array.from({ length: 6 }, (_, index) => index).filter((index) => {
+    const next = (index + 1) % 6;
+    const midpoint = projectPoint((top[index].x + top[next].x) / 2, (top[index].y + top[next].y) / 2, projection);
+    return midpoint.y >= projectedCenter.y - 0.1;
+  });
+  for (const index of visibleEdges) {
+    const next = (index + 1) % 6;
+    const midpoint = projectPoint((top[index].x + top[next].x) / 2, (top[index].y + top[next].y) / 2, projection);
+    context.fillStyle = shade(color, midpoint.x < projectPoint(topCenter.x, topCenter.y, projection).x ? -55 : -38);
+    polygonPath(context, [top[index], top[next], base[next], base[index]]);
+    context.fill();
+    context.strokeStyle = "rgba(5, 17, 20, .24)";
+    context.lineWidth = 0.75;
+    context.stroke();
+  }
+}
+
+function drawIsometricRelief(
+  context: CanvasRenderingContext2D,
+  center: { x: number; y: number },
+  elevation: number,
+  projection: ProjectionTransform,
+) {
+  if (elevation <= 0) return;
+  const peak = liftPoint(center.x, center.y - 1, elevation === 2 ? 19 : 6, projection);
+  const left = { x: center.x - (elevation === 2 ? 10 : 8), y: center.y + 7 };
+  const right = { x: center.x + (elevation === 2 ? 11 : 9), y: center.y + 7 };
+  const back = { x: center.x, y: center.y - (elevation === 2 ? 8 : 5) };
+  context.save();
+  context.fillStyle = elevation === 2 ? "rgba(53, 55, 51, .94)" : "rgba(72, 69, 53, .55)";
+  polygonPath(context, [back, peak, left]);
+  context.fill();
+  context.fillStyle = elevation === 2 ? "rgba(126, 122, 107, .96)" : "rgba(133, 119, 75, .48)";
+  polygonPath(context, [back, right, peak]);
+  context.fill();
+  context.fillStyle = elevation === 2 ? "rgba(91, 88, 76, .96)" : "rgba(101, 91, 63, .45)";
+  polygonPath(context, [left, peak, right]);
+  context.fill();
+  if (elevation === 2) {
+    const snowLeft = { x: peak.x + (left.x - peak.x) * 0.3, y: peak.y + (left.y - peak.y) * 0.3 };
+    const snowRight = { x: peak.x + (right.x - peak.x) * 0.3, y: peak.y + (right.y - peak.y) * 0.3 };
+    context.fillStyle = "rgba(235, 235, 220, .9)";
+    polygonPath(context, [peak, snowLeft, snowRight]);
+    context.fill();
+  }
+  context.restore();
 }
 
 function resourceColor(resource: string) {
@@ -224,9 +310,18 @@ function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, 
   context.restore();
 }
 
-function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, view: View, showMajors: boolean, showCityStates: boolean) {
+function drawStartLocations(
+  context: CanvasRenderingContext2D,
+  map: Civ5Map,
+  view: View,
+  showMajors: boolean,
+  showCityStates: boolean,
+  showElevation: boolean,
+  projection: ProjectionTransform,
+) {
   const scale = Math.max(view.zoom, 0.35);
   const radius = 9 / scale;
+  const isometric = projection.b !== 0;
   context.save();
   context.textAlign = "center";
   context.textBaseline = "middle";
@@ -234,7 +329,9 @@ function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, vie
   for (const start of map.startLocations) {
     if (start.cityState ? !showCityStates : !showMajors) continue;
     const displayRow = map.height - 1 - start.y;
-    const center = tileCenter(start.x, displayRow, start.y);
+    const baseCenter = tileCenter(start.x, displayRow, start.y);
+    const tile = map.tiles[start.y * map.width + start.x];
+    const center = liftPoint(baseCenter.x, baseCenter.y, tile ? tileReliefHeight(tile, showElevation, isometric) + (isometric ? 5 : 0) : 0, projection);
     context.beginPath();
     context.arc(center.x, center.y, radius, 0, Math.PI * 2);
     context.fillStyle = start.cityState ? "#7cb5c3" : "#f0ce79";
@@ -269,19 +366,38 @@ function drawMap(
   context.translate(view.x, view.y);
   context.scale(view.zoom, view.zoom);
   context.transform(projection.a, projection.b, projection.c, projection.d, projection.e, projection.f);
-
+  const isometric = projection.b !== 0;
+  const renderOrder: Array<{
+    row: number;
+    col: number;
+    tile: Civ5Tile;
+    baseCenter: { x: number; y: number };
+    center: { x: number; y: number };
+    projected: { x: number; y: number };
+  }> = [];
   for (let row = 0; row < map.height; row += 1) {
     for (let col = 0; col < map.width; col += 1) {
       const tile = tileAtDisplayPosition(map, col, row);
       if (!tile) continue;
-      const center = tileCenter(col, row, map.height - 1 - row);
+      const baseCenter = tileCenter(col, row, map.height - 1 - row);
+      const center = liftPoint(baseCenter.x, baseCenter.y, tileReliefHeight(tile, layers.elevation, isometric), projection);
       const projected = projectPoint(center.x, center.y, projection);
+      renderOrder.push({ row, col, tile, baseCenter, center, projected });
+    }
+  }
+  if (isometric) renderOrder.sort((one, two) => one.projected.y - two.projected.y || one.projected.x - two.projected.x);
+
+  for (const { row, col, tile, baseCenter, center, projected } of renderOrder) {
       const screenX = view.x + projected.x * view.zoom;
       const screenY = view.y + projected.y * view.zoom;
-      if (screenX < -35 || screenY < -35 || screenX > size.width + 35 || screenY > size.height + 35) continue;
+      if (screenX < -70 || screenY < -70 || screenX > size.width + 70 || screenY > size.height + 70) continue;
 
       const base = terrainColor(map.terrains[tile.terrain]);
-      context.fillStyle = layers.elevation && tile.elevation === 2 ? shade(base, -34) : layers.elevation && tile.elevation === 1 ? shade(base, -15) : base;
+      const reliefHeight = tileReliefHeight(tile, layers.elevation, isometric);
+      if (reliefHeight) drawIsometricSidewalls(context, baseCenter, center, base, projection);
+      context.fillStyle = isometric && reliefHeight
+        ? shade(base, tile.elevation === 2 ? -12 : -5)
+        : layers.elevation && tile.elevation === 2 ? shade(base, -34) : layers.elevation && tile.elevation === 1 ? shade(base, -15) : base;
       hexPath(context, center.x, center.y);
       context.fill();
       paintedTiles += 1;
@@ -297,13 +413,16 @@ function drawMap(
       }
 
       if (layers.elevation && tile.elevation > 0) {
-        context.fillStyle = tile.elevation === 2 ? "rgba(238, 232, 213, .76)" : "rgba(64, 55, 41, .5)";
-        context.beginPath();
-        context.moveTo(center.x - 7, center.y + 7);
-        context.lineTo(center.x, center.y - (tile.elevation === 2 ? 10 : 6));
-        context.lineTo(center.x + 8, center.y + 7);
-        context.closePath();
-        context.fill();
+        if (isometric) drawIsometricRelief(context, center, tile.elevation, projection);
+        else {
+          context.fillStyle = tile.elevation === 2 ? "rgba(238, 232, 213, .76)" : "rgba(64, 55, 41, .5)";
+          context.beginPath();
+          context.moveTo(center.x - 7, center.y + 7);
+          context.lineTo(center.x, center.y - (tile.elevation === 2 ? 10 : 6));
+          context.lineTo(center.x + 8, center.y + 7);
+          context.closePath();
+          context.fill();
+        }
       }
 
       drawRiver(context, tile.river, center.x, center.y);
@@ -326,9 +445,10 @@ function drawMap(
         context.lineWidth = 2.8 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
-    }
   }
-  if ((layers.starts || layers.cityStates) && map.startLocations.length) drawStartLocations(context, map, view, layers.starts, layers.cityStates);
+  if ((layers.starts || layers.cityStates) && map.startLocations.length) {
+    drawStartLocations(context, map, view, layers.starts, layers.cityStates, layers.elevation, projection);
+  }
   context.restore();
   return paintedTiles;
 }
@@ -348,6 +468,44 @@ function closestTile(map: Civ5Map, worldX: number, worldY: number): HoveredTile 
       if (candidate < distance && candidate <= HEX_RADIUS) {
         closest = { tile, col, row };
         distance = candidate;
+      }
+    }
+  }
+  return closest;
+}
+
+function closestIsometricTile(
+  map: Civ5Map,
+  projectedX: number,
+  projectedY: number,
+  projection: ProjectionTransform,
+  showElevation: boolean,
+): HoveredTile {
+  const world = unprojectPoint(projectedX, projectedY, projection);
+  const estimatedRow = Math.round((world.y - MAP_MARGIN - HEX_RADIUS) / (HEX_RADIUS * 1.5));
+  let closest: HoveredTile = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let row = estimatedRow - 4; row <= estimatedRow + 4; row += 1) {
+    const sourceRow = map.height - 1 - row;
+    const estimatedCol = Math.round((world.x - MAP_MARGIN - HEX_WIDTH / 2) / HEX_WIDTH - (sourceRow % 2 ? 0.5 : 0));
+    for (let col = estimatedCol - 4; col <= estimatedCol + 4; col += 1) {
+      const tile = tileAtDisplayPosition(map, col, row);
+      if (!tile) continue;
+      const baseCenter = tileCenter(col, row, sourceRow);
+      const height = tileReliefHeight(tile, showElevation, true);
+      const topCenter = liftPoint(baseCenter.x, baseCenter.y, height, projection);
+      const projectedTop = projectPoint(topCenter.x, topCenter.y, projection);
+      const projectedBase = projectPoint(baseCenter.x, baseCenter.y, projection);
+      const dx = projectedX - projectedTop.x;
+      const dy = projectedY - projectedTop.y;
+      const topScore = Math.abs(dx) / 22 + Math.abs(dy) / 13;
+      const onTop = topScore <= 1.15;
+      const onSide = height > 0 && Math.abs(dx) <= 20 && projectedY >= projectedTop.y && projectedY <= projectedBase.y + 11;
+      if (!onTop && !onSide) continue;
+      const score = onTop ? topScore : 1.2 + Math.abs(dx) / 22 + (projectedY - projectedTop.y) / Math.max(1, height) * 0.2;
+      if (score < bestScore) {
+        bestScore = score;
+        closest = { tile, col, row };
       }
     }
   }
@@ -561,8 +719,12 @@ export function Civ5MapViewer() {
       x: (event.clientX - rect.left - view.x) / view.zoom,
       y: (event.clientY - rect.top - view.y) / view.zoom,
     };
-    const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
-    setHovered(closestTile(map, worldPoint.x, worldPoint.y));
+    if (projection === "ISOMETRIC") {
+      setHovered(closestIsometricTile(map, projectedPoint.x, projectedPoint.y, mapProjection, layers.elevation));
+    } else {
+      const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
+      setHovered(closestTile(map, worldPoint.x, worldPoint.y));
+    }
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -576,7 +738,9 @@ export function Civ5MapViewer() {
       y: (event.clientY - rect.top - view.y) / view.zoom,
     };
     const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
-    const target = closestTile(map, worldPoint.x, worldPoint.y);
+    const target = projection === "ISOMETRIC"
+      ? closestIsometricTile(map, projectedPoint.x, projectedPoint.y, mapProjection, layers.elevation)
+      : closestTile(map, worldPoint.x, worldPoint.y);
     if (!target) return;
     const sourceY = map.height - 1 - target.row;
     if (editTool === "START") {
@@ -1119,7 +1283,7 @@ export function Civ5MapViewer() {
             <i aria-hidden="true" />
             <button className="fit-button" type="button" onClick={() => fitMap(size)}>Fit</button>
             <i aria-hidden="true" />
-            <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" aria-pressed={projection === "ISOMETRIC"} title={projection === "ISOMETRIC" ? "Return to 2D view" : "Switch to isometric view"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO"}</button>
+            <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" aria-pressed={projection === "ISOMETRIC"} title={projection === "ISOMETRIC" ? "Return to 2D view" : "Switch to 3D isometric view"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO 3D"}</button>
           </div>
 
           <div className="file-status" role="status">{message}</div>
