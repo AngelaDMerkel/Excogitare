@@ -25,7 +25,7 @@ const APP_VERSION = "0.1.2";
 
 type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
-type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean };
+type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 
 const TERRAIN_COLORS: Record<string, string> = {
@@ -165,6 +165,31 @@ function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, 
   context.restore();
 }
 
+function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, view: View) {
+  const scale = Math.max(view.zoom, 0.35);
+  const radius = 9 / scale;
+  context.save();
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+
+  for (const start of map.startLocations) {
+    const displayRow = map.height - 1 - start.y;
+    const center = tileCenter(start.x, displayRow);
+    context.beginPath();
+    context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+    context.fillStyle = start.cityState ? "#7cb5c3" : "#f0ce79";
+    context.fill();
+    context.strokeStyle = "rgba(8, 24, 27, .92)";
+    context.lineWidth = 2.4 / scale;
+    context.stroke();
+    context.fillStyle = "#173036";
+    context.font = `700 ${10 / scale}px "Geist Mono", monospace`;
+    context.fillText(String(start.player + 1), center.x, center.y + 0.5 / scale);
+  }
+
+  context.restore();
+}
+
 function drawMap(
   context: CanvasRenderingContext2D,
   map: Civ5Map,
@@ -238,6 +263,7 @@ function drawMap(
       }
     }
   }
+  if (layers.starts && map.startLocations.length) drawStartLocations(context, map, view);
   context.restore();
 }
 
@@ -265,7 +291,7 @@ export function Civ5MapViewer() {
   const [map, setMap] = useState<Civ5Map>(() => createDemoMap());
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
-  const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true });
+  const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true });
   const [hovered, setHovered] = useState<HoveredTile>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [message, setMessage] = useState("Demo map loaded");
@@ -316,6 +342,8 @@ export function Civ5MapViewer() {
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7);
   }, [map]);
+
+  const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled && (key !== "starts" || map.startLocations.length > 0)).length;
 
   const loadFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".civ5map")) {
@@ -425,7 +453,7 @@ export function Civ5MapViewer() {
           </dl>
 
           <div className="panel-section">
-            <div className="section-title"><h3>Layers</h3><span>{Object.values(layers).filter(Boolean).length} on</span></div>
+            <div className="section-title"><h3>Layers</h3><span>{visibleLayerCount} on</span></div>
             <div className="layer-list">
               {([
                 ["grid", "Hex grid", "Map geometry"],
@@ -439,6 +467,16 @@ export function Civ5MapViewer() {
                   <span className="switch" aria-hidden="true" />
                 </label>
               ))}
+              <label className={`layer-row${map.startLocations.length ? "" : " is-disabled"}`}>
+                <span><strong>Start locations</strong><small>{map.startLocations.length ? `${map.startLocations.length} positions` : "Not stored in this map"}</small></span>
+                <input
+                  type="checkbox"
+                  checked={layers.starts}
+                  disabled={!map.startLocations.length}
+                  onChange={(event) => setLayers((current) => ({ ...current, starts: event.target.checked }))}
+                />
+                <span className="switch" aria-hidden="true" />
+              </label>
             </div>
           </div>
 

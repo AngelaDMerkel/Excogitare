@@ -9,6 +9,17 @@ export type Civ5Tile = {
   resourceAmount: number;
 };
 
+export type Civ5StartLocation = {
+  x: number;
+  y: number;
+  player: number;
+  civilization: string;
+  leader: string;
+  team: number;
+  playable: boolean;
+  cityState: boolean;
+};
+
 export type Civ5Map = {
   name: string;
   description: string;
@@ -23,11 +34,14 @@ export type Civ5Map = {
   wonders: string[];
   resources: string[];
   tiles: Civ5Tile[];
+  startLocations: Civ5StartLocation[];
   source: "demo" | "file";
 };
 
 const HEADER_SIZE = 42;
 const TILE_SIZE = 8;
+const GAME_DESCRIPTION_HEADER_SIZE = 120;
+const PLAYER_RECORD_SIZE = 436;
 const MAX_DIMENSION = 512;
 const decoder = new TextDecoder("utf-8");
 
@@ -39,6 +53,49 @@ function readStringList(bytes: Uint8Array) {
 
 function cleanText(bytes: Uint8Array) {
   return decoder.decode(bytes).replace(/\0+$/g, "").trim();
+}
+
+function parseStartLocations(
+  view: DataView,
+  bytes: Uint8Array,
+  scenarioOffset: number,
+  width: number,
+  height: number,
+) {
+  const startLocations: Civ5StartLocation[] = [];
+  if (scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE > bytes.byteLength) return startLocations;
+
+  const playerCount = view.getUint8(scenarioOffset + 80);
+  const cityStateCount = view.getUint8(scenarioOffset + 81);
+  const recordCount = playerCount + cityStateCount;
+  if (!recordCount || recordCount > 128) return startLocations;
+
+  const improvementDataSize = width * height * TILE_SIZE;
+  const playerDataSize = recordCount * PLAYER_RECORD_SIZE;
+  const playerDataOffset = bytes.byteLength - improvementDataSize - playerDataSize;
+  if (playerDataOffset < scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE || playerDataOffset + playerDataSize > bytes.byteLength) {
+    return startLocations;
+  }
+
+  for (let player = 0; player < recordCount; player += 1) {
+    const recordOffset = playerDataOffset + player * PLAYER_RECORD_SIZE;
+    const x = view.getUint32(recordOffset + 424, true);
+    const y = view.getUint32(recordOffset + 428, true);
+    if (x >= width || y >= height) continue;
+
+    startLocations.push({
+      x,
+      y,
+      player,
+      leader: cleanText(bytes.subarray(recordOffset + 32, recordOffset + 96)),
+      civilization: cleanText(bytes.subarray(recordOffset + 160, recordOffset + 224)),
+      team: view.getUint8(recordOffset + 432),
+      playable: Boolean(view.getUint8(recordOffset + 433)),
+      cityState: player >= playerCount,
+    });
+  }
+
+  return startLocations;
 }
 
 export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map {
@@ -125,6 +182,8 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     offset += TILE_SIZE;
   }
 
+  const startLocations = parseStartLocations(view, bytes, offset, width, height);
+
   return {
     name: mapName || fallbackName.replace(/\.civ5map$/i, ""),
     description,
@@ -139,6 +198,7 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     wonders,
     resources,
     tiles,
+    startLocations,
     source: "file",
   };
 }
@@ -223,6 +283,12 @@ export function createDemoMap(): Civ5Map {
     wonders: [],
     resources,
     tiles,
+    startLocations: [
+      { x: 7, y: 7, player: 0, civilization: "CIVILIZATION_ROME", leader: "Augustus Caesar", team: 0, playable: true, cityState: false },
+      { x: 11, y: 4, player: 1, civilization: "CIVILIZATION_EGYPT", leader: "Ramesses II", team: 1, playable: true, cityState: false },
+      { x: 18, y: 8, player: 2, civilization: "CIVILIZATION_CHINA", leader: "Wu Zetian", team: 2, playable: true, cityState: false },
+      { x: 22, y: 5, player: 3, civilization: "CIVILIZATION_PERSIA", leader: "Darius I", team: 3, playable: true, cityState: false },
+    ],
     source: "demo",
   };
 }
