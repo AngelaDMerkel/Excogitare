@@ -10,19 +10,31 @@ export const MAP_SIZES = [
 ] as const;
 
 export type MapSizeId = (typeof MAP_SIZES)[number]["id"];
-export type MapPresetId = "CONTINENTS" | "PANGAEA" | "ARCHIPELAGO" | "INLAND_SEAS" | "EARTHSEA" | "RIFT_REALMS";
+export type MapPresetId = "CONTINENTS" | "PANGAEA" | "ARCHIPELAGO" | "INLAND_SEAS" | "EARTHSEA" | "RIFT_REALMS" | "LABYRINTH" | "WILD_REGIONS";
 export type MultiplayerBalance = "STANDARD" | "TOURNAMENT" | "TEAMS";
 export type ClimateSetting = "COOL" | "TEMPERATE" | "HOT";
 export type RainfallSetting = "ARID" | "NORMAL" | "WET";
 export type WorldAgeSetting = "YOUNG" | "NORMAL" | "OLD";
+export type StartQuality = "STANDARD" | "BALANCED" | "LEGENDARY";
+export type WorldModifier = "NONE" | "FANTASTICAL" | "STRATEGIC_DEPTH" | "FRACTURED" | "DOOMSDAY";
+export type GenerationStyle = "REALISTIC" | "FANTASTICAL" | "MUNDANE";
 
-export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string }> = [
-  { id: "CONTINENTS", label: "Twin Continents", description: "Two to four broad landmasses divided by navigable oceans." },
-  { id: "PANGAEA", label: "Great Pangaea", description: "One dominant continent with a broken, varied coastline." },
-  { id: "ARCHIPELAGO", label: "Shattered Isles", description: "Dense island chains, coastal empires, and naval routes." },
-  { id: "INLAND_SEAS", label: "Inland Kingdoms", description: "A land-heavy realm punctuated by lakes and inland seas." },
-  { id: "EARTHSEA", label: "Earthsea Realms", description: "Many irregular continents and isolated minor islands." },
-  { id: "RIFT_REALMS", label: "Astral Rifts", description: "Fantastical basins split by long, deep ocean rifts." },
+export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number }> = [
+  { id: "CONTINENTS", label: "Convoluted Continents", description: "Broad, asymmetric continents with hooked peninsulas and broken inland coasts.", water: 58, mountains: 12 },
+  { id: "PANGAEA", label: "Broken Pangaea", description: "One dominant landmass cleaved by gulfs, rifts, and difficult interiors.", water: 46, mountains: 14 },
+  { id: "ARCHIPELAGO", label: "Shattered Isles", description: "Dense island chains, coastal empires, and narrow naval routes.", water: 72, mountains: 9 },
+  { id: "INLAND_SEAS", label: "Inland Kingdoms", description: "A land-heavy non-wrapping realm punctured by lakes and irregular inland seas.", water: 24, mountains: 13 },
+  { id: "EARTHSEA", label: "Earthsea Realms", description: "Many irregular continents, isolated minor islands, and long voyages.", water: 64, mountains: 11 },
+  { id: "RIFT_REALMS", label: "Astronomy Rifts", description: "Fantastical basins divided by long deep-water scars and isolated shelves.", water: 61, mountains: 15 },
+  { id: "LABYRINTH", label: "Labyrinth Realm", description: "A non-wrapping maze of land bridges, inland channels, chambers, and chokepoints.", water: 43, mountains: 18 },
+  { id: "WILD_REGIONS", label: "Fantastical Regions", description: "Violently warped coastlines and climate regions with little concern for realism.", water: 55, mountains: 16 },
+];
+
+export const WORLD_MODIFIERS: ReadonlyArray<{ id: WorldModifier; label: string; description: string }> = [
+  { id: "NONE", label: "None", description: "Use the selected map type without an additional world rule." },
+  { id: "STRATEGIC_DEPTH", label: "Strategic Depth", description: "Builds long mountain systems, narrow passes, defended basins, and invasion corridors." },
+  { id: "FRACTURED", label: "Fractured World", description: "Breaks land and water into smaller contested regions with abundant chokepoints." },
+  { id: "DOOMSDAY", label: "Doomsday", description: "Creates scarred highlands, barren regions, fallout pockets, and harsh starts." },
 ];
 
 export type MapGenerationOptions = {
@@ -32,18 +44,28 @@ export type MapGenerationOptions = {
   players: number;
   balance: MultiplayerBalance;
   strategicBalance: boolean;
+  style: GenerationStyle;
+  startQuality: StartQuality;
+  modifier: WorldModifier;
+  waterPercent: number;
+  mountainPercent: number;
   climate: ClimateSetting;
   rainfall: RainfallSetting;
   worldAge: WorldAgeSetting;
 };
 
 export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
-  preset: "CONTINENTS",
+  preset: "WILD_REGIONS",
   size: "STANDARD",
   seed: "excogitare",
   players: 8,
   balance: "STANDARD",
-  strategicBalance: true,
+  strategicBalance: false,
+  style: "FANTASTICAL",
+  startQuality: "BALANCED",
+  modifier: "NONE",
+  waterPercent: 55,
+  mountainPercent: 16,
   climate: "TEMPERATE",
   rainfall: "NORMAL",
   worldAge: "NORMAL",
@@ -58,7 +80,7 @@ const TERRAINS = [
   "TERRAIN_TUNDRA",
   "TERRAIN_SNOW",
 ];
-const FEATURES = ["FEATURE_FOREST", "FEATURE_JUNGLE", "FEATURE_MARSH", "FEATURE_ICE", "FEATURE_OASIS"];
+const FEATURES = ["FEATURE_FOREST", "FEATURE_JUNGLE", "FEATURE_MARSH", "FEATURE_ICE", "FEATURE_OASIS", "FEATURE_FALLOUT"];
 const RESOURCES = [
   "RESOURCE_WHEAT",
   "RESOURCE_CATTLE",
@@ -150,6 +172,67 @@ function centerField(nx: number, ny: number, centers: Center[], wraps: boolean) 
   return field;
 }
 
+function clamp(value: number, minimum = 0, maximum = 1) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function voronoiBoundary(nx: number, ny: number, centers: Center[], wraps: boolean) {
+  let nearest = Number.POSITIVE_INFINITY;
+  let second = Number.POSITIVE_INFINITY;
+  for (const center of centers) {
+    const dx = wraps ? wrappedDistance(nx, center.x) : Math.abs(nx - center.x);
+    const distance = Math.hypot(dx, Math.abs(ny - center.y));
+    if (distance < nearest) {
+      second = nearest;
+      nearest = distance;
+    } else if (distance < second) second = distance;
+  }
+  return clamp((second - nearest) * 9);
+}
+
+function warpedCoordinates(x: number, y: number, width: number, height: number, seed: number, strength: number) {
+  const warpX = (fractalNoise(x + 401, y + 193, seed + 2003) - 0.5) * strength;
+  const warpY = (fractalNoise(x + 89, y + 577, seed + 4001) - 0.5) * strength;
+  return {
+    x: x / width + warpX,
+    y: y / Math.max(1, height - 1) + warpY,
+  };
+}
+
+function diffuseRefine(
+  source: number[],
+  width: number,
+  height: number,
+  seed: number,
+  wraps: boolean,
+  passes: number,
+  smoothing: number,
+  detail: number,
+) {
+  let current = [...source];
+  for (let pass = 0; pass < passes; pass += 1) {
+    const next = new Array<number>(current.length);
+    const scheduledDetail = detail * (1 - pass / Math.max(1, passes));
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const around = neighbors(x, y, width, height, wraps);
+        const neighborMean = around.reduce((sum, [nx, ny]) => sum + current[ny * width + nx], 0) / Math.max(1, around.length);
+        const index = y * width + x;
+        const noise = hashNoise(x + pass * 131, y + pass * 71, seed + pass * 977) - 0.5;
+        next[index] = current[index] * (1 - smoothing) + neighborMean * smoothing + noise * scheduledDetail;
+      }
+    }
+    current = next;
+  }
+  return current;
+}
+
+function quantile(values: number[], percentile: number) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(percentile * (sorted.length - 1))))];
+}
+
 function presetField(
   preset: MapPresetId,
   nx: number,
@@ -159,15 +242,24 @@ function presetField(
   wraps: boolean,
 ) {
   const blobs = centerField(nx, ny, centers, wraps);
-  if (preset === "PANGAEA") return blobs * 0.84 + noise * 0.37 - Math.abs(ny - 0.5) * 0.08;
-  if (preset === "ARCHIPELAGO") return blobs * 0.64 + noise * 0.48;
-  if (preset === "INLAND_SEAS") return 0.78 - blobs * 0.55 + noise * 0.2;
-  if (preset === "EARTHSEA") return blobs * 0.7 + noise * 0.43;
+  const boundaries = voronoiBoundary(nx, ny, centers, wraps);
+  if (preset === "PANGAEA") return blobs * 0.7 + noise * 0.46 + boundaries * 0.08 - Math.abs(ny - 0.5) * 0.08;
+  if (preset === "ARCHIPELAGO") return blobs * 0.48 + noise * 0.56 + boundaries * 0.06;
+  if (preset === "INLAND_SEAS") return 0.78 - blobs * 0.5 + noise * 0.27 - boundaries * 0.08;
+  if (preset === "EARTHSEA") return blobs * 0.56 + noise * 0.5 + boundaries * 0.08;
   if (preset === "RIFT_REALMS") {
-    const rift = Math.abs(Math.sin((nx * 3.2 + Math.sin(ny * 8) * 0.14) * Math.PI));
-    return blobs * 0.72 + noise * 0.34 - (1 - rift) * 0.25;
+    const rift = Math.abs(Math.sin((nx * 4.4 + Math.sin(ny * 11) * 0.22 + noise * 0.34) * Math.PI));
+    return blobs * 0.55 + noise * 0.43 - (1 - rift) * 0.32 + boundaries * 0.08;
   }
-  return blobs * 0.78 + noise * 0.34;
+  if (preset === "LABYRINTH") {
+    const maze = Math.abs(Math.sin((nx * 5.2 + noise * 0.8) * Math.PI) * Math.cos((ny * 4.4 - noise * 0.6) * Math.PI));
+    return maze * 0.46 + blobs * 0.22 + noise * 0.42 - boundaries * 0.13;
+  }
+  if (preset === "WILD_REGIONS") {
+    const brokenCells = Math.sin((nx * 7 + noise * 2.4) * Math.PI) * Math.cos((ny * 6 - noise * 1.7) * Math.PI);
+    return blobs * 0.38 + noise * 0.5 + brokenCells * 0.14 + boundaries * 0.13;
+  }
+  return blobs * 0.62 + noise * 0.44 + boundaries * 0.08;
 }
 
 function neighbors(x: number, y: number, width: number, height: number, wraps: boolean) {
@@ -279,16 +371,46 @@ function normalizeStarts(
   width: number,
   height: number,
   wraps: boolean,
+  quality: StartQuality,
   tournament: boolean,
 ) {
   const resourceIndex = (name: string) => RESOURCES.indexOf(name);
   for (const start of starts) {
-    const ring = neighbors(start.x, start.y, width, height, wraps)
-      .map(([x, y]) => ({ x, y, tile: tiles[y * width + x] }))
-      .filter(({ tile }) => tile.terrain >= 2 && tile.elevation < 2);
-    const placements = ["RESOURCE_WHEAT", "RESOURCE_IRON", "RESOURCE_HORSE", ...(tournament ? ["RESOURCE_CATTLE"] : [])];
+    const origin = tiles[start.y * width + start.x];
+    if (quality === "LEGENDARY") {
+      origin.terrain = 2;
+      origin.elevation = 0;
+      origin.feature = 255;
+    }
+    const visited = new Set([`${start.x},${start.y}`]);
+    let frontier: Array<[number, number]> = [[start.x, start.y]];
+    const workable: Array<{ x: number; y: number; tile: Civ5Tile }> = [];
+    for (let radius = 0; radius < (quality === "LEGENDARY" ? 2 : 1); radius += 1) {
+      const next: Array<[number, number]> = [];
+      for (const [x, y] of frontier) {
+        for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+          const key = `${nx},${ny}`;
+          if (visited.has(key)) continue;
+          visited.add(key);
+          next.push([nx, ny]);
+          const tile = tiles[ny * width + nx];
+          if (quality === "LEGENDARY" && tile.terrain >= 2 && tile.elevation === 2 && workable.length < 2) tile.elevation = 1;
+          if (tile.terrain >= 2 && tile.elevation < 2) workable.push({ x: nx, y: ny, tile });
+        }
+      }
+      frontier = next;
+    }
+    if (quality === "LEGENDARY") {
+      for (const [index, target] of workable.slice(0, 4).entries()) {
+        if (index < 2) target.tile.terrain = 2;
+        target.tile.elevation = index === 3 ? 1 : 0;
+      }
+    }
+    const placements = quality === "LEGENDARY"
+      ? ["RESOURCE_WHEAT", "RESOURCE_CATTLE", "RESOURCE_IRON", "RESOURCE_HORSE", "RESOURCE_GOLD", "RESOURCE_GEMS"]
+      : ["RESOURCE_WHEAT", "RESOURCE_IRON", "RESOURCE_HORSE", ...(tournament ? ["RESOURCE_CATTLE"] : [])];
     placements.forEach((resource, index) => {
-      const target = ring[index % Math.max(1, ring.length)];
+      const target = workable[index % Math.max(1, workable.length)];
       if (!target) return;
       target.tile.resource = resourceIndex(resource);
       target.tile.resourceAmount = resource.includes("IRON") || resource.includes("HORSE") ? 2 : 1;
@@ -297,62 +419,108 @@ function normalizeStarts(
 }
 
 export function balanceMapStarts(map: Civ5Map, options: MapGenerationOptions) {
+  const resolved = { ...DEFAULT_GENERATION_OPTIONS, ...options };
   const tiles = map.tiles.map((tile) => ({ ...tile }));
-  const random = randomFactory(seedHash(`${options.seed}:starts:${map.width}x${map.height}`));
-  const playerCount = Math.max(2, Math.min(22, Math.round(options.players)));
-  const startLocations = placeStartLocations(tiles, map.width, map.height, playerCount, map.wraps, options.balance, random);
-  if (options.strategicBalance || options.balance === "TOURNAMENT") {
-    normalizeStarts(tiles, startLocations, map.width, map.height, map.wraps, options.balance === "TOURNAMENT");
+  const random = randomFactory(seedHash(`${resolved.seed}:starts:${map.width}x${map.height}`));
+  const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
+  const startLocations = placeStartLocations(tiles, map.width, map.height, playerCount, map.wraps, resolved.balance, random);
+  if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
+    normalizeStarts(tiles, startLocations, map.width, map.height, map.wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
   return { ...map, tiles, players: playerCount, startLocations };
 }
 
 export function generateMap(options: MapGenerationOptions): Civ5Map {
-  const size = MAP_SIZES.find((item) => item.id === options.size) ?? MAP_SIZES[3];
+  const resolved = { ...DEFAULT_GENERATION_OPTIONS, ...options };
+  if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
+  const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
   const width = size.width;
   const height = size.height;
-  const seed = seedHash(`${options.seed}:${options.preset}:${options.size}`);
+  const seed = seedHash(`${resolved.seed}:${resolved.preset}:${resolved.size}:${resolved.style}:${resolved.modifier}`);
   const random = randomFactory(seed);
-  const wraps = options.preset !== "INLAND_SEAS";
+  const wraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
   const centerConfig: Record<MapPresetId, [number, [number, number]]> = {
-    CONTINENTS: [3, [0.2, 0.32]],
+    CONTINENTS: [4, [0.18, 0.31]],
     PANGAEA: [1, [0.43, 0.54]],
-    ARCHIPELAGO: [22, [0.055, 0.13]],
-    INLAND_SEAS: [7, [0.08, 0.18]],
-    EARTHSEA: [9, [0.1, 0.23]],
-    RIFT_REALMS: [7, [0.13, 0.27]],
+    ARCHIPELAGO: [28, [0.045, 0.12]],
+    INLAND_SEAS: [9, [0.07, 0.17]],
+    EARTHSEA: [12, [0.08, 0.21]],
+    RIFT_REALMS: [9, [0.11, 0.25]],
+    LABYRINTH: [13, [0.07, 0.17]],
+    WILD_REGIONS: [15, [0.065, 0.2]],
   };
-  const [centerCount, centerRadius] = centerConfig[options.preset];
+  const [centerCount, centerRadius] = centerConfig[resolved.preset];
   const centers = createCenters(centerCount, random, centerRadius, !wraps);
-  if (options.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.48, radiusY: 0.42 };
-  const threshold: Record<MapPresetId, number> = {
-    CONTINENTS: 0.36,
-    PANGAEA: 0.34,
-    ARCHIPELAGO: 0.36,
-    INLAND_SEAS: 0.35,
-    EARTHSEA: 0.35,
-    RIFT_REALMS: 0.35,
-  };
+  const plateCenters = createCenters(Math.max(6, Math.round(centerCount * 0.7)), random, [0.09, 0.19], !wraps);
+  if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
   const landMask = new Array<boolean>(width * height);
-  const fieldValues = new Array<number>(width * height);
+  let fieldValues = new Array<number>(width * height);
+  const warpStrength = (resolved.style === "FANTASTICAL" ? 0.24 : resolved.style === "REALISTIC" ? 0.1 : 0.035)
+    + (resolved.modifier === "FRACTURED" ? 0.07 : resolved.modifier === "STRATEGIC_DEPTH" ? 0.035 : 0);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const nx = x / width;
-      const ny = y / Math.max(1, height - 1);
+      const warped = warpedCoordinates(x, y, width, height, seed, warpStrength);
+      const nx = wraps ? ((warped.x % 1) + 1) % 1 : clamp(warped.x, -0.1, 1.1);
+      const ny = clamp(warped.y, -0.08, 1.08);
       const noise = fractalNoise(x, y, seed);
-      const field = presetField(options.preset, nx, ny, noise, centers, wraps);
-      const polarPenalty = wraps ? Math.max(0, Math.abs(ny - 0.5) - 0.43) * 1.5 : 0;
+      const fineDetail = valueNoise(x + 701, y + 311, resolved.style === "FANTASTICAL" ? 2.2 : 3.8, seed + 9001) - 0.5;
+      let field = presetField(resolved.preset, nx, ny, noise, centers, wraps);
+      field += fineDetail * (resolved.style === "FANTASTICAL" ? 0.2 : resolved.style === "REALISTIC" ? 0.08 : 0.035);
+      if (resolved.modifier === "FRACTURED") field += (valueNoise(x, y, 2.1, seed + 1171) - 0.5) * 0.28;
+      const polarPenalty = wraps ? Math.max(0, Math.abs(y / Math.max(1, height - 1) - 0.5) - 0.43) * (resolved.style === "FANTASTICAL" ? 0.65 : 1.45) : 0;
+      if (!wraps) {
+        const edge = Math.min(x / width, 1 - x / width, y / height, 1 - y / height);
+        if (edge < 0.055) field -= (0.055 - edge) * 3.5;
+      }
       const index = y * width + x;
-      fieldValues[index] = field;
-      landMask[index] = field - polarPenalty > threshold[options.preset];
+      fieldValues[index] = field - polarPenalty;
     }
   }
 
+  // Terrain Diffusion uses a coarse conditioning map followed by learned refinement.
+  // The browser-native realistic style mirrors that two-stage structure with a
+  // deterministic denoising/refinement schedule and Earth-like quantile targets.
+  if (resolved.style === "REALISTIC") {
+    fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, 4, 0.2, 0.07);
+  }
+  const waterPercent = clamp(resolved.waterPercent, 8, 90);
+  const landThreshold = quantile(fieldValues, waterPercent / 100);
+  for (let index = 0; index < landMask.length; index += 1) landMask[index] = fieldValues[index] > landThreshold;
+
   const tiles: Civ5Tile[] = [];
-  const ageElevation = options.worldAge === "YOUNG" ? [0.69, 0.84] : options.worldAge === "OLD" ? [0.79, 0.93] : [0.74, 0.89];
-  const rainShift = options.rainfall === "WET" ? -0.1 : options.rainfall === "ARID" ? 0.12 : 0;
-  const tempShift = options.climate === "HOT" ? 0.16 : options.climate === "COOL" ? -0.16 : 0;
+  let reliefValues = new Array<number>(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const nx = x / width;
+      const ny = y / Math.max(1, height - 1);
+      const detail = fractalNoise(x + 211, y + 307, seed + 1301);
+      const plateBoundary = 1 - voronoiBoundary(nx, ny, plateCenters, wraps);
+      let relief = detail * 0.62 + Math.max(0, fieldValues[index] - landThreshold) * 0.16;
+      if (resolved.style === "REALISTIC") relief += Math.pow(plateBoundary, 3) * 0.52;
+      if (resolved.style === "FANTASTICAL") relief += Math.pow(1 - voronoiBoundary(nx, ny, centers, wraps), 2) * 0.22;
+      if (resolved.modifier === "STRATEGIC_DEPTH") {
+        const ridgeA = 1 - Math.abs(Math.sin((nx * 5.6 + detail * 0.75 + Math.sin(ny * 9) * 0.17) * Math.PI));
+        const ridgeB = 1 - Math.abs(Math.cos((ny * 4.3 - detail * 0.62 + Math.sin(nx * 11) * 0.14) * Math.PI));
+        relief += Math.pow(Math.max(ridgeA, ridgeB * 0.8), 3) * 0.76;
+      }
+      if (resolved.modifier === "DOOMSDAY") relief += valueNoise(x + 13, y + 29, 6, seed + 817) * 0.3;
+      reliefValues[index] = relief;
+    }
+  }
+  if (resolved.style === "REALISTIC") {
+    reliefValues = diffuseRefine(reliefValues, width, height, seed + 6007, wraps, 2, 0.12, 0.045);
+  }
+  const landRelief = reliefValues.filter((_, index) => landMask[index]);
+  const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
+    ? Math.max(22, resolved.mountainPercent)
+    : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
+  const hillPercent = resolved.worldAge === "YOUNG" ? 27 : resolved.worldAge === "OLD" ? 12 : 19;
+  const mountainThreshold = effectiveMountainPercent <= 0 ? Number.POSITIVE_INFINITY : quantile(landRelief, 1 - effectiveMountainPercent / 100);
+  const hillThreshold = quantile(landRelief, 1 - clamp(effectiveMountainPercent + hillPercent, 0, 70) / 100);
+  const rainShift = resolved.rainfall === "WET" ? -0.1 : resolved.rainfall === "ARID" ? 0.12 : 0;
+  const tempShift = resolved.climate === "HOT" ? 0.16 : resolved.climate === "COOL" ? -0.16 : 0;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -360,8 +528,19 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       const land = landMask[index];
       const adjacentLand = neighbors(x, y, width, height, wraps).some(([nx, ny]) => landMask[ny * width + nx]);
       const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
-      const climateValue = Math.max(0, Math.min(1, 1 - latitude + tempShift));
-      const moisture = fractalNoise(x + 101, y + 53, seed + 701) - rainShift;
+      let climateValue = 1 - latitude + tempShift;
+      if (resolved.style === "FANTASTICAL") climateValue += (fractalNoise(x + 389, y + 127, seed + 2203) - 0.5) * 0.88;
+      const relief = reliefValues[index];
+      if (resolved.style === "REALISTIC") climateValue -= Math.max(0, relief - 0.58) * 0.22;
+      climateValue = clamp(climateValue);
+      let moisture = fractalNoise(x + 101, y + 53, seed + 701) - rainShift;
+      if (resolved.style === "REALISTIC") {
+        const westX = x === 0 ? (wraps ? width - 1 : 0) : x - 1;
+        const upwindRelief = reliefValues[y * width + westX];
+        const rise = relief - upwindRelief;
+        moisture += Math.max(0, rise) * 0.22 - Math.max(0, -rise) * 0.13;
+      }
+      if (resolved.modifier === "DOOMSDAY") moisture -= 0.14;
       let terrain = land ? 2 : adjacentLand ? 1 : 0;
       if (land && climateValue < 0.12) terrain = 6;
       else if (land && climateValue < 0.28) terrain = 5;
@@ -370,13 +549,13 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
 
       let feature = 255;
       if (!land && latitude > 0.9 && random() > 0.25) feature = 3;
+      else if (land && resolved.modifier === "DOOMSDAY" && random() > 0.87) feature = 5;
       else if (land && terrain === 4 && moisture < 0.25 && random() > 0.95) feature = 4;
       else if (land && climateValue > 0.72 && moisture > 0.66) feature = 1;
       else if (land && terrain === 2 && moisture > 0.83) feature = 2;
       else if (land && terrain !== 4 && terrain !== 6 && moisture > 0.61) feature = 0;
 
-      const relief = fractalNoise(x + 211, y + 307, seed + 1301) + (fieldValues[index] - threshold[options.preset]) * 0.18;
-      const elevation = land ? (relief > ageElevation[1] ? 2 : relief > ageElevation[0] ? 1 : 0) : 0;
+      const elevation = land ? (relief >= mountainThreshold ? 2 : relief >= hillThreshold ? 1 : 0) : 0;
       let resource = 255;
       if (random() > 0.91) {
         if (!land) resource = adjacentLand ? 4 : 255;
@@ -384,11 +563,14 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
         else resource = Math.floor(random() * RESOURCES.length);
       }
 
+      const riverChance = resolved.style === "REALISTIC"
+        ? clamp((moisture - 0.56) * 0.12 + Math.max(0, relief - 0.58) * 0.04, 0, 0.11)
+        : resolved.style === "FANTASTICAL" ? 0.035 : 0.022;
       tiles.push({
         terrain,
         resource,
         feature,
-        river: land && elevation < 2 && random() > 0.975 ? 1 << Math.floor(random() * 3) : 0,
+        river: land && elevation < 2 && random() < riverChance ? 1 << Math.floor(random() * 3) : 0,
         elevation,
         continent: land ? 1 + Math.floor(random() * 4) : 0,
         wonder: 255,
@@ -397,16 +579,17 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
     }
   }
 
-  const playerCount = Math.max(2, Math.min(22, Math.round(options.players)));
-  const startLocations = placeStartLocations(tiles, width, height, playerCount, wraps, options.balance, random);
-  if (options.strategicBalance || options.balance === "TOURNAMENT") {
-    normalizeStarts(tiles, startLocations, width, height, wraps, options.balance === "TOURNAMENT");
+  const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
+  const startLocations = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, random);
+  if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
+    normalizeStarts(tiles, startLocations, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
-  const presetName = MAP_PRESETS.find((preset) => preset.id === options.preset)?.label ?? "Generated World";
+  const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
+  const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
 
   return {
-    name: `${presetName} — ${options.seed}`,
-    description: `A seeded ${presetName.toLowerCase()} map generated by Excogitare with ${options.balance.toLowerCase()} multiplayer balance.`,
+    name: `${presetName} — ${resolved.seed}`,
+    description: `A seeded ${resolved.style.toLowerCase()} ${presetName.toLowerCase()} map${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}, targeting ${Math.round(waterPercent)}% water and ${Math.round(effectiveMountainPercent)}% mountains.`,
     worldSize: size.id,
     version: 12,
     width,
@@ -420,6 +603,6 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
     tiles,
     startLocations,
     source: "generated",
-    generation: { ...options },
+    generation: { ...resolved, waterPercent, mountainPercent: effectiveMountainPercent },
   };
 }

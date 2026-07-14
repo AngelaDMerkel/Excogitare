@@ -209,6 +209,14 @@ button { color: inherit; }
 .creator-panel .section-title,
 .script-panel .section-title,
 .tile-editor .section-title { margin-bottom: 0; }
+.style-picker { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; padding: 0; border: 0; }
+.style-picker legend { grid-column: 1 / -1; margin-bottom: 1px; color: #718984; font-family: var(--font-geist-mono), monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.style-picker button { min-width: 0; min-height: 62px; display: grid; align-content: start; gap: 4px; padding: 8px 7px; border: 1px solid var(--line); border-radius: 5px; background: rgba(9, 27, 31, .42); text-align: left; cursor: pointer; }
+.style-picker button strong { color: #aebfba; font-size: 9px; }
+.style-picker button small { color: #657d77; font-size: 7px; line-height: 1.35; }
+.style-picker button.is-active { border-color: rgba(239, 209, 138, .38); background: rgba(217, 185, 111, .09); }
+.style-picker button.is-active strong { color: var(--gold-bright); }
+.style-picker button.is-active small { color: #9cae9f; }
 .control-field { min-width: 0; display: grid; gap: 5px; }
 .control-field > span {
   color: #718984;
@@ -232,6 +240,13 @@ button { color: inherit; }
 .control-field select:focus,
 .control-field input:focus { border-color: rgba(239, 209, 138, .48); }
 .control-field small { color: #69817c; font-size: 9px; line-height: 1.4; }
+.percentage-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.percentage-field > span { display: flex; justify-content: space-between; gap: 8px; }
+.percentage-field output { color: #d7bd7f; font-size: 8px; }
+.percentage-field input[type="range"] { height: 24px; padding: 0; border: 0; accent-color: var(--gold); }
+.generation-readout { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; background: rgba(8, 24, 28, .3); }
+.generation-readout span { color: #6f8781; font-size: 8px; text-transform: uppercase; }
+.generation-readout strong { color: #b9c8c2; font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 500; }
 .control-grid { display: grid; grid-template-columns: 1.35fr .65fr; gap: 8px; }
 .control-grid.three-controls { grid-template-columns: repeat(3, 1fr); }
 .balance-check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }

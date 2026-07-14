@@ -103,6 +103,66 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 4);
 });
 
+test("generation styles honor requested water and mountain percentages", () => {
+  for (const style of ["REALISTIC", "FANTASTICAL", "MUNDANE"] as const) {
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      size: "DUEL",
+      players: 4,
+      style,
+      waterPercent: 63,
+      mountainPercent: 19,
+      seed: `distribution-${style}`,
+    });
+    const water = map.tiles.filter((tile) => tile.terrain < 2).length / map.tiles.length * 100;
+    const land = map.tiles.filter((tile) => tile.terrain >= 2);
+    const mountains = land.filter((tile) => tile.elevation === 2).length / land.length * 100;
+    assert.ok(Math.abs(water - 63) < 1, `${style} water was ${water}`);
+    assert.ok(Math.abs(mountains - 19) < 1.5, `${style} mountains were ${mountains}`);
+  }
+});
+
+test("Strategic Depth enforces mountain systems and Legendary Start adds local riches", () => {
+  const map = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "DUEL",
+    players: 4,
+    modifier: "STRATEGIC_DEPTH",
+    mountainPercent: 5,
+    startQuality: "LEGENDARY",
+    seed: "deep-legend",
+  });
+  const land = map.tiles.filter((tile) => tile.terrain >= 2);
+  const mountains = land.filter((tile) => tile.elevation === 2).length / land.length * 100;
+  assert.ok(mountains >= 20);
+
+  const nearby = (originX: number, originY: number) => {
+    const visited = new Set([`${originX},${originY}`]);
+    let frontier: Array<[number, number]> = [[originX, originY]];
+    const indices = new Set<number>();
+    for (let radius = 0; radius < 2; radius += 1) {
+      const next: Array<[number, number]> = [];
+      for (const [x, y] of frontier) {
+        const offsets = y % 2 === 0
+          ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+          : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
+        for (const [dx, dy] of offsets) {
+          const nx = (x + dx + map.width) % map.width;
+          const ny = y + dy;
+          const key = `${nx},${ny}`;
+          if (ny < 0 || ny >= map.height || visited.has(key)) continue;
+          visited.add(key);
+          next.push([nx, ny]);
+          indices.add(ny * map.width + nx);
+        }
+      }
+      frontier = next;
+    }
+    return [...indices].filter((index) => map.tiles[index].resource !== 255).length;
+  };
+  for (const start of map.startLocations) assert.ok(nearby(start.x, start.y) >= 5);
+});
+
 test("generated maps serialize to a readable Civ5Map geography file", () => {
   const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, seed: "round-trip" });
   const parsed = parseCiv5Map(serializeCiv5Map(generated), "fallback.Civ5Map");

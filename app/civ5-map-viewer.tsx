@@ -24,6 +24,7 @@ import {
   generateMap,
   MAP_PRESETS,
   MAP_SIZES,
+  WORLD_MODIFIERS,
   type MapGenerationOptions,
 } from "@/lib/map-generator";
 import {
@@ -416,6 +417,16 @@ export function Civ5MapViewer() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7);
   }, [map]);
 
+  const generationMetrics = useMemo(() => {
+    const water = map.tiles.filter((tile) => tile.terrain < 2).length;
+    const land = map.tiles.length - water;
+    const mountains = map.tiles.filter((tile) => tile.terrain >= 2 && tile.elevation === 2).length;
+    return {
+      water: Math.round((water / Math.max(1, map.tiles.length)) * 100),
+      mountains: Math.round((mountains / Math.max(1, land)) * 100),
+    };
+  }, [map]);
+
   const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled && (key !== "starts" || map.startLocations.length > 0)).length;
 
   const loadFile = useCallback(async (file: File) => {
@@ -621,7 +632,7 @@ export function Civ5MapViewer() {
       try {
         const result = mapFromLuaScript(source);
         replaceMap(result.map);
-        setGenerationOptions(result.report.options ?? generationOptions);
+        setGenerationOptions(result.map.generation ?? generationOptions);
         setMessage(`${file.name} · safely regenerated from embedded settings`);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "The Lua map could not be generated.");
@@ -738,13 +749,54 @@ export function Civ5MapViewer() {
           {mode === "CREATE" && (
             <div className="creator-panel">
               <div className="section-title"><h3>Create Mode</h3><span>seeded</span></div>
+              <fieldset className="style-picker">
+                <legend>Baseline style</legend>
+                {([
+                  ["REALISTIC", "Realistic", "Coarse-to-refined elevation, tectonic ranges, coupled climate"],
+                  ["FANTASTICAL", "Fantastical", "Warped regions, strange climates, dramatic coastlines"],
+                  ["MUNDANE", "Mundane", "Restrained shapes and familiar Civ-like distributions"],
+                ] as const).map(([value, label, note]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={generationOptions.style === value ? "is-active" : ""}
+                    onClick={() => setGenerationOptions((current) => ({ ...current, style: value }))}
+                  >
+                    <strong>{label}</strong><small>{note}</small>
+                  </button>
+                ))}
+              </fieldset>
               <label className="control-field">
                 <span>Map type</span>
-                <select value={generationOptions.preset} onChange={(event) => setGenerationOptions((current) => ({ ...current, preset: event.target.value as MapGenerationOptions["preset"] }))}>
+                <select value={generationOptions.preset} onChange={(event) => {
+                  const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
+                  if (!preset) return;
+                  setGenerationOptions((current) => ({ ...current, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains }));
+                }}>
                   {MAP_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
                 </select>
                 <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
               </label>
+              <label className="control-field">
+                <span>World modifier</span>
+                <select value={generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier} onChange={(event) => {
+                  const modifier = event.target.value as MapGenerationOptions["modifier"];
+                  setGenerationOptions((current) => ({ ...current, modifier, mountainPercent: modifier === "STRATEGIC_DEPTH" ? Math.max(22, current.mountainPercent) : modifier === "DOOMSDAY" ? Math.max(18, current.mountainPercent) : current.mountainPercent }));
+                }}>
+                  {WORLD_MODIFIERS.map((modifier) => <option key={modifier.id} value={modifier.id}>{modifier.label}</option>)}
+                </select>
+                <small>{WORLD_MODIFIERS.find((modifier) => modifier.id === (generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier))?.description}</small>
+              </label>
+              <div className="percentage-controls">
+                <label className="control-field percentage-field">
+                  <span>Water percent <output>{generationOptions.waterPercent}%</output></span>
+                  <input type="range" min="8" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} />
+                </label>
+                <label className="control-field percentage-field">
+                  <span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span>
+                  <input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} />
+                </label>
+              </div>
               <div className="control-grid">
                 <label className="control-field">
                   <span>Map size</span>
@@ -772,20 +824,26 @@ export function Civ5MapViewer() {
                   <option value="TEAMS">Paired teams</option>
                 </select>
               </label>
+              <label className="control-field">
+                <span>Start quality</span>
+                <select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}>
+                  <option value="STANDARD">Standard</option>
+                  <option value="BALANCED">Balanced strategic access</option>
+                  <option value="LEGENDARY">Legendary Start</option>
+                </select>
+                <small>{generationOptions.startQuality === "LEGENDARY" ? "Improves workable terrain and adds six valuable resources around every recommended start." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every recommended start." : "Leaves local terrain and resources untouched."}</small>
+              </label>
               <div className="control-grid three-controls">
                 <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
                 <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
                 <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
               </div>
-              <label className="balance-check">
-                <input type="checkbox" checked={generationOptions.strategicBalance} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicBalance: event.target.checked }))} />
-                <span><strong>Strategic balance</strong><small>Food, iron, and horses near every start</small></span>
-              </label>
               <div className="seed-row">
                 <label className="control-field"><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
                 <button type="button" onClick={randomizeSeed}>Shuffle</button>
               </div>
               <button className="generate-button" type="button" onClick={generateNewMap}>Generate map</button>
+              <div className="generation-readout"><span>Current map</span><strong>{generationMetrics.water}% water · {generationMetrics.mountains}% mountains</strong></div>
               <p className="editor-note">Start markers currently guide balance and editing. Geography-only Civ5Map exports let Civ V assign final starts; fixed scenario-start serialization is a later compatibility slice.</p>
 
               <div className="tile-editor">
