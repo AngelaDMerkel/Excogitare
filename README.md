@@ -11,6 +11,7 @@ A platform-agnostic, browser-based viewer and basic map editor for Civilization 
 - Use a compact Generate/Edit workflow with expandable world, climate, and multiplayer controls, or Randomise every generation option into a fresh map
 - Control water from entirely dry worlds through ocean maps, set mountain percentages, wrapping behavior, and dominant terrain types, tune start quality, and apply modifiers such as Strategic Depth, Fractured World, and Doomsday
 - Preserve overland accessibility by carving narrow hill passes through any mountain system that would otherwise isolate territory
+- Generate continuous mountain-fed river networks that follow depression-filled downhill drainage, merge as tributaries, and terminate at water
 - Equal-separation, tournament-normalized, and paired-team multiplayer start layouts
 - Undo and redo map edits
 - Export imported or generated `.Civ5Map` files, map Lua, `.modinfo`, and the visible canvas as PNG

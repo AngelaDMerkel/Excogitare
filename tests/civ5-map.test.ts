@@ -51,6 +51,84 @@ function assertMountainPassability(map: ReturnType<typeof generateMap>) {
   }
 }
 
+function assertRiverNetworks(map: ReturnType<typeof generateMap>) {
+  const vertexTiles = new Map<string, Set<number>>();
+  const riverNeighbors = new Map<string, Set<string>>();
+  let riverEdges = 0;
+  const addTile = (vertex: string, tile: number) => {
+    if (!vertexTiles.has(vertex)) vertexTiles.set(vertex, new Set());
+    vertexTiles.get(vertex)!.add(tile);
+  };
+  const addRiverEdge = (a: string, b: string) => {
+    if (!riverNeighbors.has(a)) riverNeighbors.set(a, new Set());
+    if (!riverNeighbors.has(b)) riverNeighbors.set(b, new Set());
+    riverNeighbors.get(a)!.add(b);
+    riverNeighbors.get(b)!.add(a);
+    riverEdges += 1;
+  };
+
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const owner = y * map.width + x;
+      const centerX = x * 2 + (y & 1);
+      const centerY = y * 3;
+      const definitions = y % 2 === 0
+        ? [
+            { bit: 1, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
+            { bit: 2, dx: -1, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
+            { bit: 4, dx: 0, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
+          ]
+        : [
+            { bit: 1, dx: -1, dy: 0, a: `${centerX - 1},${centerY + 1}`, b: `${centerX - 1},${centerY - 1}` },
+            { bit: 2, dx: 0, dy: -1, a: `${centerX - 1},${centerY - 1}`, b: `${centerX},${centerY - 2}` },
+            { bit: 4, dx: 1, dy: -1, a: `${centerX},${centerY - 2}`, b: `${centerX + 1},${centerY - 1}` },
+          ];
+      for (const definition of definitions) {
+        let nextX = x + definition.dx;
+        const nextY = y + definition.dy;
+        if (map.wraps) nextX = (nextX + map.width) % map.width;
+        if (nextX < 0 || nextX >= map.width || nextY < 0 || nextY >= map.height || Math.abs(nextX - x) > 1) continue;
+        const neighbor = nextY * map.width + nextX;
+        if (map.tiles[owner].terrain < 2 && map.tiles[neighbor].terrain < 2) continue;
+        for (const vertex of [definition.a, definition.b]) {
+          addTile(vertex, owner);
+          addTile(vertex, neighbor);
+        }
+        if (map.tiles[owner].river & definition.bit) addRiverEdge(definition.a, definition.b);
+      }
+    }
+  }
+
+  assert.ok(riverEdges > 0, "the generated map did not contain a river network");
+  const assigned = new Set<string>();
+  for (const origin of riverNeighbors.keys()) {
+    if (assigned.has(origin)) continue;
+    const componentVertices: string[] = [];
+    const queue = [origin];
+    assigned.add(origin);
+    let componentEdgeDegree = 0;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const vertex = queue[cursor];
+      componentVertices.push(vertex);
+      const connected = riverNeighbors.get(vertex)!;
+      componentEdgeDegree += connected.size;
+      for (const next of connected) {
+        if (assigned.has(next)) continue;
+        assigned.add(next);
+        queue.push(next);
+      }
+    }
+    const componentEdges = componentEdgeDegree / 2;
+    const endpoints = componentVertices.filter((vertex) => riverNeighbors.get(vertex)!.size === 1);
+    const touchesMountain = endpoints.some((vertex) => [...(vertexTiles.get(vertex) ?? [])].some((index) => map.tiles[index].terrain >= 2 && map.tiles[index].elevation === 2));
+    const touchesWater = endpoints.some((vertex) => [...(vertexTiles.get(vertex) ?? [])].some((index) => map.tiles[index].terrain < 2));
+    assert.ok(componentEdges >= 3, "a river was too short to form a continuous channel");
+    assert.equal(componentEdges, componentVertices.length - 1, "a river network contained a loop");
+    assert.ok(touchesMountain, "a river network did not begin at a mountain");
+    assert.ok(touchesWater, "a river network did not terminate in water");
+  }
+}
+
 function createScenarioMap() {
   const width = 2;
   const height = 2;
@@ -314,6 +392,21 @@ test("realistic terrain creates west-to-east rain shadows and softened latitude 
   for (const row of transitionRows) {
     const terrains = new Set(allLand.tiles.slice(row * allLand.width, (row + 1) * allLand.width).map((tile) => tile.terrain));
     assert.ok(terrains.size >= 2, `latitude row ${row} collapsed into one sharp biome band`);
+  }
+});
+
+test("generated rivers form continuous mountain-to-water drainage networks", () => {
+  for (const style of ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const) {
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      size: "STANDARD",
+      style,
+      rainfall: "WET",
+      waterPercent: 45,
+      mountainPercent: 22,
+      seed: `river-network-${style}`,
+    });
+    assertRiverNetworks(map);
   }
 });
 

@@ -89,9 +89,9 @@ function mapBounds(map: Civ5Map) {
   };
 }
 
-function tileCenter(col: number, row: number) {
+function tileCenter(col: number, row: number, sourceRow = row) {
   return {
-    x: MAP_MARGIN + HEX_WIDTH / 2 + HEX_WIDTH * (col + (row % 2 ? 0.5 : 0)),
+    x: MAP_MARGIN + HEX_WIDTH / 2 + HEX_WIDTH * (col + (sourceRow % 2 ? 0.5 : 0)),
     y: MAP_MARGIN + HEX_RADIUS + row * HEX_RADIUS * 1.5,
   };
 }
@@ -172,9 +172,9 @@ function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, 
     return { x: x + HEX_RADIUS * Math.cos(angle), y: y + HEX_RADIUS * Math.sin(angle) };
   });
   const edges = [
-    [1, 2, 1],
-    [2, 3, 2],
-    [3, 4, 4],
+    [4, 5, 1],
+    [3, 4, 2],
+    [2, 3, 4],
   ];
   context.save();
   context.strokeStyle = "rgba(91, 185, 211, .9)";
@@ -199,7 +199,7 @@ function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, vie
 
   for (const start of map.startLocations) {
     const displayRow = map.height - 1 - start.y;
-    const center = tileCenter(start.x, displayRow);
+    const center = tileCenter(start.x, displayRow, start.y);
     context.beginPath();
     context.arc(center.x, center.y, radius, 0, Math.PI * 2);
     context.fillStyle = start.cityState ? "#7cb5c3" : "#f0ce79";
@@ -237,7 +237,7 @@ function drawMap(
     for (let col = 0; col < map.width; col += 1) {
       const tile = tileAtDisplayPosition(map, col, row);
       if (!tile) continue;
-      const center = tileCenter(col, row);
+      const center = tileCenter(col, row, map.height - 1 - row);
       const screenX = view.x + center.x * view.zoom;
       const screenY = view.y + center.y * view.zoom;
       if (screenX < -35 || screenY < -35 || screenX > size.width + 35 || screenY > size.height + 35) continue;
@@ -300,11 +300,12 @@ function closestTile(map: Civ5Map, worldX: number, worldY: number): HoveredTile 
   let closest: HoveredTile = null;
   let distance = Number.POSITIVE_INFINITY;
   for (let row = estimatedRow - 1; row <= estimatedRow + 1; row += 1) {
-    const estimatedCol = Math.round((worldX - MAP_MARGIN - HEX_WIDTH / 2) / HEX_WIDTH - (row % 2 ? 0.5 : 0));
+    const sourceRow = map.height - 1 - row;
+    const estimatedCol = Math.round((worldX - MAP_MARGIN - HEX_WIDTH / 2) / HEX_WIDTH - (sourceRow % 2 ? 0.5 : 0));
     for (let col = estimatedCol - 1; col <= estimatedCol + 1; col += 1) {
       const tile = tileAtDisplayPosition(map, col, row);
       if (!tile) continue;
-      const center = tileCenter(col, row);
+      const center = tileCenter(col, row, sourceRow);
       const candidate = Math.hypot(center.x - worldX, center.y - worldY);
       if (candidate < distance && candidate <= HEX_RADIUS) {
         closest = { tile, col, row };

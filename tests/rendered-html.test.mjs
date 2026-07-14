@@ -45,6 +45,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /const paintedTiles = drawMap\(renderContext/);
   assert.match(source, /if \(map\.tiles\.length && paintedTiles === 0\) return/);
   assert.match(source, /context\.drawImage\(renderCanvas, 0, 0\)/);
+  assert.match(source, /\[4, 5, 1\]/);
+  assert.match(source, /\[3, 4, 2\]/);
+  assert.match(source, /\[2, 3, 4\]/);
+  assert.match(source, /tileCenter\(col, row, map\.height - 1 - row\)/);
   assert.match(source, />Randomise</);
   assert.match(source, /aria-label="Create tools"/);
   assert.match(source, /World shape/);

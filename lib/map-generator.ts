@@ -441,6 +441,222 @@ function chooseTerrain(
   return scores.reduce((best, candidate) => candidate[1] > best[1] ? candidate : best)[0];
 }
 
+type RiverEdge = {
+  a: number;
+  b: number;
+  owner: number;
+  bit: 1 | 2 | 4;
+  tiles: [number, number];
+};
+
+type RiverVertex = {
+  edges: number[];
+  key: string;
+  tiles: number[];
+};
+
+type DrainageHeapItem = { cost: number; vertex: number };
+
+function pushDrainageHeap(heap: DrainageHeapItem[], item: DrainageHeapItem) {
+  heap.push(item);
+  let index = heap.length - 1;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (heap[parent].cost <= item.cost) break;
+    heap[index] = heap[parent];
+    index = parent;
+  }
+  heap[index] = item;
+}
+
+function popDrainageHeap(heap: DrainageHeapItem[]) {
+  if (!heap.length) return undefined;
+  const first = heap[0];
+  const last = heap.pop()!;
+  if (heap.length) {
+    let index = 0;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      if (left >= heap.length) break;
+      const child = right < heap.length && heap[right].cost < heap[left].cost ? right : left;
+      if (heap[child].cost >= last.cost) break;
+      heap[index] = heap[child];
+      index = child;
+    }
+    heap[index] = last;
+  }
+  return first;
+}
+
+function riverNeighbor(x: number, y: number, direction: 0 | 2 | 3, width: number, height: number, wraps: boolean) {
+  const offsets = y % 2 === 0
+    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
+  let nextX = x + offsets[direction][0];
+  const nextY = y + offsets[direction][1];
+  if (wraps) nextX = (nextX + width) % width;
+  if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height) return null;
+  // Do not route a visual river across the rendered map seam. It can still
+  // terminate on either coast, while the land itself remains cylindrical.
+  if (Math.abs(nextX - x) > 1) return null;
+  return [nextX, nextY] as const;
+}
+
+function generateRiverNetwork(
+  tiles: Civ5Tile[],
+  reliefValues: number[],
+  moistures: number[],
+  width: number,
+  height: number,
+  wraps: boolean,
+  style: GenerationStyle,
+  rainfall: RainfallSetting,
+  random: () => number,
+) {
+  const vertices: RiverVertex[] = [];
+  const vertexByKey = new Map<string, number>();
+  const edges: RiverEdge[] = [];
+  const vertexIndex = (key: string, adjacentTiles: [number, number]) => {
+    let index = vertexByKey.get(key);
+    if (index === undefined) {
+      index = vertices.length;
+      vertexByKey.set(key, index);
+      vertices.push({ key, edges: [], tiles: [] });
+    }
+    for (const tile of adjacentTiles) if (!vertices[index].tiles.includes(tile)) vertices[index].tiles.push(tile);
+    return index;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const owner = y * width + x;
+      const centerX = x * 2 + (y & 1);
+      const centerY = y * 3;
+      const definitions = [
+        { bit: 1 as const, direction: 0 as const, start: `${centerX - 1},${centerY + 1}`, end: `${centerX - 1},${centerY - 1}` },
+        { bit: 2 as const, direction: 2 as const, start: `${centerX - 1},${centerY - 1}`, end: `${centerX},${centerY - 2}` },
+        { bit: 4 as const, direction: 3 as const, start: `${centerX},${centerY - 2}`, end: `${centerX + 1},${centerY - 1}` },
+      ];
+      for (const definition of definitions) {
+        const neighbor = riverNeighbor(x, y, definition.direction, width, height, wraps);
+        if (!neighbor) continue;
+        const neighborIndex = neighbor[1] * width + neighbor[0];
+        if (tiles[owner].terrain < 2 && tiles[neighborIndex].terrain < 2) continue;
+        const adjacentTiles: [number, number] = [owner, neighborIndex];
+        const a = vertexIndex(definition.start, adjacentTiles);
+        const b = vertexIndex(definition.end, adjacentTiles);
+        const edgeIndex = edges.length;
+        edges.push({ a, b, owner, bit: definition.bit, tiles: adjacentTiles });
+        vertices[a].edges.push(edgeIndex);
+        vertices[b].edges.push(edgeIndex);
+      }
+    }
+  }
+
+  const isWater = vertices.map((vertex) => vertex.tiles.some((index) => tiles[index].terrain < 2));
+  if (!isWater.some(Boolean)) return new Uint8Array(tiles.length);
+  const rawHeight = vertices.map((vertex, vertexNumber) => {
+    if (isWater[vertexNumber]) return -1;
+    const land = vertex.tiles.filter((index) => tiles[index].terrain >= 2);
+    const relief = land.reduce((sum, index) => sum + reliefValues[index], 0) / Math.max(1, land.length);
+    const elevation = Math.max(...land.map((index) => tiles[index].elevation));
+    return relief + elevation * 0.28;
+  });
+
+  // Priority-flood fills local depressions just enough to create a monotonic
+  // drainage surface. Every parent pointer therefore leads toward water while
+  // still preferring the lowest available terrain.
+  const drainageHeight = new Float64Array(vertices.length);
+  drainageHeight.fill(Number.POSITIVE_INFINITY);
+  const parentVertex = new Int32Array(vertices.length);
+  const parentEdge = new Int32Array(vertices.length);
+  parentVertex.fill(-1);
+  parentEdge.fill(-1);
+  const heap: DrainageHeapItem[] = [];
+  for (let vertex = 0; vertex < vertices.length; vertex += 1) {
+    if (!isWater[vertex]) continue;
+    drainageHeight[vertex] = -1;
+    pushDrainageHeap(heap, { vertex, cost: -1 });
+  }
+  while (heap.length) {
+    const current = popDrainageHeap(heap)!;
+    if (current.cost !== drainageHeight[current.vertex]) continue;
+    for (const edgeIndex of vertices[current.vertex].edges) {
+      const edge = edges[edgeIndex];
+      const next = edge.a === current.vertex ? edge.b : edge.a;
+      const candidate = Math.max(rawHeight[next], current.cost + 0.0001);
+      if (candidate >= drainageHeight[next]) continue;
+      drainageHeight[next] = candidate;
+      parentVertex[next] = current.vertex;
+      parentEdge[next] = edgeIndex;
+      pushDrainageHeap(heap, { vertex: next, cost: candidate });
+    }
+  }
+
+  const candidates = vertices.flatMap((vertex, vertexNumber) => {
+    if (isWater[vertexNumber] || parentEdge[vertexNumber] < 0 || vertex.edges.length < 2) return [];
+    const mountainTile = vertex.tiles.find((index) => tiles[index].terrain >= 2 && tiles[index].elevation === 2);
+    if (mountainTile === undefined) return [];
+    let current = vertexNumber;
+    let length = 0;
+    const seen = new Set<number>();
+    while (!isWater[current] && parentVertex[current] >= 0 && length <= width + height) {
+      if (seen.has(current)) break;
+      seen.add(current);
+      current = parentVertex[current];
+      length += 1;
+    }
+    if (!isWater[current] || length < 4) return [];
+    const moisture = vertex.tiles.reduce((sum, index) => sum + moistures[index], 0) / Math.max(1, vertex.tiles.length);
+    return [{ vertex: vertexNumber, mountainTile, length, score: moisture * 1.25 + rawHeight[vertexNumber] * 0.62 + Math.min(length, 24) * 0.018 + random() * 0.22 }];
+  }).sort((a, b) => b.score - a.score);
+
+  const landCount = tiles.filter((tile) => tile.terrain >= 2).length;
+  const rainfallFactor = rainfall === "WET" ? 1.5 : rainfall === "ARID" ? 0.58 : 1;
+  const styleFactor = style === "REALISTIC" ? 1.22 : style === "FANTASTICAL" ? 1.08 : style === "BRUTAL" ? 0.72 : 0.9;
+  const desiredSources = Math.max(1, Math.min(32, Math.round(landCount * 0.0024 * rainfallFactor * styleFactor)));
+  const selectedMountains: Array<[number, number]> = [];
+  const networkVertices = new Set<number>();
+  const networkEdges = new Set<number>();
+
+  for (const candidate of candidates) {
+    if (selectedMountains.length >= desiredSources) break;
+    const location: [number, number] = [candidate.mountainTile % width, Math.floor(candidate.mountainTile / width)];
+    if (selectedMountains.some((selected) => hexDistance(location, selected, width, wraps) < 5)) continue;
+    if (networkVertices.has(candidate.vertex)) continue;
+    const pathEdges: number[] = [];
+    const pathVertices = [candidate.vertex];
+    let current = candidate.vertex;
+    let reachedDrainage = false;
+    const seen = new Set<number>();
+    while (!isWater[current] && parentEdge[current] >= 0 && pathEdges.length <= width + height) {
+      if (seen.has(current)) break;
+      seen.add(current);
+      const edgeIndex = parentEdge[current];
+      const next = parentVertex[current];
+      pathEdges.push(edgeIndex);
+      pathVertices.push(next);
+      current = next;
+      if (isWater[current] || networkVertices.has(current)) {
+        reachedDrainage = true;
+        break;
+      }
+    }
+    if (!reachedDrainage || pathEdges.length < 3) continue;
+    selectedMountains.push(location);
+    for (const edgeIndex of pathEdges) networkEdges.add(edgeIndex);
+    for (const vertex of pathVertices) networkVertices.add(vertex);
+  }
+
+  const rivers = new Uint8Array(tiles.length);
+  for (const edgeIndex of networkEdges) {
+    const edge = edges[edgeIndex];
+    rivers[edge.owner] |= edge.bit;
+  }
+  return rivers;
+}
+
 function hexDistance(a: [number, number], b: [number, number], width: number, wraps: boolean) {
   const toCube = ([x, y]: [number, number]) => {
     const q = x - (y - (y & 1)) / 2;
@@ -742,7 +958,6 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       const land = landMask[index];
       const adjacentLand = neighbors(x, y, width, height, wraps).some(([nx, ny]) => landMask[ny * width + nx]);
       const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
-      const relief = reliefValues[index];
       const climateValue = temperatures[index];
       const moisture = moistures[index];
       const biomeVariation = valueNoise(x + 733, y + 419, 6.5, seed + 3511) - 0.5;
@@ -765,14 +980,11 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
         else resource = Math.floor(random() * RESOURCES.length);
       }
 
-      const riverChance = resolved.style === "REALISTIC"
-        ? clamp((moisture - 0.56) * 0.12 + Math.max(0, relief - 0.58) * 0.04, 0, 0.11)
-        : resolved.style === "FANTASTICAL" ? 0.035 : resolved.style === "BRUTAL" ? 0.012 : 0.022;
       tiles.push({
         terrain,
         resource,
         feature,
-        river: land && elevation < 2 && random() < riverChance ? 1 << Math.floor(random() * 3) : 0,
+        river: 0,
         elevation,
         continent: land ? 1 + Math.floor(random() * 4) : 0,
         wonder: 255,
@@ -786,6 +998,8 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
     normalizeStarts(tiles, startLocations, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
+  const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random);
+  for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
   const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
   const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
 
