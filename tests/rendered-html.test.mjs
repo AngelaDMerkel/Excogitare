@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -33,4 +34,13 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.doesNotMatch(html, /Files stay on this device/);
   assert.match(html, /Open map/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/i);
+});
+
+test("layer redraws preserve the existing canvas backing buffer", async () => {
+  const source = await readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8");
+  assert.match(source, /useLayoutEffect\(\(\) => \{/);
+  assert.match(source, /if \(canvas\.width !== backingWidth\) canvas\.width = backingWidth/);
+  assert.match(source, /if \(canvas\.height !== backingHeight\) canvas\.height = backingHeight/);
+  assert.doesNotMatch(source, /canvas\.width = Math\.round\(size\.width \* pixelRatio\)/);
+  assert.doesNotMatch(source, /canvas\.height = Math\.round\(size\.height \* pixelRatio\)/);
 });

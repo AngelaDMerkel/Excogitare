@@ -209,7 +209,7 @@ button { color: inherit; }
 .creator-panel .section-title,
 .script-panel .section-title,
 .tile-editor .section-title { margin-bottom: 0; }
-.style-picker { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; padding: 0; border: 0; }
+.style-picker { min-width: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin: 0; padding: 0; border: 0; }
 .style-picker legend { grid-column: 1 / -1; margin-bottom: 1px; color: #718984; font-family: var(--font-geist-mono), monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .style-picker button { min-width: 0; min-height: 62px; display: grid; align-content: start; gap: 4px; padding: 8px 7px; border: 1px solid var(--line); border-radius: 5px; background: rgba(9, 27, 31, .42); text-align: left; cursor: pointer; }
 .style-picker button strong { color: #aebfba; font-size: 9px; }
@@ -249,6 +249,12 @@ button { color: inherit; }
 .generation-readout strong { color: #b9c8c2; font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 500; }
 .control-grid { display: grid; grid-template-columns: 1.35fr .65fr; gap: 8px; }
 .control-grid.three-controls { grid-template-columns: repeat(3, 1fr); }
+.terrain-dominance-picker { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; }
+.terrain-dominance-picker legend { color: #718984; font-family: var(--font-geist-mono), monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.terrain-dominance-picker > small { color: #69817c; font-size: 8px; line-height: 1.35; }
+.terrain-dominance-picker > div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.terrain-dominance-picker button { min-width: 0; height: 29px; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; background: rgba(9, 27, 31, .42); color: #78908a; font-size: 8px; cursor: pointer; }
+.terrain-dominance-picker button.is-active { border-color: rgba(239, 209, 138, .42); background: rgba(217, 185, 111, .1); color: var(--gold-bright); }
 .balance-check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
 .balance-check input { margin: 2px 0 0; accent-color: var(--gold); }
 .balance-check span { display: grid; gap: 2px; }

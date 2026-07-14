@@ -6,6 +6,51 @@ import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
 
 const encoder = new TextEncoder();
 
+function adjacentIndices(index: number, width: number, height: number, wraps: boolean) {
+  const x = index % width;
+  const y = Math.floor(index / width);
+  const offsets = y % 2 === 0
+    ? [[-1, 0], [1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]]
+    : [[-1, 0], [1, 0], [0, -1], [1, -1], [0, 1], [1, 1]];
+  return offsets.flatMap(([dx, dy]) => {
+    let nextX = x + dx;
+    const nextY = y + dy;
+    if (wraps) nextX = (nextX + width) % width;
+    return nextX >= 0 && nextX < width && nextY >= 0 && nextY < height ? [nextY * width + nextX] : [];
+  });
+}
+
+function assertMountainPassability(map: ReturnType<typeof generateMap>) {
+  const assignedLand = new Set<number>();
+  for (let origin = 0; origin < map.tiles.length; origin += 1) {
+    if (map.tiles[origin].terrain < 2 || assignedLand.has(origin)) continue;
+    const landmass: number[] = [];
+    const queue = [origin];
+    assignedLand.add(origin);
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor];
+      landmass.push(index);
+      for (const next of adjacentIndices(index, map.width, map.height, map.wraps)) {
+        if (map.tiles[next].terrain < 2 || assignedLand.has(next)) continue;
+        assignedLand.add(next);
+        queue.push(next);
+      }
+    }
+    const passable = landmass.filter((index) => map.tiles[index].elevation !== 2);
+    assert.ok(passable.length > 0, "a landmass was entirely mountains");
+    const reached = new Set<number>([passable[0]]);
+    const paths = [passable[0]];
+    for (let cursor = 0; cursor < paths.length; cursor += 1) {
+      for (const next of adjacentIndices(paths[cursor], map.width, map.height, map.wraps)) {
+        if (map.tiles[next].terrain < 2 || map.tiles[next].elevation === 2 || reached.has(next)) continue;
+        reached.add(next);
+        paths.push(next);
+      }
+    }
+    assert.equal(reached.size, passable.length, "mountains isolated passable territory");
+  }
+}
+
 function createScenarioMap() {
   const width = 2;
   const height = 2;
@@ -161,6 +206,107 @@ test("Strategic Depth enforces mountain systems and Legendary Start adds local r
     return [...indices].filter((index) => map.tiles[index].resource !== 255).length;
   };
   for (const start of map.startLocations) assert.ok(nearby(start.x, start.y) >= 5);
+});
+
+test("zero-water worlds remain traversable through mountain passes", () => {
+  for (const style of ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const) {
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      size: "DUEL",
+      style,
+      modifier: "STRATEGIC_DEPTH",
+      waterPercent: 0,
+      mountainPercent: 35,
+      seed: `all-land-${style}`,
+    });
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, 0);
+    assertMountainPassability(map);
+  }
+});
+
+test("dominant terrain choices visibly control the generated mix", () => {
+  const desert = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    style: "REALISTIC",
+    waterPercent: 35,
+    dominantTerrains: ["DESERT"],
+    seed: "dominant-desert",
+  });
+  const desertLand = desert.tiles.filter((tile) => tile.terrain >= 2);
+  const desertCount = desertLand.filter((tile) => tile.terrain === 4).length;
+  assert.ok(desertCount / desertLand.length > 0.5);
+
+  const temperate = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    style: "REALISTIC",
+    waterPercent: 35,
+    dominantTerrains: ["GRASSLAND", "PLAINS"],
+    seed: "dominant-temperate",
+  });
+  const temperateLand = temperate.tiles.filter((tile) => tile.terrain >= 2);
+  const selectedCount = temperateLand.filter((tile) => tile.terrain === 2 || tile.terrain === 3).length;
+  assert.ok(selectedCount / temperateLand.length > 0.7);
+});
+
+test("realistic terrain creates west-to-east rain shadows and softened latitude transitions", () => {
+  const map = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    preset: "PANGAEA",
+    style: "REALISTIC",
+    waterPercent: 25,
+    mountainPercent: 28,
+    seed: "rain-shadow-audit",
+  });
+  const wetness = (terrain: number) => terrain === 2 ? 1 : terrain === 3 ? 0.55 : terrain === 5 ? 0.4 : terrain === 6 ? 0.25 : 0.05;
+  const shadowDifferences: number[] = [];
+  for (let y = 3; y < map.height - 3; y += 1) {
+    let x = 4;
+    while (x < map.width - 4) {
+      if (map.tiles[y * map.width + x].elevation !== 2) {
+        x += 1;
+        continue;
+      }
+      const westEdge = x;
+      while (x < map.width - 4 && map.tiles[y * map.width + x].elevation === 2) x += 1;
+      const eastEdge = x - 1;
+      const west = [westEdge - 3, westEdge - 2, westEdge - 1].map((column) => map.tiles[y * map.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
+      const east = [eastEdge + 1, eastEdge + 2, eastEdge + 3].map((column) => map.tiles[y * map.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
+      if (west.length >= 2 && east.length >= 2) {
+        shadowDifferences.push(west.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / west.length - east.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / east.length);
+      }
+    }
+  }
+  assert.ok(shadowDifferences.length > 20);
+  assert.ok(shadowDifferences.reduce((sum, difference) => sum + difference, 0) / shadowDifferences.length > 0.1);
+
+  const allLand = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "STANDARD", style: "REALISTIC", waterPercent: 0, seed: "soft-latitudes" });
+  const transitionRows = [4, 8, 12, allLand.height - 13, allLand.height - 9, allLand.height - 5];
+  for (const row of transitionRows) {
+    const terrains = new Set(allLand.tiles.slice(row * allLand.width, (row + 1) * allLand.width).map((tile) => tile.terrain));
+    assert.ok(terrains.size >= 2, `latitude row ${row} collapsed into one sharp biome band`);
+  }
+});
+
+test("Brutal generation is scarce, mountainous, competitive, and still accessible", () => {
+  const brutal = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: "STANDARD",
+    style: "BRUTAL",
+    balance: "TOURNAMENT",
+    waterPercent: 42,
+    mountainPercent: 18,
+    seed: "brutal-competition",
+  });
+  const land = brutal.tiles.filter((tile) => tile.terrain >= 2);
+  const mountainShare = land.filter((tile) => tile.elevation === 2).length / land.length;
+  const resourceShare = brutal.tiles.filter((tile) => tile.resource !== 255).length / brutal.tiles.length;
+  assert.ok(mountainShare >= 0.17);
+  assert.ok(resourceShare < 0.075);
+  assert.equal(brutal.startLocations.length, DEFAULT_GENERATION_OPTIONS.players);
+  assertMountainPassability(brutal);
 });
 
 test("generated maps serialize to a readable Civ5Map geography file", () => {

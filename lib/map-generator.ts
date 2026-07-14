@@ -17,7 +17,15 @@ export type RainfallSetting = "ARID" | "NORMAL" | "WET";
 export type WorldAgeSetting = "YOUNG" | "NORMAL" | "OLD";
 export type StartQuality = "STANDARD" | "BALANCED" | "LEGENDARY";
 export type WorldModifier = "NONE" | "FANTASTICAL" | "STRATEGIC_DEPTH" | "FRACTURED" | "DOOMSDAY";
-export type GenerationStyle = "REALISTIC" | "FANTASTICAL" | "MUNDANE";
+export type GenerationStyle = "REALISTIC" | "FANTASTICAL" | "MUNDANE" | "BRUTAL";
+export type DominantTerrain = "GRASSLAND" | "PLAINS" | "DESERT" | "TUNDRA";
+
+export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: string }> = [
+  { id: "GRASSLAND", label: "Grassland" },
+  { id: "PLAINS", label: "Plains" },
+  { id: "DESERT", label: "Desert" },
+  { id: "TUNDRA", label: "Tundra" },
+];
 
 export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number }> = [
   { id: "CONTINENTS", label: "Convoluted Continents", description: "Broad, asymmetric continents with hooked peninsulas and broken inland coasts.", water: 58, mountains: 12 },
@@ -49,6 +57,7 @@ export type MapGenerationOptions = {
   modifier: WorldModifier;
   waterPercent: number;
   mountainPercent: number;
+  dominantTerrains: DominantTerrain[];
   climate: ClimateSetting;
   rainfall: RainfallSetting;
   worldAge: WorldAgeSetting;
@@ -66,6 +75,7 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   modifier: "NONE",
   waterPercent: 55,
   mountainPercent: 16,
+  dominantTerrains: [],
   climate: "TEMPERATE",
   rainfall: "NORMAL",
   worldAge: "NORMAL",
@@ -276,6 +286,125 @@ function neighbors(x: number, y: number, width: number, height: number, wraps: b
   return result;
 }
 
+function passableReach(
+  origin: number,
+  landMask: boolean[],
+  elevations: number[],
+  width: number,
+  height: number,
+  wraps: boolean,
+) {
+  const reached = new Set<number>([origin]);
+  const queue = [origin];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const index = queue[cursor];
+    const x = index % width;
+    const y = Math.floor(index / width);
+    for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+      const next = ny * width + nx;
+      if (!landMask[next] || elevations[next] === 2 || reached.has(next)) continue;
+      reached.add(next);
+      queue.push(next);
+    }
+  }
+  return reached;
+}
+
+/**
+ * Mountains may constrain movement, but may never seal off otherwise walkable
+ * territory. Each landmass receives the fewest short hill passes needed to
+ * join all of its non-mountain regions.
+ */
+function carveAccessiblePasses(
+  landMask: boolean[],
+  elevations: number[],
+  width: number,
+  height: number,
+  wraps: boolean,
+) {
+  const assigned = new Set<number>();
+  for (let origin = 0; origin < landMask.length; origin += 1) {
+    if (!landMask[origin] || assigned.has(origin)) continue;
+    const landmass: number[] = [];
+    const landQueue = [origin];
+    assigned.add(origin);
+    for (let cursor = 0; cursor < landQueue.length; cursor += 1) {
+      const index = landQueue[cursor];
+      landmass.push(index);
+      const x = index % width;
+      const y = Math.floor(index / width);
+      for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+        const next = ny * width + nx;
+        if (!landMask[next] || assigned.has(next)) continue;
+        assigned.add(next);
+        landQueue.push(next);
+      }
+    }
+
+    let passableOrigin = landmass.find((index) => elevations[index] !== 2);
+    if (passableOrigin === undefined) {
+      passableOrigin = landmass[0];
+      elevations[passableOrigin] = 1;
+    }
+    let accessible = passableReach(passableOrigin, landMask, elevations, width, height, wraps);
+    let target = landmass.find((index) => elevations[index] !== 2 && !accessible.has(index));
+
+    while (target !== undefined) {
+      const previous = new Int32Array(landMask.length);
+      previous.fill(-2);
+      const queue = [...accessible];
+      for (const index of accessible) previous[index] = -1;
+      let bridge = -1;
+      for (let cursor = 0; cursor < queue.length && bridge < 0; cursor += 1) {
+        const index = queue[cursor];
+        const x = index % width;
+        const y = Math.floor(index / width);
+        for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+          const next = ny * width + nx;
+          if (!landMask[next] || previous[next] !== -2) continue;
+          previous[next] = index;
+          if (elevations[next] !== 2 && !accessible.has(next)) {
+            bridge = next;
+            break;
+          }
+          queue.push(next);
+        }
+      }
+      if (bridge < 0) break;
+      for (let index = bridge; index >= 0 && !accessible.has(index); index = previous[index]) {
+        if (elevations[index] === 2) elevations[index] = 1;
+      }
+      accessible = passableReach(passableOrigin, landMask, elevations, width, height, wraps);
+      target = landmass.find((index) => elevations[index] !== 2 && !accessible.has(index));
+    }
+  }
+}
+
+function chooseTerrain(
+  temperature: number,
+  moisture: number,
+  variation: number,
+  dominantTerrains: DominantTerrain[],
+  brutal: boolean,
+) {
+  const dominant = new Set(dominantTerrains);
+  const bias = (terrain: DominantTerrain) => dominant.has(terrain) ? 0.62 : 0;
+  const scores: Array<[number, number]> = [
+    [2, 1.08 - Math.abs(moisture - 0.72) * 1.35 - Math.abs(temperature - 0.61) * 0.72 + bias("GRASSLAND") - (brutal ? 0.22 : 0)],
+    [3, 0.98 - Math.abs(moisture - 0.48) * 1.12 - Math.abs(temperature - 0.57) * 0.42 + bias("PLAINS") + (brutal ? 0.12 : 0)],
+    [4, 0.62 + (temperature - 0.58) * 0.7 + (0.35 - moisture) * 1.7 + bias("DESERT") + (brutal ? 0.16 : 0)],
+    [5, 0.75 + (0.4 - temperature) * 1.62 - Math.abs(moisture - 0.5) * 0.32 + bias("TUNDRA") + (brutal ? 0.08 : 0)],
+    [6, 0.75 + (0.24 - temperature) * 3.4 - Math.abs(moisture - 0.56) * 0.18],
+  ];
+  // Broad, low-amplitude regional variation breaks visible latitude bands
+  // without erasing the overall temperature gradient.
+  scores[0][1] += variation * 0.16;
+  scores[1][1] -= variation * 0.08;
+  scores[2][1] -= variation * 0.12;
+  scores[3][1] += variation * 0.1;
+  return scores.reduce((best, candidate) => candidate[1] > best[1] ? candidate : best)[0];
+}
+
 function hexDistance(a: [number, number], b: [number, number], width: number, wraps: boolean) {
   const toCube = ([x, y]: [number, number]) => {
     const q = x - (y - (y & 1)) / 2;
@@ -455,7 +584,7 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
   const landMask = new Array<boolean>(width * height);
   let fieldValues = new Array<number>(width * height);
-  const warpStrength = (resolved.style === "FANTASTICAL" ? 0.24 : resolved.style === "REALISTIC" ? 0.1 : 0.035)
+  const warpStrength = (resolved.style === "FANTASTICAL" ? 0.24 : resolved.style === "REALISTIC" ? 0.1 : resolved.style === "BRUTAL" ? 0.15 : 0.035)
     + (resolved.modifier === "FRACTURED" ? 0.07 : resolved.modifier === "STRATEGIC_DEPTH" ? 0.035 : 0);
 
   for (let y = 0; y < height; y += 1) {
@@ -466,7 +595,7 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       const noise = fractalNoise(x, y, seed);
       const fineDetail = valueNoise(x + 701, y + 311, resolved.style === "FANTASTICAL" ? 2.2 : 3.8, seed + 9001) - 0.5;
       let field = presetField(resolved.preset, nx, ny, noise, centers, wraps);
-      field += fineDetail * (resolved.style === "FANTASTICAL" ? 0.2 : resolved.style === "REALISTIC" ? 0.08 : 0.035);
+      field += fineDetail * (resolved.style === "FANTASTICAL" ? 0.2 : resolved.style === "REALISTIC" ? 0.08 : resolved.style === "BRUTAL" ? 0.13 : 0.035);
       if (resolved.modifier === "FRACTURED") field += (valueNoise(x, y, 2.1, seed + 1171) - 0.5) * 0.28;
       const polarPenalty = wraps ? Math.max(0, Math.abs(y / Math.max(1, height - 1) - 0.5) - 0.43) * (resolved.style === "FANTASTICAL" ? 0.65 : 1.45) : 0;
       if (!wraps) {
@@ -484,9 +613,10 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   if (resolved.style === "REALISTIC") {
     fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, 4, 0.2, 0.07);
   }
-  const waterPercent = clamp(resolved.waterPercent, 8, 90);
-  const landThreshold = quantile(fieldValues, waterPercent / 100);
-  for (let index = 0; index < landMask.length; index += 1) landMask[index] = fieldValues[index] > landThreshold;
+  const waterPercent = clamp(resolved.waterPercent, 0, 90);
+  const landThreshold = waterPercent === 0 ? Number.NEGATIVE_INFINITY : quantile(fieldValues, waterPercent / 100);
+  const reliefBaseline = Number.isFinite(landThreshold) ? landThreshold : quantile(fieldValues, 0.15);
+  for (let index = 0; index < landMask.length; index += 1) landMask[index] = waterPercent === 0 || fieldValues[index] > landThreshold;
 
   const tiles: Civ5Tile[] = [];
   let reliefValues = new Array<number>(width * height);
@@ -497,9 +627,13 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       const ny = y / Math.max(1, height - 1);
       const detail = fractalNoise(x + 211, y + 307, seed + 1301);
       const plateBoundary = 1 - voronoiBoundary(nx, ny, plateCenters, wraps);
-      let relief = detail * 0.62 + Math.max(0, fieldValues[index] - landThreshold) * 0.16;
+      let relief = detail * 0.62 + Math.max(0, fieldValues[index] - reliefBaseline) * 0.16;
       if (resolved.style === "REALISTIC") relief += Math.pow(plateBoundary, 3) * 0.52;
       if (resolved.style === "FANTASTICAL") relief += Math.pow(1 - voronoiBoundary(nx, ny, centers, wraps), 2) * 0.22;
+      if (resolved.style === "BRUTAL") {
+        const contestedRidge = 1 - Math.abs(Math.sin((nx * 4.8 + detail * 0.56 + Math.sin(ny * 8.2) * 0.18) * Math.PI));
+        relief += Math.pow(plateBoundary, 2.4) * 0.26 + Math.pow(contestedRidge, 3.2) * 0.35;
+      }
       if (resolved.modifier === "STRATEGIC_DEPTH") {
         const ridgeA = 1 - Math.abs(Math.sin((nx * 5.6 + detail * 0.75 + Math.sin(ny * 9) * 0.17) * Math.PI));
         const ridgeB = 1 - Math.abs(Math.cos((ny * 4.3 - detail * 0.62 + Math.sin(nx * 11) * 0.14) * Math.PI));
@@ -515,12 +649,55 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   const landRelief = reliefValues.filter((_, index) => landMask[index]);
   const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
     ? Math.max(22, resolved.mountainPercent)
-    : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
+    : resolved.modifier === "DOOMSDAY" || resolved.style === "BRUTAL" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
   const hillPercent = resolved.worldAge === "YOUNG" ? 27 : resolved.worldAge === "OLD" ? 12 : 19;
-  const mountainThreshold = effectiveMountainPercent <= 0 ? Number.POSITIVE_INFINITY : quantile(landRelief, 1 - effectiveMountainPercent / 100);
-  const hillThreshold = quantile(landRelief, 1 - clamp(effectiveMountainPercent + hillPercent, 0, 70) / 100);
+  // Generate a small surplus because the accessibility pass intentionally
+  // demotes mountains wherever a complete range would seal off land.
+  const mountainSelectionPercent = effectiveMountainPercent <= 0 ? 0 : clamp(
+    effectiveMountainPercent + (resolved.modifier === "STRATEGIC_DEPTH" ? 4 : 2.2),
+    0,
+    42,
+  );
+  const mountainThreshold = mountainSelectionPercent <= 0 ? Number.POSITIVE_INFINITY : quantile(landRelief, 1 - mountainSelectionPercent / 100);
+  const hillThreshold = quantile(landRelief, 1 - clamp(mountainSelectionPercent + hillPercent, 0, 72) / 100);
   const rainShift = resolved.rainfall === "WET" ? -0.1 : resolved.rainfall === "ARID" ? 0.12 : 0;
   const tempShift = resolved.climate === "HOT" ? 0.16 : resolved.climate === "COOL" ? -0.16 : 0;
+  const elevations = landMask.map((land, index) => land ? (reliefValues[index] >= mountainThreshold ? 2 : reliefValues[index] >= hillThreshold ? 1 : 0) : 0);
+  carveAccessiblePasses(landMask, elevations, width, height, wraps);
+  const dominantTerrains = Array.isArray(resolved.dominantTerrains) ? resolved.dominantTerrains : [];
+  const temperatures = new Array<number>(width * height);
+  const moistures = new Array<number>(width * height);
+
+  for (let y = 0; y < height; y += 1) {
+    const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
+    let airborneMoisture = clamp(0.6 - rainShift + (valueNoise(0, y + 43, 8, seed + 1741) - 0.5) * 0.18);
+    let upwindRelief = reliefValues[y * width];
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const regionalTemperature = (valueNoise(x + 311, y + 907, 11, seed + 2711) - 0.5)
+        * (resolved.style === "FANTASTICAL" ? 0.62 : resolved.style === "REALISTIC" ? 0.34 : resolved.style === "BRUTAL" ? 0.3 : 0.25);
+      const localTemperature = (fractalNoise(x + 389, y + 127, seed + 2203) - 0.5)
+        * (resolved.style === "FANTASTICAL" ? 0.36 : resolved.style === "REALISTIC" ? 0.18 : 0.14);
+      const altitudeCooling = resolved.style === "REALISTIC" ? Math.max(0, reliefValues[index] - 0.48) * 0.26 : 0;
+      const latitudeTemperature = 0.1 + Math.cos(latitude * Math.PI / 2) * 0.82;
+      temperatures[index] = clamp(latitudeTemperature + tempShift + regionalTemperature + localTemperature - altitudeCooling);
+
+      const backgroundMoisture = clamp(fractalNoise(x + 101, y + 53, seed + 701) - rainShift - (resolved.style === "BRUTAL" ? 0.09 : 0));
+      if (resolved.style === "REALISTIC") {
+        if (!landMask[index]) airborneMoisture += (0.84 - airborneMoisture) * 0.34;
+        else airborneMoisture += (backgroundMoisture - airborneMoisture) * 0.12;
+        const rise = Math.max(0, reliefValues[index] - upwindRelief);
+        const mountainLift = elevations[index] === 2 ? 0.06 : elevations[index] === 1 ? 0.015 : 0;
+        const precipitation = rise * 0.72 + mountainLift;
+        moistures[index] = clamp(airborneMoisture + precipitation * 0.7);
+        airborneMoisture = clamp(airborneMoisture - precipitation * 0.78);
+        upwindRelief = reliefValues[index];
+      } else {
+        moistures[index] = backgroundMoisture;
+      }
+      if (resolved.modifier === "DOOMSDAY") moistures[index] = clamp(moistures[index] - 0.14);
+    }
+  }
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -528,24 +705,12 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       const land = landMask[index];
       const adjacentLand = neighbors(x, y, width, height, wraps).some(([nx, ny]) => landMask[ny * width + nx]);
       const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
-      let climateValue = 1 - latitude + tempShift;
-      if (resolved.style === "FANTASTICAL") climateValue += (fractalNoise(x + 389, y + 127, seed + 2203) - 0.5) * 0.88;
       const relief = reliefValues[index];
-      if (resolved.style === "REALISTIC") climateValue -= Math.max(0, relief - 0.58) * 0.22;
-      climateValue = clamp(climateValue);
-      let moisture = fractalNoise(x + 101, y + 53, seed + 701) - rainShift;
-      if (resolved.style === "REALISTIC") {
-        const westX = x === 0 ? (wraps ? width - 1 : 0) : x - 1;
-        const upwindRelief = reliefValues[y * width + westX];
-        const rise = relief - upwindRelief;
-        moisture += Math.max(0, rise) * 0.22 - Math.max(0, -rise) * 0.13;
-      }
-      if (resolved.modifier === "DOOMSDAY") moisture -= 0.14;
+      const climateValue = temperatures[index];
+      const moisture = moistures[index];
+      const biomeVariation = valueNoise(x + 733, y + 419, 6.5, seed + 3511) - 0.5;
       let terrain = land ? 2 : adjacentLand ? 1 : 0;
-      if (land && climateValue < 0.12) terrain = 6;
-      else if (land && climateValue < 0.28) terrain = 5;
-      else if (land && climateValue > 0.66 && moisture < 0.43) terrain = 4;
-      else if (land && moisture < 0.58) terrain = 3;
+      if (land) terrain = chooseTerrain(climateValue, moisture, biomeVariation, dominantTerrains, resolved.style === "BRUTAL");
 
       let feature = 255;
       if (!land && latitude > 0.9 && random() > 0.25) feature = 3;
@@ -555,9 +720,9 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
       else if (land && terrain === 2 && moisture > 0.83) feature = 2;
       else if (land && terrain !== 4 && terrain !== 6 && moisture > 0.61) feature = 0;
 
-      const elevation = land ? (relief >= mountainThreshold ? 2 : relief >= hillThreshold ? 1 : 0) : 0;
+      const elevation = elevations[index];
       let resource = 255;
-      if (random() > 0.91) {
+      if (random() > (resolved.style === "BRUTAL" ? 0.95 : 0.91)) {
         if (!land) resource = adjacentLand ? 4 : 255;
         else if (elevation === 2) resource = random() > 0.5 ? 11 : 12;
         else resource = Math.floor(random() * RESOURCES.length);
@@ -565,7 +730,7 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
 
       const riverChance = resolved.style === "REALISTIC"
         ? clamp((moisture - 0.56) * 0.12 + Math.max(0, relief - 0.58) * 0.04, 0, 0.11)
-        : resolved.style === "FANTASTICAL" ? 0.035 : 0.022;
+        : resolved.style === "FANTASTICAL" ? 0.035 : resolved.style === "BRUTAL" ? 0.012 : 0.022;
       tiles.push({
         terrain,
         resource,

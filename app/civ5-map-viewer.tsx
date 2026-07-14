@@ -7,6 +7,7 @@ import {
   type WheelEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/civ5-map";
 import {
   DEFAULT_GENERATION_OPTIONS,
+  DOMINANT_TERRAINS,
   generateMap,
   MAP_PRESETS,
   MAP_SIZES,
@@ -396,14 +398,21 @@ export function Civ5MapViewer() {
     return () => window.cancelAnimationFrame(frame);
   }, [map, size, fitMap]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(size.width * pixelRatio);
-    canvas.height = Math.round(size.height * pixelRatio);
-    canvas.style.width = `${size.width}px`;
-    canvas.style.height = `${size.height}px`;
+    const displayWidth = `${size.width}px`;
+    const displayHeight = `${size.height}px`;
+    const backingWidth = Math.round(size.width * pixelRatio);
+    const backingHeight = Math.round(size.height * pixelRatio);
+    // Assigning width or height clears the entire canvas. Keep layer-only
+    // redraws on the existing backing buffer so Edit mode never flashes the
+    // canvas-shell background between the input event and the next frame.
+    if (canvas.width !== backingWidth) canvas.width = backingWidth;
+    if (canvas.height !== backingHeight) canvas.height = backingHeight;
+    if (canvas.style.width !== displayWidth) canvas.style.width = displayWidth;
+    if (canvas.style.height !== displayHeight) canvas.style.height = displayHeight;
     const context = canvas.getContext("2d");
     if (context) drawMap(context, map, layers, hovered, view, size, pixelRatio);
   }, [map, layers, hovered, view, size]);
@@ -755,12 +764,15 @@ export function Civ5MapViewer() {
                   ["REALISTIC", "Realistic", "Coarse-to-refined elevation, tectonic ranges, coupled climate"],
                   ["FANTASTICAL", "Fantastical", "Warped regions, strange climates, dramatic coastlines"],
                   ["MUNDANE", "Mundane", "Restrained shapes and familiar Civ-like distributions"],
+                  ["BRUTAL", "Brutal", "Harsh terrain, scarce resources, and fair but punishing competitive routes"],
                 ] as const).map(([value, label, note]) => (
                   <button
                     key={value}
                     type="button"
                     className={generationOptions.style === value ? "is-active" : ""}
-                    onClick={() => setGenerationOptions((current) => ({ ...current, style: value }))}
+                    onClick={() => setGenerationOptions((current) => value === "BRUTAL"
+                      ? { ...current, style: value, balance: "TOURNAMENT", startQuality: "BALANCED", mountainPercent: Math.max(18, current.mountainPercent) }
+                      : { ...current, style: value })}
                   >
                     <strong>{label}</strong><small>{note}</small>
                   </button>
@@ -771,7 +783,7 @@ export function Civ5MapViewer() {
                 <select value={generationOptions.preset} onChange={(event) => {
                   const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
                   if (!preset) return;
-                  setGenerationOptions((current) => ({ ...current, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains }));
+                  setGenerationOptions((current) => ({ ...current, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains }));
                 }}>
                   {MAP_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
                 </select>
@@ -790,11 +802,11 @@ export function Civ5MapViewer() {
               <div className="percentage-controls">
                 <label className="control-field percentage-field">
                   <span>Water percent <output>{generationOptions.waterPercent}%</output></span>
-                  <input type="range" min="8" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} />
+                  <input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} />
                 </label>
                 <label className="control-field percentage-field">
                   <span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span>
-                  <input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} />
+                  <input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" || generationOptions.style === "BRUTAL" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} />
                 </label>
               </div>
               <div className="control-grid">
@@ -838,6 +850,31 @@ export function Civ5MapViewer() {
                 <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
                 <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
               </div>
+              <fieldset className="terrain-dominance-picker">
+                <legend>Dominant terrain</legend>
+                <small>Select one or more. With none selected, climate alone determines the mix.</small>
+                <div>
+                  {DOMINANT_TERRAINS.map((terrain) => {
+                    const selected = (generationOptions.dominantTerrains ?? []).includes(terrain.id);
+                    return (
+                      <button
+                        key={terrain.id}
+                        type="button"
+                        className={selected ? "is-active" : ""}
+                        aria-pressed={selected}
+                        onClick={() => setGenerationOptions((current) => ({
+                          ...current,
+                          dominantTerrains: (current.dominantTerrains ?? []).includes(terrain.id)
+                            ? (current.dominantTerrains ?? []).filter((item) => item !== terrain.id)
+                            : [...(current.dominantTerrains ?? []), terrain.id],
+                        }))}
+                      >
+                        {terrain.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
               <div className="seed-row">
                 <label className="control-field"><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
                 <button type="button" onClick={randomizeSeed}>Shuffle</button>
