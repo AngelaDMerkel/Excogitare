@@ -38,6 +38,25 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/i);
 });
 
+test("social artwork is a high-resolution render of a generated Excogitare map", async () => {
+  const [editorArtwork, fallbackArtwork, layout, renderer] = await Promise.all([
+    readFile(new URL("../public/og-editor.png", import.meta.url)),
+    readFile(new URL("../public/og.png", import.meta.url)),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/render-social-art.mjs", import.meta.url), "utf8"),
+  ]);
+
+  assert.equal(editorArtwork.subarray(1, 4).toString(), "PNG");
+  assert.equal(editorArtwork.readUInt32BE(16), 2400);
+  assert.equal(editorArtwork.readUInt32BE(20), 1260);
+  assert.deepEqual(editorArtwork, fallbackArtwork);
+  assert.match(layout, /width: 2400, height: 1260/);
+  assert.match(layout, /High-resolution isometric map rendered by Excogitare/);
+  assert.match(renderer, /generateMap\(options\)/);
+  assert.match(renderer, /preset: "WILD_REGIONS"/);
+  assert.match(renderer, /const PROJECTION = \{ a: 0\.86, b: 0\.25, c: -0\.52, d: 0\.38 \}/);
+});
+
 test("layer redraws preserve the existing canvas backing buffer", async () => {
   const source = await readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8");
   assert.match(source, /useLayoutEffect\(\(\) => \{/);
@@ -105,4 +124,67 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /\[canvasMap\.width, canvasMap\.height, projection\]/);
   assert.match(source, /\}, \[size, fitMap\]\);/);
   assert.doesNotMatch(source, /\}, \[canvasMap, size, fitMap\]\);/);
+});
+
+test("the map legend cannot capture Create controls", async () => {
+  const [source, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /const selectWorkspaceMode = \(nextMode: WorkspaceMode\) => \{\s*setShowLegend\(false\)/);
+  assert.match(source, /const generateNewMap = \(\) => \{\s*setShowLegend\(false\)/);
+  assert.match(source, /const randomiseWorld = \(\) => \{\s*setShowLegend\(false\)/);
+  assert.match(css, /\.sidebar \{\s*position: relative;\s*z-index: 2;/);
+  assert.match(css, /\.canvas-shell \{[^}]*z-index: 1;[^}]*isolation: isolate;/);
+});
+
+test("export confirmation is a modal rather than a sidebar prompt", async () => {
+  const [source, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(source, /edit-mode-prompt validation-prompt/);
+  assert.match(source, /className="export-confirmation-backdrop"/);
+  assert.match(source, /className="export-confirmation-modal" role="dialog" aria-modal="true"/);
+  assert.match(source, /Export despite validation findings\?/);
+  assert.match(source, /exportConfirmationCancelRef\.current\?\.focus\(\)/);
+  assert.match(source, /event\.key === "Escape"/);
+  assert.match(source, />Cancel<\/button>/);
+  assert.match(source, />Open report<\/button>/);
+  assert.match(source, />Export anyway<\/button>/);
+  assert.match(css, /\.export-confirmation-backdrop \{\s*position: fixed;\s*inset: 0;\s*z-index: 100;/);
+});
+
+test("Lua uses an editable, staged, multi-file project workspace", async () => {
+  const [source, worker, runtime, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lua-map.worker.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/lua-runtime.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /<h3>Lua project<\/h3><span>sandboxed<\/span>/);
+  assert.match(source, /Replace main script/);
+  assert.match(source, /Add dependencies/);
+  assert.match(source, /className="lua-source-editor"/);
+  assert.match(source, /Script options/);
+  assert.match(source, /GetMapInitData\(\) overrides the fallback dimensions/);
+  assert.match(source, /className="lua-hook-editor"/);
+  assert.match(source, /Generate map from Lua/);
+  assert.match(source, /Regenerate map from Lua/);
+  assert.match(source, /className=\{`lua-run-status/);
+  assert.match(source, /role="status" aria-live="polite"/);
+  assert.match(source, /The result replaces the current map and remains fully editable/);
+  assert.match(source, /Execution pipeline/);
+  assert.match(worker, /type\(GetMapScriptInfo\)=="function"/);
+  assert.match(worker, /type\(GetMapInitData\)=="function"/);
+  assert.match(worker, /__set_route/);
+  assert.match(worker, /__set_improvement/);
+  assert.match(worker, /__set_start/);
+  assert.match(worker, /request\.postProcessSource/);
+  assert.match(worker, /let lua: LuaEngine \| null = null;\s+try \{\s+const wasmUrl/);
+  assert.match(worker, /lua\?\.global\.close\(\)/);
+  assert.match(runtime, /mergeScriptStarts/);
+  assert.match(runtime, /worker\.onmessageerror/);
+  assert.match(css, /\.lua-source-editor,/);
+  assert.match(css, /\.lua-pipeline li\.is-complete::before/);
 });

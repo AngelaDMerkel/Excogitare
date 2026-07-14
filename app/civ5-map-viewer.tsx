@@ -45,6 +45,7 @@ import {
   type LuaCompatibilityReport,
 } from "@/lib/map-script";
 import { runLuaMapScript } from "@/lib/lua-runtime";
+import { mergeLuaDependencies, type LuaProjectDependency, type LuaRuntimeMetadata, type LuaScriptOption } from "@/lib/lua-project";
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "@/lib/political-map";
 
 const HEX_RADIUS = 20;
@@ -879,6 +880,14 @@ export function Civ5MapViewer() {
   const [repairDiagnostics, setRepairDiagnostics] = useState<string[]>([]);
   const [luaReport, setLuaReport] = useState<LuaCompatibilityReport | null>(null);
   const [luaFileName, setLuaFileName] = useState("");
+  const [luaSource, setLuaSource] = useState("");
+  const [luaDependencies, setLuaDependencies] = useState<LuaProjectDependency[]>([]);
+  const [luaPostProcess, setLuaPostProcess] = useState("");
+  const [luaCustomOptions, setLuaCustomOptions] = useState<LuaScriptOption[]>([]);
+  const [luaMetadata, setLuaMetadata] = useState<LuaRuntimeMetadata | null>(null);
+  const [luaLogs, setLuaLogs] = useState<string[]>([]);
+  const [luaIsRunning, setLuaIsRunning] = useState(false);
+  const [luaRunStatus, setLuaRunStatus] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const [layers, setLayers] = useState<Layers>({ political: false, grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
@@ -894,8 +903,10 @@ export function Civ5MapViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
+  const exportConfirmationCancelRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
+  const luaDependencyInputRef = useRef<HTMLInputElement>(null);
   const generationIdRef = useRef(0);
   const mapRef = useRef(map);
   const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
@@ -988,6 +999,19 @@ export function Civ5MapViewer() {
     observer.observe(shell);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!showExportValidation) return;
+    const frame = window.requestAnimationFrame(() => exportConfirmationCancelRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowExportValidation(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showExportValidation]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => fitMap(size));
@@ -1351,6 +1375,12 @@ export function Civ5MapViewer() {
     setMessage("Repair tests complete · review the proposed corrections");
   };
 
+  const selectWorkspaceMode = (nextMode: WorkspaceMode) => {
+    setShowLegend(false);
+    if (nextMode === "REPAIR") enterRepairMode();
+    else setMode(nextMode);
+  };
+
   const copySelection = () => {
     if (!selection) return;
     const width = selection.maxX - selection.minX + 1;
@@ -1364,6 +1394,7 @@ export function Civ5MapViewer() {
   };
 
   const generateNewMap = () => {
+    setShowLegend(false);
     const generated = generateMap(generationOptions);
     replaceMap(generated);
     const id = ++generationIdRef.current;
@@ -1374,6 +1405,7 @@ export function Civ5MapViewer() {
   };
 
   const randomiseWorld = () => {
+    setShowLegend(false);
     const options = randomGenerationOptions();
     const generated = generateMap(options);
     setGenerationOptions(options);
@@ -1386,6 +1418,7 @@ export function Civ5MapViewer() {
   };
 
   const openGeneration = (entry: GenerationHistoryEntry) => {
+    setShowLegend(false);
     const restored = restoreGeneration(entry);
     replaceMap(restored);
     setActiveGenerationId(entry.id);
@@ -1419,32 +1452,78 @@ export function Civ5MapViewer() {
     const source = await file.text();
     const report = inspectLuaMapScript(source);
     setLuaFileName(file.name);
+    setLuaSource(source);
+    setLuaDependencies([]);
+    setLuaPostProcess("");
+    setLuaCustomOptions([]);
+    setLuaMetadata(null);
+    setLuaLogs([]);
     setLuaReport(report);
-    if (report.compatible) {
-      try {
-        const result = mapFromLuaScript(source);
+    setLuaRunStatus(`${file.name} is ready to generate.`);
+    setMessage(`${file.name} · loaded into the Lua project`);
+  };
+
+  const onLuaDependencyChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = "";
+    if (!files.length) return;
+    const incoming = await Promise.all(files.map(async (file) => ({ name: file.name, source: await file.text() })));
+    setLuaDependencies((current) => mergeLuaDependencies(current, incoming));
+    setLuaMetadata(null);
+    setMessage(`${files.length} Lua dependenc${files.length === 1 ? "y" : "ies"} added to ${luaFileName || "the project"}`);
+  };
+
+  const runLuaProject = async () => {
+    if (!luaSource.trim() || luaIsRunning) return;
+    const report = inspectLuaMapScript(luaSource);
+    setLuaReport(report);
+    setLuaIsRunning(true);
+    setLuaMetadata(null);
+    setLuaRunStatus(`Starting ${luaFileName || "the Lua project"}…`);
+    setMessage(`${luaFileName} · running the Lua project…`);
+    try {
+      if (report.execution === "NATIVE" && !luaDependencies.length && !luaPostProcess.trim()) {
+        const result = mapFromLuaScript(luaSource);
         replaceMap(result.map);
         setGenerationOptions(result.map.generation ?? generationOptions);
-        setMessage(`${file.name} · safely regenerated from embedded settings`);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "The Lua map could not be generated.");
+        setLuaLogs([]);
+        setLuaRunStatus("Map generated and opened in the editor.");
+        setMessage(`${luaFileName} · safely regenerated from embedded settings`);
+        return;
       }
-    } else {
-      setMessage(`${file.name} · running in the isolated Lua preview…`);
-      try {
-        const result = await runLuaMapScript(source, file.name, generationOptions);
-        replaceMap(result.map);
-        setLuaReport({
-          compatible: true,
-          title: "Generated with the experimental Civ V runtime",
-          details: [...report.details, "Executed in an isolated worker with an 8 second function limit", `${result.logs.length} script log lines captured`],
-        });
-        setMessage(`${file.name} · Lua preview generated`);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : "The Lua script could not be executed.";
-        setLuaReport({ ...report, details: [...report.details, detail] });
-        setMessage(`${file.name} · ${detail}`);
-      }
+      const result = await runLuaMapScript(luaSource, luaFileName, generationOptions, {
+        dependencies: luaDependencies,
+        customOptions: luaCustomOptions.map((option) => option.selectedValue),
+        postProcessSource: luaPostProcess,
+      });
+      replaceMap(result.map);
+      setLuaCustomOptions(result.metadata.options);
+      setLuaMetadata(result.metadata);
+      setLuaLogs(result.logs);
+      const includeDetail = result.metadata.missingIncludes.length
+        ? `${result.metadata.missingIncludes.length} include${result.metadata.missingIncludes.length === 1 ? "" : "s"} still missing`
+        : `${result.metadata.loadedIncludes.length} include${result.metadata.loadedIncludes.length === 1 ? "" : "s"} resolved`;
+      setLuaReport({
+        compatible: !result.metadata.missingIncludes.length,
+        execution: "SANDBOX",
+        title: result.metadata.missingIncludes.length ? "Generated with compatibility gaps" : "Lua project generated",
+        details: [
+          `${result.metadata.width}×${result.metadata.height} map allocated by the runtime`,
+          result.metadata.wraps ? "East/west wrapping enabled" : "Non-wrapping map",
+          includeDetail,
+          `${result.metadata.options.length} script option${result.metadata.options.length === 1 ? "" : "s"} exposed`,
+          `${result.metadata.stages.filter((stage) => stage.status === "COMPLETE").length} pipeline stages completed`,
+        ],
+      });
+      setLuaRunStatus(`Generated ${result.metadata.width}×${result.metadata.height} map and opened it in the editor.`);
+      setMessage(`${luaFileName} · Lua project generated an editable map`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "The Lua project could not be executed.";
+      setLuaReport({ ...report, details: [...report.details, detail] });
+      setLuaRunStatus(detail);
+      setMessage(`${luaFileName} · ${detail}`);
+    } finally {
+      setLuaIsRunning(false);
     }
   };
 
@@ -1460,7 +1539,7 @@ export function Civ5MapViewer() {
         </div>
         <nav className="mode-tabs" aria-label="Workspace mode">
           {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
-            <button key={item} type="button" className={mode === item ? "is-active" : ""} onClick={() => item === "REPAIR" ? enterRepairMode() : setMode(item)}>
+            <button key={item} type="button" className={mode === item ? "is-active" : ""} onClick={() => selectWorkspaceMode(item)}>
               {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}
             </button>
           ))}
@@ -1485,6 +1564,7 @@ export function Civ5MapViewer() {
           <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()}>Open map</button>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept=".civ5map,.Civ5Map,application/octet-stream" onChange={onFileChange} />
           <input ref={luaInputRef} className="visually-hidden" type="file" accept=".lua,text/x-lua,text/plain" onChange={onLuaFileChange} />
+          <input ref={luaDependencyInputRef} className="visually-hidden" type="file" multiple accept=".lua,text/x-lua,text/plain" onChange={onLuaDependencyChange} />
         </div>
       </header>
 
@@ -1539,18 +1619,6 @@ export function Civ5MapViewer() {
               <div>
                 <button type="button" onClick={() => setShowEditPrompt(false)}>Not now</button>
                 <button className="confirm-edit" type="button" onClick={enterEditMode}>Edit details</button>
-              </div>
-            </div>
-          )}
-
-          {showExportValidation && (
-            <div className="edit-mode-prompt validation-prompt" role="dialog" aria-label="Civ5Map validation warnings">
-              <strong>Review before export</strong>
-              <p>{validationIssues.filter((issue) => issue.severity === "ERROR").length} errors and {validationIssues.filter((issue) => issue.severity === "WARNING").length} warnings were found.</p>
-              <ul>{validationIssues.filter((issue) => issue.severity !== "INFO").slice(0, 4).map((issue, index) => <li key={`${issue.category}-${index}`}>{issue.message}</li>)}</ul>
-              <div>
-                <button type="button" onClick={() => { setShowExportValidation(false); setMode("CREATE"); setCreateView("ANALYZE"); }}>Open report</button>
-                <button className="confirm-edit" type="button" onClick={() => { setShowExportValidation(false); performCiv5MapExport(); }}>Export anyway</button>
               </div>
             </div>
           )}
@@ -1857,14 +1925,89 @@ export function Civ5MapViewer() {
 
           {mode === "SCRIPT" && (
             <div className="script-panel">
-              <div className="section-title"><h3>Lua workspace</h3><span>experimental</span></div>
-              <p>Round-trip Excogitare scripts or run Civ V map scripts inside an isolated, time-limited browser worker. Unsupported APIs are reported with the script.</p>
-              <div className="control-grid">
-                <label className="control-field"><span>Preview size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}</select></label>
-                <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
+              <div className="section-title"><h3>Lua project</h3><span>sandboxed</span></div>
+              <p>Load a main Civ V map script, supply its named Lua dependencies, edit the source, and replay a post-generation hook. A successful run becomes an ordinary editable map.</p>
+              <div className="lua-project-actions">
+                <button type="button" onClick={() => luaInputRef.current?.click()}>{luaSource ? "Replace main script" : "Open main script"}</button>
+                <button type="button" disabled={!luaSource} onClick={() => luaDependencyInputRef.current?.click()}>Add dependencies</button>
               </div>
-              <label className="control-field"><span>Runtime seed</span><input value={generationOptions.seed} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
-              <button className="lua-open-button" type="button" onClick={() => luaInputRef.current?.click()}>Open and run Lua script</button>
+              {luaSource && (
+                <>
+                  <div className="lua-project-file">
+                    <span>Main</span><strong>{luaFileName}</strong><small>{luaSource.split("\n").length.toLocaleString()} lines</small>
+                  </div>
+                  <div className="lua-generate-panel">
+                    <button className="lua-run-button" type="button" disabled={luaIsRunning} onClick={runLuaProject}>{luaIsRunning ? "Generating map from Lua…" : luaMetadata ? "Regenerate map from Lua" : "Generate map from Lua"}</button>
+                    <div className={`lua-run-status${luaIsRunning ? " is-running" : ""}`} role="status" aria-live="polite">
+                      {luaRunStatus || "Ready to generate an editable map."}
+                    </div>
+                    <small>Runs the main script, supplied dependencies, selected options, and post-process hook. The result replaces the current map and remains fully editable.</small>
+                  </div>
+                  <details className="lua-workspace-group" open>
+                    <summary><span>Source editor</span><small>Modify generator functions directly</small></summary>
+                    <div className="lua-workspace-body">
+                      <textarea className="lua-source-editor" aria-label="Lua main script source" spellCheck={false} value={luaSource} onChange={(event) => { setLuaSource(event.target.value); setLuaMetadata(null); }} />
+                    </div>
+                  </details>
+
+                  <details className="lua-workspace-group" open={luaDependencies.length > 0}>
+                    <summary><span>Dependencies</span><small>{luaDependencies.length ? `${luaDependencies.length} supplied` : "Built-in compatibility includes only"}</small></summary>
+                    <div className="lua-workspace-body">
+                      {luaDependencies.length ? (
+                        <div className="lua-dependency-list">
+                          {luaDependencies.map((dependency) => (
+                            <div key={dependency.name}><span>{dependency.name}</span><small>{dependency.source.split("\n").length} lines</small><button type="button" aria-label={`Remove ${dependency.name}`} onClick={() => setLuaDependencies((current) => current.filter((item) => item.name !== dependency.name))}>Remove</button></div>
+                          ))}
+                        </div>
+                      ) : <p className="lua-empty-note">Common Civ V helpers such as MapGenerator, bit, vectors, and starting-plot scaffolding are supplied by the runtime. Add mod-specific files here.</p>}
+                      <button className="lua-inline-button" type="button" onClick={() => luaDependencyInputRef.current?.click()}>Add .lua files</button>
+                    </div>
+                  </details>
+
+                  {luaCustomOptions.length > 0 && (
+                    <details className="lua-workspace-group" open>
+                      <summary><span>Script options</span><small>{luaCustomOptions.length} discovered by GetMapScriptInfo()</small></summary>
+                      <div className="lua-workspace-body">
+                        {luaCustomOptions.map((option) => (
+                          <label className="control-field" key={option.index}>
+                            <span>{option.name}</span>
+                            {option.values.length ? (
+                              <select value={option.selectedValue} onChange={(event) => setLuaCustomOptions((current) => current.map((item) => item.index === option.index ? { ...item, selectedValue: Number(event.target.value) } : item))}>
+                                {option.values.map((value, index) => <option key={`${value}-${index}`} value={index + 1}>{value || `Value ${index + 1}`}</option>)}
+                              </select>
+                            ) : (
+                              <input type="number" min="1" value={option.selectedValue} onChange={(event) => setLuaCustomOptions((current) => current.map((item) => item.index === option.index ? { ...item, selectedValue: Number(event.target.value) } : item))} />
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  <details className="lua-workspace-group">
+                    <summary><span>Runtime</span><small>Fallback allocation, seed, and starts</small></summary>
+                    <div className="lua-workspace-body">
+                      <div className="control-grid">
+                        <label className="control-field"><span>Fallback size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}</select></label>
+                        <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
+                      </div>
+                      <div className="control-grid">
+                        <label className="control-field"><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>Runtime seed</span><input value={generationOptions.seed} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
+                      </div>
+                      <p className="lua-empty-note">GetMapInitData() overrides the fallback dimensions and wrap type. Excogitare fills any player starts the script leaves unassigned.</p>
+                    </div>
+                  </details>
+
+                  <details className="lua-workspace-group">
+                    <summary><span>Post-process hook</span><small>Replay modifications after generation</small></summary>
+                    <div className="lua-workspace-body">
+                      <textarea className="lua-hook-editor" aria-label="Lua post-process hook" spellCheck={false} placeholder={'-- Runs after the script finishes.\n-- Example:\n-- Map.GetPlot(4, 4):SetTerrainType(TerrainTypes.TERRAIN_DESERT)'} value={luaPostProcess} onChange={(event) => { setLuaPostProcess(event.target.value); setLuaMetadata(null); }} />
+                      <p className="lua-empty-note">The hook can call the same Map and plot APIs as the generator. It is stored in this workspace and reruns every time you generate.</p>
+                    </div>
+                  </details>
+                </>
+              )}
               {luaReport && (
                 <div className={`lua-report${luaReport.compatible ? " is-compatible" : ""}`}>
                   <strong>{luaReport.title}</strong>
@@ -1872,8 +2015,20 @@ export function Civ5MapViewer() {
                   <ul>{luaReport.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
                 </div>
               )}
+              {luaMetadata && (
+                <details className="lua-pipeline" open>
+                  <summary>Execution pipeline</summary>
+                  <ol>{luaMetadata.stages.map((stage) => <li key={stage.id} className={stage.status === "COMPLETE" ? "is-complete" : "is-skipped"}><span>{stage.label}</span><small>{stage.detail}</small></li>)}</ol>
+                </details>
+              )}
+              {luaLogs.length > 0 && (
+                <details className="lua-console">
+                  <summary>Script console · {luaLogs.length} lines</summary>
+                  <pre>{luaLogs.join("\n")}</pre>
+                </details>
+              )}
               <div className="script-export-grid">
-                <button type="button" onClick={exportLua}>Export Lua</button>
+                <button type="button" onClick={exportLua}>Export map Lua</button>
                 <button type="button" onClick={exportModInfo}>Export .modinfo</button>
               </div>
             </div>
@@ -2076,6 +2231,29 @@ export function Civ5MapViewer() {
           )}
         </div>
       </section>
+
+      {showExportValidation && (
+        <div
+          className="export-confirmation-backdrop"
+          onPointerDown={(event) => { if (event.currentTarget === event.target) setShowExportValidation(false); }}
+        >
+          <section className="export-confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="export-confirmation-title" aria-describedby="export-confirmation-summary">
+            <header>
+              <span>Export Civ5Map</span>
+              <h2 id="export-confirmation-title">Export despite validation findings?</h2>
+            </header>
+            <p id="export-confirmation-summary">
+              Excogitare found {validationIssues.filter((issue) => issue.severity === "ERROR").length} errors and {validationIssues.filter((issue) => issue.severity === "WARNING").length} warnings. The file may not behave correctly in Civ V.
+            </p>
+            <ul>{validationIssues.filter((issue) => issue.severity !== "INFO").slice(0, 4).map((issue, index) => <li key={`${issue.category}-${index}`}>{issue.message}</li>)}</ul>
+            <div className="export-confirmation-actions">
+              <button ref={exportConfirmationCancelRef} type="button" onClick={() => setShowExportValidation(false)}>Cancel</button>
+              <button type="button" onClick={() => { setShowExportValidation(false); setMode("CREATE"); setCreateView("ANALYZE"); }}>Open report</button>
+              <button className="confirm-export" type="button" onClick={() => { setShowExportValidation(false); performCiv5MapExport(); }}>Export anyway</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

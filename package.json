@@ -9,7 +9,7 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start --host 0.0.0.0",
-    "test": "pnpm run build && node --test tests/rendered-html.test.mjs && node --experimental-strip-types --test tests/civ5-map.test.ts",
+    "test": "pnpm run build && node --test tests/rendered-html.test.mjs && node --experimental-strip-types --test tests/civ5-map.test.ts tests/lua-runtime.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

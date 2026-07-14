@@ -1,5 +1,7 @@
 # Excogitare
 
+*excōgitāre* /ɛk.skoː.ɡɪˈtaː.rɛ/ — Latin: to devise, contrive, or think something into being.
+
 A platform-agnostic, browser-based viewer and basic map editor for Civilization V `.Civ5Map` files. Excogitare parses, renders, generates and edits physical maps directly in the browser.
 
 I owe the greatest thanks to [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage) who did all the real research and provided all the documentation necessary for me to produce this tool. The native generator's presets take high-level inspiration from [mirror's Fantastical Map Script](https://steamcommunity.com/sharedfiles/filedetails/?id=310024314) broad range of world shapes while using an independent implementation. Lua previews run in an isolated worker with a strict timeout and a growing compatibility layer for `Map`, `GameInfo`, plot mutation, enums, database iteration, and common map-generator helpers. Scripts that depend on unsupported Civ V internals receive a compatibility report.
@@ -10,29 +12,34 @@ Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/ter
 
 AI was relied upon heavily for the production of this tool. Often I performed manual review, but more often I did not; although, most of the architecture and logic is my own making—  not always. This was meant to be a quick and dirty tool for making fun makes so that I can while away my waking hours unproductively. None of this is tested for security and if you decide to host this and expose it publicly, you do so at your own risk. 
 
-## Current features
+## Explore
 
-- Open local `.Civ5Map` files
-- Render terrain, coasts, rivers, features, resources, hills, and mountains
-- Edit map metadata and individual terrain, elevation, feature, resource, and start-location tiles
-- Generate deterministic maps from eight landmass presets, Realistic/Fantastical/Mundane/Brutal baseline styles, and the six standard Civ V sizes
-- Use a compact Generate/Edit workflow with expandable world, climate, and multiplayer controls, or Randomise every generation option into a fresh map
-- Control water from entirely dry worlds through ocean maps, set mountain percentages, wrapping behavior, and dominant terrain types, tune start quality, and apply modifiers such as Strategic Depth, Fractured World, and Doomsday
-- Preserve overland accessibility by carving narrow hill passes through any mountain system that would otherwise isolate territory
-- Generate continuous mountain-fed river networks that follow depression-filled downhill drainage, merge as tributaries, and terminate at water
-- Equal-separation, tournament-normalized, and paired-team multiplayer start layouts
-- Undo and redo map edits
-- Export imported or generated `.Civ5Map` files, map Lua, `.modinfo`, and the visible canvas as PNG
-- Re-open Excogitare-generated Lua scripts and preview other Civ V scripts in a time-limited WebAssembly Lua worker
-- Built-in sample map so the interface is useful before a file is selected
-- Multi-stage Alpine Linux container
+Explore is the sober and consequently most dependable part of Excogitare. It opens a local `.Civ5Map` and renders terrain, coasts, rivers, features, resources, natural wonders, relief, roads, improvements, start locations and city states. Layers can be hidden when they get in the way; the legend explains the less obvious marks; the political layer uses stored scenario ownership where it exists; and the isometric view adds some theatrical height without pretending to be Civ V's renderer. Dragging pans, scrolling zooms, and neither should now be forgotten merely because a tile changed.
+
+The map name and description can be edited, imported scenario data is preserved where the parser understands it, and the result can be exported as `.Civ5Map` or as a transparent PNG of the current view. The binary format is not blessed with a complete public specification, so unusual versions and heavily modded maps may contain data Excogitare does not recognize. Political colour is inferred from civilization and team identifiers rather than loaded from Civ V's XML database; generated maps show projected start influence, not genuine borders. Isometric mode is decorative. It is not a miniature game engine, however charming that would be.
+
+## Create
+
+Create produces deterministic maps from a seed, the standard Civ V sizes, several landmass presets and four broad styles: Realistic, Fantastical, Mundane and Brutal. World geometry can be sensible, square, absurdly tall or absurdly wide. Controls cover water, mountains, climate, terrain dominance, wrapping, wonders, luxuries, strategic resources, barbarians, ruins, players, city states and multiplayer start balance. Randomise ignores good taste on the user's behalf. The latest thirty generations remain available for the current browser session.
+
+Generated maps should contain legal terrain and features, passable landmasses, continuous mountain-fed rivers and reasonably separated starts. The editor supplies tile brushes, several brush sizes, flood fill, region selection, copy and paste, and direct start-position editing. Analyze provides a multiplayer balance report and a Civ V-oriented validation pass. Undo and redo exist because even deliberate mountain ranges become regrettable.
+
+This generator is an independent approximation of Civ V's rules, not Firaxis code, and “balanced” remains a heuristic rather than a theorem. Generation history disappears when the page is reloaded. More importantly, newly generated `.Civ5Map` exports are still geography-first: scenario-only material such as player and city-state records, camps, ruins, ruined cities and roads can be previewed and analyzed but is not yet fully embedded in a fresh scenario section. Imported maps fare better because their existing scenario structure can be amended instead of invented.
+
+## Repair
+
+Repair loads a `.Civ5Map`, runs structural and rules-based tests, and presents the original, corrected and difference views before anything is applied. Safe, standard and aggressive profiles control how adventurous the proposed corrections may be. Checks cover malformed tile values, illegal terrain, feature, resource and wonder combinations, broken or aquatic rivers, cities on impossible tiles, start counts, duplicate starts, city-state flags, spacing, land access and mountain isolation. Resources may be relocated or deleted; rivers may be rebuilt so that they begin in high ground, remain continuous and eventually meet water.
+
+Repair is useful, but it is not an oracle. Its legality tables know the ordinary content bundled into Excogitare, not every rule added by every mod. Aggressive river correction may replace a designer's strange but intentional river with a more defensible one. Salvage mode can recover geography from some damaged files, but unsupported or corrupt scenario data may still be lost. Passing every test means that the map looks internally coherent to Excogitare; it does not amount to a blood oath that Civ V will load every possible file. Review the difference view and retain the original.
+
+## Lua
+
+Lua remains the least finished menu, but it is now a project workspace rather than a hopeful file picker. A main map script can be loaded and edited in place; named `.lua` dependencies can be supplied alongside it; custom options returned by `GetMapScriptInfo()` become controls; and `GetMapInitData()` may choose the actual dimensions and east-west wrapping. The script then passes through explicit plot, terrain, feature, river and continent stages inside the isolated, time-limited WebAssembly worker. The resulting tiles, roads, improvements and any starts assigned through `Players:SetStartingPlot()` are captured as an ordinary editable Excogitare map.
+
+A second Lua editor provides a replayable post-process hook. It runs after the generator and can use the same `Map` and plot APIs to make deliberate programmatic alterations without vandalizing the original functions. The workspace reports which includes loaded, which remain missing, which stages ran and what the script printed. Common Civ V helpers receive built-in compatibility shims; in particular, Fantastical v31 can now complete its ordinary default generation path and expose its nine map options. Excogitare fills any major or city-state starts the script leaves unassigned.
+
+This is still a compatibility experiment, not a faithful Civ V Lua host. The database is skeletal, SQL supplied by a mod is not imported, dynamic or computed `include()` paths cannot be discovered in advance, the standard `AssignStartingPlots` machinery is only scaffolding, and many mod-specific APIs remain absent. Unsupported natural-wonder feature IDs and resources outside Excogitare's vocabulary may be discarded during capture. The Lua project itself is not yet saved as a portable bundle, and exporting an edited map as Lua still produces a static description of that map; it cannot reverse-engineer brush strokes into the procedural imagination of the original author. That would be alchemy, and this is merely software.
 
 ## Docker
 
 `docker-compose` is the recommended deployment method for Excogitare.
-
-## ToDo
-
-- Emulated API endpoints for Civ5 to read and generate maps based on the Lua
-- Modal popup with generation walkthough(?)
-- Add a political view based on work by [samuelyuan/Civ5MapImage](https://github.com/samuelyuan/Civ5MapImage)

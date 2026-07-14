@@ -1,5 +1,6 @@
 import type { Civ5Map } from "./civ5-map.ts";
 import { generateMap, type MapGenerationOptions } from "./map-generator.ts";
+import { findLuaIncludes } from "./lua-project.ts";
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = "";
@@ -37,6 +38,7 @@ export type LuaCompatibilityReport = {
   title: string;
   details: string[];
   options?: MapGenerationOptions;
+  execution: "NATIVE" | "SANDBOX" | "UNKNOWN";
 };
 
 export function inspectLuaMapScript(source: string): LuaCompatibilityReport {
@@ -49,22 +51,28 @@ export function inspectLuaMapScript(source: string): LuaCompatibilityReport {
         title: "Excogitare map script",
         details: ["Embedded generation settings found", "Safe native regeneration available", "No external Civ V database calls required"],
         options,
+        execution: "NATIVE",
       };
     } catch {
-      return { compatible: false, title: "Damaged Excogitare script", details: ["The embedded generation settings could not be decoded"] };
+      return { compatible: false, title: "Damaged Excogitare script", details: ["The embedded generation settings could not be decoded"], execution: "UNKNOWN" };
     }
   }
   const details: string[] = [];
+  const includes = findLuaIncludes(source);
   if (/function\s+GetMapScriptInfo\s*\(/.test(source)) details.push("Map-script metadata entry point found");
+  if (/function\s+GetMapInitData\s*\(/.test(source)) details.push("Script-controlled dimensions and wrapping found");
   if (/function\s+GeneratePlotTypes\s*\(/.test(source)) details.push("Plot generation entry point found");
+  if (/\bCustomOptions\s*=|\bGetCustomOptions\s*\(/.test(source)) details.push("Script-defined map options found");
   if (/\bMap\./.test(source)) details.push("Uses the Civ V Map API");
   if (/\bGameInfo\./.test(source)) details.push("Uses the Civ V game database");
-  if (/\bDB\./.test(source)) details.push("Uses direct database queries");
-  if (/\binclude\s*\(/.test(source)) details.push("Requires bundled Civ V Lua includes");
+  if (/\bDB\./.test(source)) details.push("Direct database queries will use the limited compatibility database");
+  if (includes.length) details.push(`${includes.length} named Lua include${includes.length === 1 ? "" : "s"} requested`);
+  const recognized = /function\s+(?:GetMapScriptInfo|GenerateMap|GeneratePlotTypes)\s*\(/.test(source);
   return {
     compatible: false,
-    title: details.length ? "Civ V compatibility work required" : "Not recognized as a Civ V map script",
+    title: recognized ? "Civ V map project detected" : "Not recognized as a Civ V map script",
     details: details.length ? details : ["No supported map-generation entry points were found"],
+    execution: recognized ? "SANDBOX" : "UNKNOWN",
   };
 }
 

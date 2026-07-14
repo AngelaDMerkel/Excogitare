@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: "Excogitare Civilization V map viewer and editor" }],
+      images: [{ url: imageUrl, width: 2400, height: 1260, alt: "High-resolution isometric map rendered by Excogitare" }],
     },
     twitter: {
       card: "summary_large_image",
