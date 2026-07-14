@@ -1,12 +1,12 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 
 export const MAP_SIZES = [
-  { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2 },
-  { id: "TINY", label: "Tiny", width: 56, height: 36, recommendedPlayers: 4 },
-  { id: "SMALL", label: "Small", width: 66, height: 42, recommendedPlayers: 6 },
-  { id: "STANDARD", label: "Standard", width: 80, height: 52, recommendedPlayers: 8 },
-  { id: "LARGE", label: "Large", width: 104, height: 64, recommendedPlayers: 10 },
-  { id: "HUGE", label: "Huge", width: 128, height: 80, recommendedPlayers: 12 },
+  { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 4 },
+  { id: "TINY", label: "Tiny", width: 56, height: 36, recommendedPlayers: 4, recommendedCityStates: 8 },
+  { id: "SMALL", label: "Small", width: 66, height: 42, recommendedPlayers: 6, recommendedCityStates: 12 },
+  { id: "STANDARD", label: "Standard", width: 80, height: 52, recommendedPlayers: 8, recommendedCityStates: 16 },
+  { id: "LARGE", label: "Large", width: 104, height: 64, recommendedPlayers: 10, recommendedCityStates: 20 },
+  { id: "HUGE", label: "Huge", width: 128, height: 80, recommendedPlayers: 12, recommendedCityStates: 24 },
 ] as const;
 
 export type MapSizeId = (typeof MAP_SIZES)[number]["id"];
@@ -20,6 +20,21 @@ export type WorldModifier = "NONE" | "FANTASTICAL" | "STRATEGIC_DEPTH" | "FRACTU
 export type GenerationStyle = "REALISTIC" | "FANTASTICAL" | "MUNDANE" | "BRUTAL";
 export type DominantTerrain = "GRASSLAND" | "PLAINS" | "DESERT" | "TUNDRA";
 export type WrapType = "PRESET" | "EAST_WEST" | "NONE";
+export type MapGeometry = "STANDARD" | "TALL" | "WIDE" | "SQUARE";
+
+export function resolveMapDimensions(sizeId: MapSizeId, geometry: MapGeometry) {
+  const size = MAP_SIZES.find((item) => item.id === sizeId) ?? MAP_SIZES[3];
+  if (geometry === "STANDARD") return { width: size.width, height: size.height };
+  const area = size.width * size.height;
+  if (geometry === "SQUARE") {
+    const side = Math.max(16, Math.round(Math.sqrt(area)));
+    return { width: side, height: side };
+  }
+  const ratio = geometry === "TALL" ? 0.4 : 4;
+  const width = Math.max(16, Math.round(Math.sqrt(area * ratio)));
+  const height = Math.max(16, Math.round(area / width));
+  return { width, height };
+}
 
 export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: string }> = [
   { id: "GRASSLAND", label: "Grassland" },
@@ -51,12 +66,14 @@ export type MapGenerationOptions = {
   size: MapSizeId;
   seed: string;
   players: number;
+  cityStates: number;
   balance: MultiplayerBalance;
   strategicBalance: boolean;
   style: GenerationStyle;
   startQuality: StartQuality;
   modifier: WorldModifier;
   wrapType: WrapType;
+  geometry: MapGeometry;
   waterPercent: number;
   mountainPercent: number;
   dominantTerrains: DominantTerrain[];
@@ -70,12 +87,14 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   size: "STANDARD",
   seed: "excogitare",
   players: 8,
+  cityStates: 16,
   balance: "STANDARD",
   strategicBalance: false,
   style: "FANTASTICAL",
   startQuality: "BALANCED",
   modifier: "NONE",
   wrapType: "PRESET",
+  geometry: "STANDARD",
   waterPercent: 55,
   mountainPercent: 16,
   dominantTerrains: [],
@@ -103,10 +122,12 @@ export function randomGenerationOptions(random: () => number = Math.random): Map
     size,
     modifier,
     wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
+    geometry: randomItem(["STANDARD", "TALL", "WIDE", "SQUARE"] as const, random),
     waterPercent: Math.floor(random() * 91),
     mountainPercent: minimumMountains + Math.floor(random() * (39 - minimumMountains)),
     dominantTerrains,
     players: 2 + Math.floor(random() * 21),
+    cityStates: Math.floor(random() * 42),
     balance: randomItem(["STANDARD", "TOURNAMENT", "TEAMS"] as const, random),
     startQuality: randomItem(["STANDARD", "BALANCED", "LEGENDARY"] as const, random),
     climate: randomItem(["COOL", "TEMPERATE", "HOT"] as const, random),
@@ -746,6 +767,69 @@ function placeStartLocations(
   }));
 }
 
+function placeCityStateLocations(
+  tiles: Civ5Tile[],
+  width: number,
+  height: number,
+  count: number,
+  playerCount: number,
+  wraps: boolean,
+  majorStarts: Civ5StartLocation[],
+  random: () => number,
+) {
+  if (count <= 0) return [];
+  const occupied = new Set(majorStarts.map((start) => `${start.x},${start.y}`));
+  const candidates: Array<[number, number]> = [];
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (occupied.has(`${x},${y}`)) continue;
+      const tile = tiles[y * width + x];
+      if (tile.terrain < 2 || tile.elevation === 2) continue;
+      const workable = neighbors(x, y, width, height, wraps).filter(([nx, ny]) => {
+        const neighbor = tiles[ny * width + nx];
+        return neighbor.terrain >= 2 && neighbor.elevation < 2;
+      }).length;
+      if (workable >= 3) candidates.push([x, y]);
+    }
+  }
+
+  const anchors: Array<[number, number]> = majorStarts.map((start) => [start.x, start.y]);
+  const selected: Array<[number, number]> = [];
+  while (selected.length < count && selected.length < candidates.length) {
+    let best: [number, number] | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const candidate of candidates) {
+      if (selected.some(([x, y]) => x === candidate[0] && y === candidate[1])) continue;
+      const referencePoints = [...anchors, ...selected];
+      const nearest = referencePoints.length
+        ? Math.min(...referencePoints.map((point) => hexDistance(candidate, point, width, wraps)))
+        : width + height;
+      const localYield = neighbors(candidate[0], candidate[1], width, height, wraps).reduce((score, [x, y]) => {
+        const tile = tiles[y * width + x];
+        return score + (tile.terrain >= 2 && tile.elevation < 2 ? 1 : 0) + (tile.resource !== 255 ? 0.5 : 0);
+      }, 0);
+      const score = nearest * 3 + localYield + random() * 0.05;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    if (!best) break;
+    selected.push(best);
+  }
+
+  return selected.map<Civ5StartLocation>(([x, y], index) => ({
+    x,
+    y,
+    player: playerCount + index,
+    civilization: "",
+    leader: "",
+    team: 255,
+    playable: false,
+    cityState: true,
+  }));
+}
+
 function normalizeStarts(
   tiles: Civ5Tile[],
   starts: Civ5StartLocation[],
@@ -804,10 +888,13 @@ export function balanceMapStarts(map: Civ5Map, options: MapGenerationOptions) {
   const tiles = map.tiles.map((tile) => ({ ...tile }));
   const random = randomFactory(seedHash(`${resolved.seed}:starts:${map.width}x${map.height}`));
   const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
-  const startLocations = placeStartLocations(tiles, map.width, map.height, playerCount, map.wraps, resolved.balance, random);
+  const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
+  const majorStarts = placeStartLocations(tiles, map.width, map.height, playerCount, map.wraps, resolved.balance, random);
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
-    normalizeStarts(tiles, startLocations, map.width, map.height, map.wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
+    normalizeStarts(tiles, majorStarts, map.width, map.height, map.wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
+  const cityStates = placeCityStateLocations(tiles, map.width, map.height, cityStateCount, playerCount, map.wraps, majorStarts, random);
+  const startLocations = [...majorStarts, ...cityStates];
   return { ...map, tiles, players: playerCount, startLocations };
 }
 
@@ -815,9 +902,9 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   const resolved = { ...DEFAULT_GENERATION_OPTIONS, ...options };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
   const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
-  const width = size.width;
-  const height = size.height;
-  const seed = seedHash(`${resolved.seed}:${resolved.preset}:${resolved.size}:${resolved.style}:${resolved.modifier}`);
+  const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
+  const geometrySeed = resolved.geometry === "STANDARD" ? "" : `:${resolved.geometry}`;
+  const seed = seedHash(`${resolved.seed}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}`);
   const random = randomFactory(seed);
   const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
   const wraps = resolved.wrapType === "PRESET" ? presetWraps : resolved.wrapType === "EAST_WEST";
@@ -994,10 +1081,13 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   }
 
   const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
-  const startLocations = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, random);
+  const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
+  const majorStarts = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, random);
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
-    normalizeStarts(tiles, startLocations, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
+    normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
+  const cityStates = placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random);
+  const startLocations = [...majorStarts, ...cityStates];
   const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random);
   for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
   const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata } from "../lib/civ5-map.ts";
-import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
 
 const encoder = new TextEncoder();
@@ -214,7 +214,7 @@ test("exports tile edits while preserving imported scenario starts", () => {
 });
 
 test("seeded generation is deterministic and uses standard map sizes", () => {
-  const options = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, seed: "same-world" };
+  const options = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, cityStates: 6, seed: "same-world" };
   const first = generateMap(options);
   const second = generateMap(options);
 
@@ -222,8 +222,26 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.equal(first.height, 24);
   assert.deepEqual(first.tiles, second.tiles);
   assert.deepEqual(first.startLocations, second.startLocations);
-  assert.equal(first.startLocations.length, 4);
-  assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 4);
+  assert.equal(first.startLocations.filter((start) => !start.cityState).length, 4);
+  assert.equal(first.startLocations.filter((start) => start.cityState).length, 6);
+  assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 10);
+});
+
+test("geometry choices preserve the size budget while changing the aspect ratio", () => {
+  assert.deepEqual(resolveMapDimensions("STANDARD", "STANDARD"), { width: 80, height: 52 });
+  const tall = resolveMapDimensions("STANDARD", "TALL");
+  const wide = resolveMapDimensions("STANDARD", "WIDE");
+  const square = resolveMapDimensions("STANDARD", "SQUARE");
+  assert.ok(tall.height / tall.width > 2);
+  assert.ok(wide.width / wide.height > 3);
+  assert.equal(square.width, square.height);
+  for (const dimensions of [tall, wide, square]) {
+    assert.ok(Math.abs(dimensions.width * dimensions.height - 80 * 52) / (80 * 52) < 0.03);
+  }
+
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", geometry: "TALL", seed: "vertical-world" });
+  assert.equal(generated.width, resolveMapDimensions("DUEL", "TALL").width);
+  assert.equal(generated.height, resolveMapDimensions("DUEL", "TALL").height);
 });
 
 test("Randomise produces complete valid settings and wrap choices control export geography", () => {
@@ -233,17 +251,21 @@ test("Randomise produces complete valid settings and wrap choices control export
     return state / 0x100000000;
   };
   const wrapTypes = new Set<string>();
+  const geometries = new Set<string>();
   for (let index = 0; index < 60; index += 1) {
     const options = randomGenerationOptions(random);
     wrapTypes.add(options.wrapType);
+    geometries.add(options.geometry);
     assert.ok(options.waterPercent >= 0 && options.waterPercent <= 90);
     assert.ok(options.mountainPercent >= 0 && options.mountainPercent <= 38);
     assert.ok(options.players >= 2 && options.players <= 22);
+    assert.ok(options.cityStates >= 0 && options.cityStates <= 41);
     assert.ok(options.seed.length >= 10);
     if (options.modifier === "STRATEGIC_DEPTH") assert.ok(options.mountainPercent >= 22);
     if (options.modifier === "DOOMSDAY" || options.style === "BRUTAL") assert.ok(options.mountainPercent >= 18);
   }
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
+  assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "SQUARE"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });
@@ -310,7 +332,7 @@ test("Strategic Depth enforces mountain systems and Legendary Start adds local r
     }
     return [...indices].filter((index) => map.tiles[index].resource !== 255).length;
   };
-  for (const start of map.startLocations) assert.ok(nearby(start.x, start.y) >= 5);
+  for (const start of map.startLocations.filter((item) => !item.cityState)) assert.ok(nearby(start.x, start.y) >= 5);
 });
 
 test("zero-water worlds remain traversable through mountain passes", () => {
@@ -425,8 +447,23 @@ test("Brutal generation is scarce, mountainous, competitive, and still accessibl
   const resourceShare = brutal.tiles.filter((tile) => tile.resource !== 255).length / brutal.tiles.length;
   assert.ok(mountainShare >= 0.17);
   assert.ok(resourceShare < 0.075);
-  assert.equal(brutal.startLocations.length, DEFAULT_GENERATION_OPTIONS.players);
+  assert.equal(brutal.startLocations.filter((start) => !start.cityState).length, DEFAULT_GENERATION_OPTIONS.players);
   assertMountainPassability(brutal);
+});
+
+test("generated city states are distinct non-playable starts", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 4, cityStates: 7, seed: "minor-powers" });
+  const majors = generated.startLocations.filter((start) => !start.cityState);
+  const cityStates = generated.startLocations.filter((start) => start.cityState);
+  assert.equal(majors.length, 4);
+  assert.equal(cityStates.length, 7);
+  assert.equal(new Set(generated.startLocations.map((start) => `${start.x},${start.y}`)).size, 11);
+  for (const [index, start] of cityStates.entries()) {
+    assert.equal(start.player, 4 + index);
+    assert.equal(start.playable, false);
+    assert.equal(start.team, 255);
+    assert.equal(generated.tiles[start.y * generated.width + start.x].elevation < 2, true);
+  }
 });
 
 test("generated maps serialize to a readable Civ5Map geography file", () => {

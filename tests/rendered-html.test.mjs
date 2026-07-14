@@ -55,6 +55,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Climate and terrain/);
   assert.match(source, /Players and starts/);
   assert.match(source, /<span>Wrap type<\/span>/);
+  assert.match(source, /<span>Geometry<\/span>/);
+  assert.match(source, /<span>City states<\/span>/);
+  assert.match(source, /projection-button/);
+  assert.match(source, /unprojectPoint/);
   assert.doesNotMatch(source, /canvas\.width = Math\.round\(size\.width \* pixelRatio\)/);
   assert.doesNotMatch(source, /canvas\.height = Math\.round\(size\.height \* pixelRatio\)/);
 });

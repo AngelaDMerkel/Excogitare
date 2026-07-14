@@ -393,6 +393,8 @@ button { color: inherit; }
 .map-toolbar span { width: 47px; text-align: center; color: #819792; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
 .map-toolbar i { height: 19px; width: 1px; margin: 0 3px; background: var(--line); }
 .map-toolbar .fit-button { width: 34px; font-size: 9px; text-transform: uppercase; }
+.map-toolbar .projection-button { width: 34px; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.map-toolbar .projection-button.is-active { background: rgba(240, 206, 121, .14); color: #f0ce79; }
 
 .file-status {
   position: absolute;

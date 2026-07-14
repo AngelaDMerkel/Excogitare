@@ -27,6 +27,7 @@ import {
   MAP_PRESETS,
   MAP_SIZES,
   randomGenerationOptions,
+  resolveMapDimensions,
   WORLD_MODIFIERS,
   type MapGenerationOptions,
 } from "@/lib/map-generator";
@@ -47,11 +48,13 @@ const APP_VERSION = "0.1.2";
 
 type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
-type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean };
+type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer };
 type WorkspaceMode = "VIEW" | "CREATE" | "SCRIPT";
 type Brush = { terrain: number | null; elevation: number | null; feature: number | null; resource: number | null };
+type Projection = "FLAT" | "ISOMETRIC";
+type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 
 const TERRAIN_COLORS: Record<string, string> = {
   OCEAN: "#183d50",
@@ -86,6 +89,37 @@ function mapBounds(map: Civ5Map) {
   return {
     width: HEX_WIDTH * (map.width + 0.5) + MAP_MARGIN * 2,
     height: HEX_RADIUS * 1.5 * (map.height - 1) + HEX_RADIUS * 2 + MAP_MARGIN * 2,
+  };
+}
+
+function projectionTransform(map: Civ5Map, projection: Projection): ProjectionTransform {
+  const bounds = mapBounds(map);
+  if (projection === "FLAT") return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0, ...bounds };
+  const base = { a: 0.86, b: 0.25, c: -0.52, d: 0.38 };
+  const corners = [
+    { x: 0, y: 0 },
+    { x: bounds.width, y: 0 },
+    { x: 0, y: bounds.height },
+    { x: bounds.width, y: bounds.height },
+  ].map(({ x, y }) => ({ x: base.a * x + base.c * y, y: base.b * x + base.d * y }));
+  const minX = Math.min(...corners.map((point) => point.x));
+  const maxX = Math.max(...corners.map((point) => point.x));
+  const minY = Math.min(...corners.map((point) => point.y));
+  const maxY = Math.max(...corners.map((point) => point.y));
+  return { ...base, e: -minX, f: -minY, width: maxX - minX, height: maxY - minY };
+}
+
+function projectPoint(x: number, y: number, transform: ProjectionTransform) {
+  return { x: transform.a * x + transform.c * y + transform.e, y: transform.b * x + transform.d * y + transform.f };
+}
+
+function unprojectPoint(x: number, y: number, transform: ProjectionTransform) {
+  const determinant = transform.a * transform.d - transform.b * transform.c;
+  const shiftedX = x - transform.e;
+  const shiftedY = y - transform.f;
+  return {
+    x: (transform.d * shiftedX - transform.c * shiftedY) / determinant,
+    y: (-transform.b * shiftedX + transform.a * shiftedY) / determinant,
   };
 }
 
@@ -190,7 +224,7 @@ function drawRiver(context: CanvasRenderingContext2D, river: number, x: number, 
   context.restore();
 }
 
-function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, view: View) {
+function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, view: View, showMajors: boolean, showCityStates: boolean) {
   const scale = Math.max(view.zoom, 0.35);
   const radius = 9 / scale;
   context.save();
@@ -198,6 +232,7 @@ function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, vie
   context.textBaseline = "middle";
 
   for (const start of map.startLocations) {
+    if (start.cityState ? !showCityStates : !showMajors) continue;
     const displayRow = map.height - 1 - start.y;
     const center = tileCenter(start.x, displayRow, start.y);
     context.beginPath();
@@ -209,7 +244,7 @@ function drawStartLocations(context: CanvasRenderingContext2D, map: Civ5Map, vie
     context.stroke();
     context.fillStyle = "#173036";
     context.font = `700 ${10 / scale}px "Geist Mono", monospace`;
-    context.fillText(String(start.player + 1), center.x, center.y + 0.5 / scale);
+    context.fillText(start.cityState ? "CS" : String(start.player + 1), center.x, center.y + 0.5 / scale);
   }
 
   context.restore();
@@ -223,6 +258,7 @@ function drawMap(
   view: View,
   size: Size,
   pixelRatio: number,
+  projection: ProjectionTransform,
 ) {
   let paintedTiles = 0;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -232,14 +268,16 @@ function drawMap(
   context.save();
   context.translate(view.x, view.y);
   context.scale(view.zoom, view.zoom);
+  context.transform(projection.a, projection.b, projection.c, projection.d, projection.e, projection.f);
 
   for (let row = 0; row < map.height; row += 1) {
     for (let col = 0; col < map.width; col += 1) {
       const tile = tileAtDisplayPosition(map, col, row);
       if (!tile) continue;
       const center = tileCenter(col, row, map.height - 1 - row);
-      const screenX = view.x + center.x * view.zoom;
-      const screenY = view.y + center.y * view.zoom;
+      const projected = projectPoint(center.x, center.y, projection);
+      const screenX = view.x + projected.x * view.zoom;
+      const screenY = view.y + projected.y * view.zoom;
       if (screenX < -35 || screenY < -35 || screenX > size.width + 35 || screenY > size.height + 35) continue;
 
       const base = terrainColor(map.terrains[tile.terrain]);
@@ -290,7 +328,7 @@ function drawMap(
       }
     }
   }
-  if (layers.starts && map.startLocations.length) drawStartLocations(context, map, view);
+  if ((layers.starts || layers.cityStates) && map.startLocations.length) drawStartLocations(context, map, view, layers.starts, layers.cityStates);
   context.restore();
   return paintedTiles;
 }
@@ -330,7 +368,8 @@ export function Civ5MapViewer() {
   const [luaFileName, setLuaFileName] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
-  const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true });
+  const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
+  const [projection, setProjection] = useState<Projection>("FLAT");
   const [hovered, setHovered] = useState<HoveredTile>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [message, setMessage] = useState("Demo map loaded");
@@ -383,7 +422,8 @@ export function Civ5MapViewer() {
     setFutureMaps((future) => future.slice(1));
   };
 
-  const bounds = useMemo(() => mapBounds(map), [map]);
+  const mapProjection = useMemo(() => projectionTransform(map, projection), [map, projection]);
+  const bounds = useMemo(() => ({ width: mapProjection.width, height: mapProjection.height }), [mapProjection]);
   const fitMap = useCallback((targetSize: Size, targetBounds = bounds) => {
     const zoom = Math.max(0.16, Math.min(1.7, Math.min((targetSize.width - 44) / targetBounds.width, (targetSize.height - 44) / targetBounds.height)));
     setView({ zoom, x: (targetSize.width - targetBounds.width * zoom) / 2, y: (targetSize.height - targetBounds.height * zoom) / 2 });
@@ -431,14 +471,14 @@ export function Civ5MapViewer() {
     // Complete the next frame away from the visible canvas. If a transient
     // layout state culls every tile, retain the last valid map frame instead
     // of replacing it with the blue canvas background.
-    const paintedTiles = drawMap(renderContext, map, layers, hovered, view, size, pixelRatio);
+    const paintedTiles = drawMap(renderContext, map, layers, hovered, view, size, pixelRatio, mapProjection);
     if (map.tiles.length && paintedTiles === 0) return;
     context.save();
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.globalCompositeOperation = "copy";
     context.drawImage(renderCanvas, 0, 0);
     context.restore();
-  }, [map, layers, hovered, view, size]);
+  }, [map, layers, hovered, view, size, mapProjection]);
 
   const terrainBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
@@ -463,10 +503,15 @@ export function Civ5MapViewer() {
     const sizeLabel = MAP_SIZES.find((item) => item.id === generationOptions.size)?.label ?? generationOptions.size;
     const presetLabel = MAP_PRESETS.find((item) => item.id === generationOptions.preset)?.label ?? generationOptions.preset;
     const styleLabel = generationOptions.style.toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
-    return `${styleLabel} · ${presetLabel} · ${sizeLabel} · ${generationOptions.players} players`;
+    const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
+    return `${styleLabel} · ${presetLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
   }, [generationOptions]);
 
-  const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled && (key !== "starts" || map.startLocations.length > 0)).length;
+  const majorStartCount = map.startLocations.filter((start) => !start.cityState).length;
+  const cityStateCount = map.startLocations.filter((start) => start.cityState).length;
+  const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled
+    && (key !== "starts" || majorStartCount > 0)
+    && (key !== "cityStates" || cityStateCount > 0)).length;
 
   const loadFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".civ5map")) {
@@ -512,7 +557,12 @@ export function Civ5MapViewer() {
       return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    setHovered(closestTile(map, (event.clientX - rect.left - view.x) / view.zoom, (event.clientY - rect.top - view.y) / view.zoom));
+    const projectedPoint = {
+      x: (event.clientX - rect.left - view.x) / view.zoom,
+      y: (event.clientY - rect.top - view.y) / view.zoom,
+    };
+    const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
+    setHovered(closestTile(map, worldPoint.x, worldPoint.y));
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -521,7 +571,12 @@ export function Civ5MapViewer() {
     event.currentTarget.releasePointerCapture(event.pointerId);
     if (mode !== "CREATE" || createView !== "EDIT" || drag?.moved) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const target = closestTile(map, (event.clientX - rect.left - view.x) / view.zoom, (event.clientY - rect.top - view.y) / view.zoom);
+    const projectedPoint = {
+      x: (event.clientX - rect.left - view.x) / view.zoom,
+      y: (event.clientY - rect.top - view.y) / view.zoom,
+    };
+    const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
+    const target = closestTile(map, worldPoint.x, worldPoint.y);
     if (!target) return;
     const sourceY = map.height - 1 - target.row;
     if (editTool === "START") {
@@ -844,8 +899,8 @@ export function Civ5MapViewer() {
                     <span>Map size</span>
                     <select value={generationOptions.size} onChange={(event) => {
                       const nextSize = event.target.value as MapGenerationOptions["size"];
-                      const recommended = MAP_SIZES.find((item) => item.id === nextSize)?.recommendedPlayers ?? generationOptions.players;
-                      setGenerationOptions((current) => ({ ...current, size: nextSize, players: recommended }));
+                      const next = MAP_SIZES.find((item) => item.id === nextSize);
+                      setGenerationOptions((current) => ({ ...current, size: nextSize, players: next?.recommendedPlayers ?? current.players, cityStates: next?.recommendedCityStates ?? current.cityStates }));
                     }}>
                       {MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}
                     </select>
@@ -859,7 +914,7 @@ export function Civ5MapViewer() {
                   <details className="creator-group">
                     <summary><span>World shape</span><small>{generationOptions.waterPercent}% water · {generationOptions.mountainPercent}% mountains</small></summary>
                     <div className="creator-group-body">
-                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge }))}>Reset world shape</button>
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, geometry: DEFAULT_GENERATION_OPTIONS.geometry, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge }))}>Reset world shape</button>
                       <label className="control-field">
                         <span>World modifier</span>
                         <select value={generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier} onChange={(event) => {
@@ -877,6 +932,16 @@ export function Civ5MapViewer() {
                           <option value="EAST_WEST">East / west</option>
                           <option value="NONE">No wrapping</option>
                         </select>
+                      </label>
+                      <label className="control-field">
+                        <span>Geometry</span>
+                        <select value={generationOptions.geometry} onChange={(event) => setGenerationOptions((current) => ({ ...current, geometry: event.target.value as MapGenerationOptions["geometry"] }))}>
+                          <option value="STANDARD">Standard proportions</option>
+                          <option value="TALL">Very tall and narrow</option>
+                          <option value="WIDE">Very thin and wide</option>
+                          <option value="SQUARE">Perfectly square</option>
+                        </select>
+                        <small>{(() => { const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry); return `${dimensions.width} × ${dimensions.height} tiles`; })()}</small>
                       </label>
                       <div className="percentage-controls">
                         <label className="control-field percentage-field"><span>Water percent <output>{generationOptions.waterPercent}%</output></span><input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} /></label>
@@ -908,11 +973,12 @@ export function Civ5MapViewer() {
                   </details>
 
                   <details className="creator-group">
-                    <summary><span>Players and starts</span><small>{generationOptions.players} players · {generationOptions.startQuality.toLowerCase()}</small></summary>
+                    <summary><span>Players and starts</span><small>{generationOptions.players} players · {generationOptions.cityStates} city states</small></summary>
                     <div className="creator-group-body">
-                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, players: MAP_SIZES.find((item) => item.id === current.size)?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, balance: DEFAULT_GENERATION_OPTIONS.balance, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }))}>Reset players</button>
-                      <div className="control-grid">
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => { const sizePreset = MAP_SIZES.find((item) => item.id === current.size); return { ...current, players: sizePreset?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, cityStates: sizePreset?.recommendedCityStates ?? DEFAULT_GENERATION_OPTIONS.cityStates, balance: DEFAULT_GENERATION_OPTIONS.balance, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }; })}>Reset players</button>
+                      <div className="control-grid three-controls">
                         <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
+                        <label className="control-field"><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Layout</span><select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}><option value="STANDARD">Equal separation</option><option value="TOURNAMENT">Tournament</option><option value="TEAMS">Paired teams</option></select></label>
                       </div>
                       <label className="control-field"><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select><small>{generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}</small></label>
@@ -989,13 +1055,23 @@ export function Civ5MapViewer() {
                   <span className="switch" aria-hidden="true" />
                 </label>
               ))}
-              <label className={`layer-row${map.startLocations.length ? "" : " is-disabled"}`}>
-                <span><strong>Start locations</strong><small>{map.startLocations.length ? `${map.startLocations.length} positions` : "Not stored in this map"}</small></span>
+              <label className={`layer-row${majorStartCount ? "" : " is-disabled"}`}>
+                <span><strong>Start locations</strong><small>{majorStartCount ? `${majorStartCount} positions` : "Not stored in this map"}</small></span>
                 <input
                   type="checkbox"
                   checked={layers.starts}
-                  disabled={!map.startLocations.length}
+                  disabled={!majorStartCount}
                   onChange={(event) => setLayers((current) => ({ ...current, starts: event.target.checked }))}
+                />
+                <span className="switch" aria-hidden="true" />
+              </label>
+              <label className={`layer-row${cityStateCount ? "" : " is-disabled"}`}>
+                <span><strong>City states</strong><small>{cityStateCount ? `${cityStateCount} positions` : "Not stored in this map"}</small></span>
+                <input
+                  type="checkbox"
+                  checked={layers.cityStates}
+                  disabled={!cityStateCount}
+                  onChange={(event) => setLayers((current) => ({ ...current, cityStates: event.target.checked }))}
                 />
                 <span className="switch" aria-hidden="true" />
               </label>
@@ -1042,6 +1118,8 @@ export function Civ5MapViewer() {
             <button type="button" onClick={() => zoomAt(0.83, size.width / 2, size.height / 2)} aria-label="Zoom out">−</button>
             <i aria-hidden="true" />
             <button className="fit-button" type="button" onClick={() => fitMap(size)}>Fit</button>
+            <i aria-hidden="true" />
+            <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" aria-pressed={projection === "ISOMETRIC"} title={projection === "ISOMETRIC" ? "Return to 2D view" : "Switch to isometric view"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO"}</button>
           </div>
 
           <div className="file-status" role="status">{message}</div>
