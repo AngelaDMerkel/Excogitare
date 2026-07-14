@@ -14,10 +14,27 @@ import {
 import {
   createDemoMap,
   parseCiv5Map,
-  updateCiv5MapMetadata,
+  serializeCiv5Map,
+  updateCiv5Map,
   type Civ5Map,
   type Civ5Tile,
 } from "@/lib/civ5-map";
+import {
+  DEFAULT_GENERATION_OPTIONS,
+  generateMap,
+  MAP_PRESETS,
+  MAP_SIZES,
+  type MapGenerationOptions,
+} from "@/lib/map-generator";
+import {
+  createLuaMapScript,
+  createModInfo,
+  inspectLuaMapScript,
+  mapExportBaseName,
+  mapFromLuaScript,
+  type LuaCompatibilityReport,
+} from "@/lib/map-script";
+import { runLuaMapScript } from "@/lib/lua-runtime";
 
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
@@ -29,6 +46,8 @@ type Size = { width: number; height: number };
 type Layers = { grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer };
+type WorkspaceMode = "VIEW" | "CREATE" | "SCRIPT";
+type Brush = { terrain: number | null; elevation: number | null; feature: number | null; resource: number | null };
 
 const TERRAIN_COLORS: Record<string, string> = {
   OCEAN: "#183d50",
@@ -291,7 +310,15 @@ function closestTile(map: Civ5Map, worldX: number, worldY: number): HoveredTile 
 
 export function Civ5MapViewer() {
   const [map, setMap] = useState<Civ5Map>(() => createDemoMap());
+  const [pastMaps, setPastMaps] = useState<Civ5Map[]>([]);
+  const [futureMaps, setFutureMaps] = useState<Civ5Map[]>([]);
   const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
+  const [mode, setMode] = useState<WorkspaceMode>("VIEW");
+  const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
+  const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
+  const [editTool, setEditTool] = useState<"TILE" | "START">("TILE");
+  const [luaReport, setLuaReport] = useState<LuaCompatibilityReport | null>(null);
+  const [luaFileName, setLuaFileName] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const [layers, setLayers] = useState<Layers>({ grid: true, features: true, resources: true, elevation: true, starts: true });
@@ -305,7 +332,46 @@ export function Civ5MapViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null);
+  const luaInputRef = useRef<HTMLInputElement>(null);
+  const mapRef = useRef(map);
+  const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
+
+  const replaceMap = useCallback((next: Civ5Map, source: ImportedMapSource | null = null) => {
+    mapRef.current = next;
+    setMap(next);
+    setPastMaps([]);
+    setFutureMaps([]);
+    setSourceFile(source);
+    setHovered(null);
+  }, []);
+
+  const commitMap = useCallback((next: Civ5Map | ((current: Civ5Map) => Civ5Map)) => {
+    const current = mapRef.current;
+    const resolved = typeof next === "function" ? next(current) : next;
+    if (resolved === current) return;
+    mapRef.current = resolved;
+    setPastMaps((past) => [...past.slice(-49), current]);
+    setFutureMaps([]);
+    setMap(resolved);
+  }, []);
+
+  const undo = () => {
+    const previous = pastMaps.at(-1);
+    if (!previous) return;
+    setFutureMaps((future) => [mapRef.current, ...future].slice(0, 50));
+    mapRef.current = previous;
+    setMap(previous);
+    setPastMaps((past) => past.slice(0, -1));
+  };
+
+  const redo = () => {
+    const next = futureMaps[0];
+    if (!next) return;
+    setPastMaps((past) => [...past.slice(-49), mapRef.current]);
+    mapRef.current = next;
+    setMap(next);
+    setFutureMaps((future) => future.slice(1));
+  };
 
   const bounds = useMemo(() => mapBounds(map), [map]);
   const fitMap = useCallback((targetSize: Size, targetBounds = bounds) => {
@@ -361,16 +427,14 @@ export function Civ5MapViewer() {
       setMessage("Reading map…");
       const buffer = await file.arrayBuffer();
       const parsed = parseCiv5Map(buffer, file.name);
-      setMap(parsed);
-      setSourceFile({ fileName: file.name, buffer });
-      setHovered(null);
+      replaceMap(parsed, { fileName: file.name, buffer });
       setShowEditPrompt(false);
       setIsEditingMetadata(false);
       setMessage(`${file.name} · rendered locally`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "That map could not be read.");
     }
-  }, []);
+  }, [replaceMap]);
 
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -387,12 +451,13 @@ export function Civ5MapViewer() {
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
+    dragRef.current = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y, moved: false };
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     if (drag) {
+      if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 4) drag.moved = true;
       setView((current) => ({ ...current, x: drag.viewX + event.clientX - drag.x, y: drag.viewY + event.clientY - drag.y }));
       return;
     }
@@ -401,8 +466,49 @@ export function Civ5MapViewer() {
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
+    if (mode !== "CREATE" || drag?.moved) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = closestTile(map, (event.clientX - rect.left - view.x) / view.zoom, (event.clientY - rect.top - view.y) / view.zoom);
+    if (!target) return;
+    const sourceY = map.height - 1 - target.row;
+    if (editTool === "START") {
+      commitMap((current) => {
+        const existing = current.startLocations.findIndex((start) => start.x === target.col && start.y === sourceY);
+        const startLocations = [...current.startLocations];
+        if (existing >= 0) startLocations.splice(existing, 1);
+        else startLocations.push({
+          x: target.col,
+          y: sourceY,
+          player: startLocations.length,
+          civilization: "",
+          leader: "",
+          team: generationOptions.balance === "TEAMS" ? Math.floor(startLocations.length / 2) : startLocations.length,
+          playable: true,
+          cityState: false,
+        });
+        return { ...current, players: startLocations.length || current.players, startLocations };
+      });
+      setMessage("Start position updated · undo available");
+      return;
+    }
+    commitMap((current) => {
+      const index = sourceY * current.width + target.col;
+      const tiles = [...current.tiles];
+      const tile = { ...tiles[index] };
+      if (brush.terrain !== null) tile.terrain = brush.terrain;
+      if (brush.elevation !== null) tile.elevation = brush.elevation;
+      if (brush.feature !== null) tile.feature = brush.feature;
+      if (brush.resource !== null) {
+        tile.resource = brush.resource;
+        tile.resourceAmount = brush.resource === 255 ? 0 : Math.max(1, tile.resourceAmount);
+      }
+      tiles[index] = tile;
+      return { ...current, tiles };
+    });
+    setMessage(`Tile ${target.col}, ${sourceY} edited · undo available`);
   };
 
   const zoomAt = (factor: number, screenX: number, screenY: number) => {
@@ -418,6 +524,17 @@ export function Civ5MapViewer() {
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     zoomAt(event.deltaY < 0 ? 1.12 : 0.89, event.clientX - rect.left, event.clientY - rect.top);
+  };
+
+  const download = (data: BlobPart, fileName: string, type = "application/octet-stream") => {
+    const blobUrl = URL.createObjectURL(new Blob([data], { type }));
+    const link = document.createElement("a");
+    link.download = fileName;
+    link.href = blobUrl;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
   };
 
   const exportView = () => {
@@ -450,28 +567,81 @@ export function Civ5MapViewer() {
   const saveMetadata = () => {
     const name = draftName.trim();
     if (!name) return;
-    setMap((current) => ({ ...current, name, description: draftDescription }));
+    commitMap((current) => ({ ...current, name, description: draftDescription }));
     setIsEditingMetadata(false);
     setMessage(sourceFile ? "Map details edited · ready to export" : "Demo map details edited");
   };
 
   const exportCiv5Map = () => {
-    if (!sourceFile || isEditingMetadata) return;
+    if (isEditingMetadata) return;
     try {
-      const exported = updateCiv5MapMetadata(sourceFile.buffer, map.name, map.description);
-      const blobUrl = URL.createObjectURL(new Blob([exported], { type: "application/octet-stream" }));
-      const baseName = sourceFile.fileName.replace(/\.civ5map$/i, "");
-      const downloadName = `${baseName}-edited.Civ5Map`;
-      const link = document.createElement("a");
-      link.download = downloadName;
-      link.href = blobUrl;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+      const exported = sourceFile ? updateCiv5Map(sourceFile.buffer, map) : serializeCiv5Map(map);
+      const baseName = sourceFile?.fileName.replace(/\.civ5map$/i, "") ?? mapExportBaseName(map);
+      const downloadName = `${baseName}${sourceFile ? "-edited" : ""}.Civ5Map`;
+      download(exported, downloadName);
       setMessage(`${downloadName} · exported`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The edited map could not be exported.");
+    }
+  };
+
+  const generateNewMap = () => {
+    const generated = generateMap(generationOptions);
+    replaceMap(generated);
+    setMode("CREATE");
+    setMessage(`${generated.name} · generated from seed ${generationOptions.seed}`);
+  };
+
+  const randomizeSeed = () => {
+    const seed = Math.random().toString(36).slice(2, 10);
+    setGenerationOptions((current) => ({ ...current, seed }));
+  };
+
+  const exportLua = () => {
+    const baseName = mapExportBaseName(map);
+    download(createLuaMapScript(map), `${baseName}.lua`, "text/x-lua;charset=utf-8");
+    setMessage(`${baseName}.lua · exported`);
+  };
+
+  const exportModInfo = () => {
+    const baseName = mapExportBaseName(map);
+    download(createModInfo(map, `${baseName}.lua`), `${baseName}.modinfo`, "application/xml;charset=utf-8");
+    setMessage(`${baseName}.modinfo · exported`);
+  };
+
+  const onLuaFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const source = await file.text();
+    const report = inspectLuaMapScript(source);
+    setLuaFileName(file.name);
+    setLuaReport(report);
+    if (report.compatible) {
+      try {
+        const result = mapFromLuaScript(source);
+        replaceMap(result.map);
+        setGenerationOptions(result.report.options ?? generationOptions);
+        setMessage(`${file.name} · safely regenerated from embedded settings`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "The Lua map could not be generated.");
+      }
+    } else {
+      setMessage(`${file.name} · running in the isolated Lua preview…`);
+      try {
+        const result = await runLuaMapScript(source, file.name, generationOptions);
+        replaceMap(result.map);
+        setLuaReport({
+          compatible: true,
+          title: "Generated with the experimental Civ V runtime",
+          details: [...report.details, "Executed in an isolated worker with an 8 second function limit", `${result.logs.length} script log lines captured`],
+        });
+        setMessage(`${file.name} · Lua preview generated`);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "The Lua script could not be executed.";
+        setLuaReport({ ...report, details: [...report.details, detail] });
+        setMessage(`${file.name} · ${detail}`);
+      }
     }
   };
 
@@ -485,19 +655,33 @@ export function Civ5MapViewer() {
             <h1>Excogitare</h1>
           </div>
         </div>
+        <nav className="mode-tabs" aria-label="Workspace mode">
+          {(["VIEW", "CREATE", "SCRIPT"] as const).map((item) => (
+            <button key={item} type="button" className={mode === item ? "is-active" : ""} onClick={() => setMode(item)}>
+              {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : "Lua"}
+            </button>
+          ))}
+        </nav>
         <div className="topbar-actions">
+          <div className="history-actions" aria-label="Edit history">
+            <button type="button" onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
+            <button type="button" onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
+          </div>
           <button className="button button-secondary button-export-view" type="button" onClick={exportView}>Export view</button>
+          {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" onClick={exportLua}>Export Lua</button>}
+          {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" onClick={exportModInfo}>Export .modinfo</button>}
           <button
             className="button button-secondary button-export-map"
             type="button"
             onClick={exportCiv5Map}
-            disabled={!sourceFile || isEditingMetadata}
-            title={!sourceFile ? "Open a Civ5Map file before exporting" : isEditingMetadata ? "Save your edits before exporting" : "Export an edited Civ5Map file"}
+            disabled={isEditingMetadata}
+            title={isEditingMetadata ? "Save your edits before exporting" : "Export the current Civ5Map file"}
           >
             Export Civ5Map
           </button>
           <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()}>Open map</button>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept=".civ5map,.Civ5Map,application/octet-stream" onChange={onFileChange} />
+          <input ref={luaInputRef} className="visually-hidden" type="file" accept=".lua,text/x-lua,text/plain" onChange={onLuaFileChange} />
         </div>
       </header>
 
@@ -511,13 +695,16 @@ export function Civ5MapViewer() {
               </label>
             ) : (
               <div>
-                <p className="eyebrow">{map.source === "demo" ? "Sample map" : "Open map"}</p>
+                <p className="eyebrow">{map.source === "demo" ? "Sample map" : map.source === "file" ? "Open map" : map.source === "script" ? "Lua map" : "Generated map"}</p>
                 <button className="editable-map-name" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
                   <h2>{map.name}</h2>
                 </button>
               </div>
             )}
-            <span className="version-badge" aria-label={`Excogitare version ${APP_VERSION}`}>{`v${APP_VERSION}`}</span>
+            <div className="map-badges">
+              {pastMaps.length > 0 && <span className="dirty-badge">Edited</span>}
+              <span className="version-badge" aria-label={`Excogitare version ${APP_VERSION}`}>{`v${APP_VERSION}`}</span>
+            </div>
           </div>
           {isEditingMetadata ? (
             <div className="metadata-editor">
@@ -544,6 +731,101 @@ export function Civ5MapViewer() {
               <div>
                 <button type="button" onClick={() => setShowEditPrompt(false)}>Not now</button>
                 <button className="confirm-edit" type="button" onClick={enterEditMode}>Edit details</button>
+              </div>
+            </div>
+          )}
+
+          {mode === "CREATE" && (
+            <div className="creator-panel">
+              <div className="section-title"><h3>Create Mode</h3><span>seeded</span></div>
+              <label className="control-field">
+                <span>Map type</span>
+                <select value={generationOptions.preset} onChange={(event) => setGenerationOptions((current) => ({ ...current, preset: event.target.value as MapGenerationOptions["preset"] }))}>
+                  {MAP_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                </select>
+                <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
+              </label>
+              <div className="control-grid">
+                <label className="control-field">
+                  <span>Map size</span>
+                  <select
+                    value={generationOptions.size}
+                    onChange={(event) => {
+                      const nextSize = event.target.value as MapGenerationOptions["size"];
+                      const recommended = MAP_SIZES.find((item) => item.id === nextSize)?.recommendedPlayers ?? generationOptions.players;
+                      setGenerationOptions((current) => ({ ...current, size: nextSize, players: recommended }));
+                    }}
+                  >
+                    {MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}
+                  </select>
+                </label>
+                <label className="control-field">
+                  <span>Players</span>
+                  <input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} />
+                </label>
+              </div>
+              <label className="control-field">
+                <span>Multiplayer layout</span>
+                <select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}>
+                  <option value="STANDARD">Equal separation</option>
+                  <option value="TOURNAMENT">Tournament normalized</option>
+                  <option value="TEAMS">Paired teams</option>
+                </select>
+              </label>
+              <div className="control-grid three-controls">
+                <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
+                <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
+                <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
+              </div>
+              <label className="balance-check">
+                <input type="checkbox" checked={generationOptions.strategicBalance} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicBalance: event.target.checked }))} />
+                <span><strong>Strategic balance</strong><small>Food, iron, and horses near every start</small></span>
+              </label>
+              <div className="seed-row">
+                <label className="control-field"><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
+                <button type="button" onClick={randomizeSeed}>Shuffle</button>
+              </div>
+              <button className="generate-button" type="button" onClick={generateNewMap}>Generate map</button>
+              <p className="editor-note">Start markers currently guide balance and editing. Geography-only Civ5Map exports let Civ V assign final starts; fixed scenario-start serialization is a later compatibility slice.</p>
+
+              <div className="tile-editor">
+                <div className="section-title"><h3>Edit map</h3><span>click a hex</span></div>
+                <div className="tool-tabs">
+                  <button type="button" className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
+                  <button type="button" className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
+                </div>
+                {editTool === "TILE" ? (
+                  <div className="brush-grid">
+                    <label className="control-field"><span>Terrain</span><select value={brush.terrain ?? ""} onChange={(event) => setBrush((current) => ({ ...current, terrain: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option>{map.terrains.map((name, index) => <option key={name} value={index}>{friendlyName(name, "TERRAIN_")}</option>)}</select></label>
+                    <label className="control-field"><span>Elevation</span><select value={brush.elevation ?? ""} onChange={(event) => setBrush((current) => ({ ...current, elevation: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="0">Flat</option><option value="1">Hills</option><option value="2">Mountain</option></select></label>
+                    <label className="control-field"><span>Feature</span><select value={brush.feature ?? ""} onChange={(event) => setBrush((current) => ({ ...current, feature: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.features.map((name, index) => <option key={name} value={index}>{friendlyName(name, "FEATURE_")}</option>)}</select></label>
+                    <label className="control-field"><span>Resource</span><select value={brush.resource ?? ""} onChange={(event) => setBrush((current) => ({ ...current, resource: event.target.value === "" ? null : Number(event.target.value) }))}><option value="">No change</option><option value="255">None</option>{map.resources.map((name, index) => <option key={name} value={index}>{friendlyName(name, "RESOURCE_")}</option>)}</select></label>
+                  </div>
+                ) : <p className="editor-note">Click a hex to add or remove a numbered start. Team Mode pairs consecutive players.</p>}
+              </div>
+            </div>
+          )}
+
+          {mode === "SCRIPT" && (
+            <div className="script-panel">
+              <div className="section-title"><h3>Lua workspace</h3><span>experimental</span></div>
+              <p>Round-trip Excogitare scripts or run Civ V map scripts inside an isolated, time-limited browser worker. Unsupported APIs are reported with the script.</p>
+              <div className="control-grid">
+                <label className="control-field"><span>Preview size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}</select></label>
+                <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
+              </div>
+              <label className="control-field"><span>Runtime seed</span><input value={generationOptions.seed} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
+              <button className="lua-open-button" type="button" onClick={() => luaInputRef.current?.click()}>Open and run Lua script</button>
+              {luaReport && (
+                <div className={`lua-report${luaReport.compatible ? " is-compatible" : ""}`}>
+                  <strong>{luaReport.title}</strong>
+                  <small>{luaFileName}</small>
+                  <ul>{luaReport.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
+                </div>
+              )}
+              <div className="script-export-grid">
+                <button type="button" onClick={exportLua}>Export Lua</button>
+                <button type="button" onClick={exportModInfo}>Export .modinfo</button>
               </div>
             </div>
           )}
@@ -594,12 +876,12 @@ export function Civ5MapViewer() {
             </div>
           </div>
 
-          <button className="demo-button" type="button" onClick={() => { setMap(createDemoMap()); setSourceFile(null); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>
+          <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>
         </aside>
 
         <div
           ref={canvasShellRef}
-          className={`canvas-shell${isDraggingFile ? " is-dragging" : ""}`}
+          className={`canvas-shell${isDraggingFile ? " is-dragging" : ""}${mode === "CREATE" ? " is-editing" : ""}`}
           onDragEnter={(event) => { event.preventDefault(); setIsDraggingFile(true); }}
           onDragOver={(event) => event.preventDefault()}
           onDragLeave={(event) => { if (event.currentTarget === event.target) setIsDraggingFile(false); }}
@@ -637,7 +919,7 @@ export function Civ5MapViewer() {
               </div>
             </div>
           ) : (
-            <div className="map-hint">Drag to pan <span>·</span> Scroll to zoom <span>·</span> Hover for tile data</div>
+            <div className="map-hint">{mode === "CREATE" ? "Click to edit" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
           )}
 
           {isDraggingFile && (

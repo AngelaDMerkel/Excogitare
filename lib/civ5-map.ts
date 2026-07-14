@@ -35,7 +35,8 @@ export type Civ5Map = {
   resources: string[];
   tiles: Civ5Tile[];
   startLocations: Civ5StartLocation[];
-  source: "demo" | "file";
+  source: "demo" | "file" | "generated" | "script";
+  generation?: import("./map-generator.ts").MapGenerationOptions;
 };
 
 const HEADER_SIZE = 42;
@@ -89,6 +90,90 @@ export function updateCiv5MapMetadata(buffer: ArrayBuffer, name: string, descrip
   output.set(descriptionBytes, nameOffset + nameBytes.byteLength);
   output.set(source.subarray(suffixOffset), nameOffset + nameBytes.byteLength + descriptionBytes.byteLength);
   return output.buffer;
+}
+
+function tileDataOffset(buffer: ArrayBuffer) {
+  const view = new DataView(buffer);
+  const version = view.getUint8(0) & 0x0f;
+  let offset = HEADER_SIZE;
+  for (const headerOffset of [14, 18, 22, 26, 30, 34, 38]) offset += view.getUint32(headerOffset, true);
+  if (version >= 11) {
+    if (offset + 4 > buffer.byteLength) throw new Error("The world-size header is incomplete.");
+    const worldSizeLength = view.getUint32(offset, true);
+    offset += 4 + worldSizeLength;
+  }
+  return offset;
+}
+
+function writeTiles(view: DataView, offset: number, map: Civ5Map) {
+  for (const tile of map.tiles) {
+    view.setUint8(offset, tile.terrain);
+    view.setUint8(offset + 1, tile.resource);
+    view.setUint8(offset + 2, tile.feature);
+    view.setUint8(offset + 3, tile.river);
+    view.setUint8(offset + 4, tile.elevation);
+    view.setUint8(offset + 5, tile.continent);
+    view.setUint8(offset + 6, tile.wonder);
+    view.setUint8(offset + 7, tile.resourceAmount);
+    offset += TILE_SIZE;
+  }
+}
+
+export function updateCiv5Map(buffer: ArrayBuffer, map: Civ5Map) {
+  const original = parseCiv5Map(buffer, map.name);
+  if (original.width !== map.width || original.height !== map.height || map.tiles.length !== original.tiles.length) {
+    throw new Error("Imported maps cannot be resized during export.");
+  }
+  const output = updateCiv5MapMetadata(buffer, map.name, map.description);
+  const offset = tileDataOffset(output);
+  if (offset + map.tiles.length * TILE_SIZE > output.byteLength) throw new Error("The map tile section is incomplete.");
+  writeTiles(new DataView(output), offset, map);
+  return output;
+}
+
+function encodeStringList(values: string[]) {
+  return encoder.encode(values.length ? `${values.join("\0")}\0` : "");
+}
+
+export function serializeCiv5Map(map: Civ5Map) {
+  if (!map.width || !map.height || map.tiles.length !== map.width * map.height) {
+    throw new Error("The generated map does not contain a complete tile grid.");
+  }
+  const terrainBytes = encodeStringList(map.terrains);
+  const featureBytes = encodeStringList(map.features);
+  const wonderBytes = encodeStringList(map.wonders);
+  const resourceBytes = encodeStringList(map.resources);
+  const nameBytes = encoder.encode(map.name.replaceAll("\0", ""));
+  const descriptionBytes = encoder.encode(map.description.replaceAll("\0", ""));
+  const worldSizeBytes = encoder.encode(`WORLDSIZE_${map.worldSize.replace(/^WORLDSIZE_/i, "").replaceAll(" ", "_").toUpperCase()}`);
+  const geographySize = terrainBytes.length + featureBytes.length + wonderBytes.length + resourceBytes.length + nameBytes.length + descriptionBytes.length;
+  const tileBytes = map.tiles.length * TILE_SIZE;
+  const output = new ArrayBuffer(HEADER_SIZE + geographySize + 4 + worldSizeBytes.length + tileBytes);
+  const view = new DataView(output);
+  const bytes = new Uint8Array(output);
+  view.setUint8(0, 0x0c);
+  view.setUint32(1, map.width, true);
+  view.setUint32(5, map.height, true);
+  view.setUint8(9, Math.min(255, map.players));
+  view.setUint8(10, map.wraps ? 1 : 0);
+  view.setUint32(14, terrainBytes.length, true);
+  view.setUint32(18, featureBytes.length, true);
+  view.setUint32(22, wonderBytes.length, true);
+  view.setUint32(26, resourceBytes.length, true);
+  view.setUint32(30, 0, true);
+  view.setUint32(34, nameBytes.length, true);
+  view.setUint32(38, descriptionBytes.length, true);
+  let offset = HEADER_SIZE;
+  for (const section of [terrainBytes, featureBytes, wonderBytes, resourceBytes, nameBytes, descriptionBytes]) {
+    bytes.set(section, offset);
+    offset += section.length;
+  }
+  view.setUint32(offset, worldSizeBytes.length, true);
+  offset += 4;
+  bytes.set(worldSizeBytes, offset);
+  offset += worldSizeBytes.length;
+  writeTiles(view, offset, map);
+  return output;
 }
 
 function parseStartLocations(

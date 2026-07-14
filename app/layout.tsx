@@ -13,14 +13,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const title = "Excogitare — Civ5 Map Viewer";
-const description = "Open and explore Civilization V map files directly in your browser.";
+const title = "Excogitare — Civ5 Map Viewer & Editor";
+const description = "Open, generate, edit, and export Civilization V maps directly in your browser.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const imageUrl = `${protocol}://${host}/og.png`;
+  const imageUrl = `${protocol}://${host}/og-editor.png`;
 
   return {
     title,
@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: "Excogitare hex-map preview" }],
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: "Excogitare Civilization V map viewer and editor" }],
     },
     twitter: {
       card: "summary_large_image",

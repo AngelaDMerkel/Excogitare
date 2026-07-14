@@ -19,13 +19,16 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Excogitare — Civ5 Map Viewer<\/title>/i);
+  assert.match(html, /<title>Excogitare — Civ5 Map Viewer &amp; Editor<\/title>/i);
   assert.match(html, /Excogitare/);
   assert.match(html, /v0\.1\.2/);
   assert.match(html, /The Twin Continents/);
   assert.match(html, /Start locations/);
   assert.match(html, /4 positions/);
   assert.match(html, /Export Civ5Map/);
+  assert.match(html, />Explore</);
+  assert.match(html, />Create</);
+  assert.match(html, />Lua</);
   assert.match(html, /Edit map name and description/);
   assert.doesNotMatch(html, /Files stay on this device/);
   assert.match(html, /Open map/);

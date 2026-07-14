@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCiv5Map, updateCiv5MapMetadata } from "../lib/civ5-map.ts";
+import { parseCiv5Map, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata } from "../lib/civ5-map.ts";
+import { DEFAULT_GENERATION_OPTIONS, generateMap } from "../lib/map-generator.ts";
+import { createLuaMapScript, mapFromLuaScript } from "../lib/map-script.ts";
 
 const encoder = new TextEncoder();
 
@@ -74,4 +76,51 @@ test("rewrites map metadata without disturbing scenario data", () => {
     playable: true,
     cityState: false,
   }]);
+});
+
+test("exports tile edits while preserving imported scenario starts", () => {
+  const original = createScenarioMap();
+  const edited = parseCiv5Map(original, "test.Civ5Map");
+  edited.tiles[0] = { ...edited.tiles[0], elevation: 2, river: 4 };
+  const parsed = parseCiv5Map(updateCiv5Map(original, edited), "test.Civ5Map");
+
+  assert.equal(parsed.tiles[0].elevation, 2);
+  assert.equal(parsed.tiles[0].river, 4);
+  assert.equal(parsed.startLocations.length, 1);
+  assert.equal(parsed.startLocations[0].x, 1);
+});
+
+test("seeded generation is deterministic and uses standard map sizes", () => {
+  const options = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, seed: "same-world" };
+  const first = generateMap(options);
+  const second = generateMap(options);
+
+  assert.equal(first.width, 40);
+  assert.equal(first.height, 24);
+  assert.deepEqual(first.tiles, second.tiles);
+  assert.deepEqual(first.startLocations, second.startLocations);
+  assert.equal(first.startLocations.length, 4);
+  assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 4);
+});
+
+test("generated maps serialize to a readable Civ5Map geography file", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, seed: "round-trip" });
+  const parsed = parseCiv5Map(serializeCiv5Map(generated), "fallback.Civ5Map");
+
+  assert.equal(parsed.name, generated.name);
+  assert.equal(parsed.description, generated.description);
+  assert.equal(parsed.worldSize, "DUEL");
+  assert.equal(parsed.width, generated.width);
+  assert.equal(parsed.height, generated.height);
+  assert.deepEqual(parsed.tiles, generated.tiles);
+});
+
+test("Excogitare Lua exports retain safe native generation settings", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", seed: "lua-round-trip" });
+  const source = createLuaMapScript(generated);
+  const imported = mapFromLuaScript(source).map;
+
+  assert.equal(imported.source, "script");
+  assert.deepEqual(imported.generation, generated.generation);
+  assert.deepEqual(imported.tiles, generated.tiles);
 });
