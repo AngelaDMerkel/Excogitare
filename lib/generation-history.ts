@@ -1,4 +1,5 @@
 import type { Civ5Map } from "./civ5-map.ts";
+import { cloneGenerationStructure } from "./generation-structure.ts";
 
 export const MAX_GENERATION_HISTORY = 30;
 
@@ -14,6 +15,7 @@ function snapshotMap(map: Civ5Map): Civ5Map {
     startLocations: map.startLocations.map((start) => ({ ...start })),
     cities: map.cities?.map((city) => ({ ...city })),
     generation: map.generation ? { ...map.generation, dominantTerrains: [...map.generation.dominantTerrains] } : undefined,
+    structure: cloneGenerationStructure(map.structure),
   };
 }
 

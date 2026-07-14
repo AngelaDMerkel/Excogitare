@@ -53,6 +53,7 @@ export type Civ5Map = {
   cities?: Civ5City[];
   source: "demo" | "file" | "generated" | "script";
   generation?: import("./map-generator.ts").MapGenerationOptions;
+  structure?: import("./generation-structure.ts").GenerationStructure;
 };
 
 const HEADER_SIZE = 42;

@@ -85,6 +85,23 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Climate and terrain/);
   assert.match(source, /Players and starts/);
   assert.match(source, /Resources and wonders/);
+  assert.match(source, /<strong>Excogitare<\/strong>/);
+  assert.match(source, /<strong>Region-Graph<\/strong>/);
+  assert.match(source, /<strong>Physical<\/strong>/);
+  assert.match(source, /Excogitare worlds/);
+  assert.match(source, /Region-Graph worlds/);
+  assert.match(source, /Physical worlds/);
+  assert.match(source, /Geographic granularity/);
+  assert.match(source, /Ocean basins/);
+  assert.match(source, /Region contrast/);
+  assert.match(source, /Plate activity/);
+  assert.match(source, /Erosion/);
+  assert.match(source, /World structure/);
+  assert.match(source, /retained for editing/);
+  assert.match(source, /After generation/);
+  assert.match(source, /map-generation\.worker/);
+  assert.match(source, /kind: "REGENERATE"/);
+  assert.match(source, /Cancel · \{generationStage\}/);
   assert.match(source, />Analyze</);
   assert.match(source, /Multiplayer balance/);
   assert.match(source, /Civ5 validation/);
@@ -132,8 +149,8 @@ test("the map legend cannot capture Create controls", async () => {
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(source, /const selectWorkspaceMode = \(nextMode: WorkspaceMode\) => \{\s*setShowLegend\(false\)/);
-  assert.match(source, /const generateNewMap = \(\) => \{\s*setShowLegend\(false\)/);
-  assert.match(source, /const randomiseWorld = \(\) => \{\s*setShowLegend\(false\)/);
+  assert.match(source, /const generateNewMap = async \(\) => \{\s*setShowLegend\(false\)/);
+  assert.match(source, /const randomiseWorld = async \(\) => \{\s*setShowLegend\(false\)/);
   assert.match(css, /\.sidebar \{\s*position: relative;\s*z-index: 2;/);
   assert.match(css, /\.canvas-shell \{[^}]*z-index: 1;[^}]*isolation: isolate;/);
 });

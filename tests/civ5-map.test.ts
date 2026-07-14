@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata, type Civ5Map, type Civ5Tile } from "../lib/civ5-map.ts";
-import { DEFAULT_GENERATION_OPTIONS, generateMap, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, generateMap, MAP_PRESETS, randomGenerationOptions, resolveMapDimensions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapExportBaseName, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "../lib/generation-history.ts";
@@ -356,7 +356,7 @@ test("projects generated-map political influence onto land around starts", () =>
 });
 
 test("export filenames follow the current editor map name", () => {
-  const map = createScenarioMap();
+  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "export-name" });
   map.name = "  Ashes & Empires: Redux / 2  ";
   assert.equal(mapExportBaseName(map), "ashes-empires-redux-2");
   map.name = "!?";
@@ -587,6 +587,142 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 10);
 });
 
+test("region-built generation is deterministic, exact, legal, and geographically structured", () => {
+  const options = {
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "REGION_GRAPH" as const,
+    preset: "LIVING_WORLD" as const,
+    size: "DUEL" as const,
+    players: 4,
+    cityStates: 6,
+    waterPercent: 57,
+    mountainPercent: 21,
+    granularity: "HIGH" as const,
+    riverDensity: "DENSE" as const,
+    seed: "region-world-audit",
+  };
+  const first = generateMap(options);
+  const second = generateMap(options);
+
+  assert.deepEqual(first.tiles, second.tiles);
+  assert.deepEqual(first.startLocations, second.startLocations);
+  assert.equal(first.tiles.filter((tile) => tile.terrain < 2).length, Math.round(first.tiles.length * 0.57));
+  assert.match(first.description, /Region-Graph engine/);
+  assert.equal(first.startLocations.filter((start) => !start.cityState).length, 4);
+  assert.equal(first.startLocations.filter((start) => start.cityState).length, 6);
+  assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), []);
+  assertMountainPassability(first);
+  assertRiverNetworks(first);
+  assert.equal(first.structure?.engine, "REGION_GRAPH");
+  assert.ok(first.structure!.objects.some((object) => object.kind === "SUBREGION"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "POLYGON"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "SUPERPOLYGON"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "CLIMATE_REGION"));
+  assert.ok(first.structure!.mountainRanges.length > 0);
+  assert.ok(first.structure!.riverSystems.length > 0);
+});
+
+test("Excogitare, Region-Graph, and Physical are distinct generation engines", () => {
+  const families = new Map(MAP_PRESETS.map((preset) => [preset.id, preset.engine]));
+  assert.equal(families.get("WILD_REGIONS"), "EXCOGITARE");
+  assert.equal(families.get("LIVING_WORLD"), "REGION_GRAPH");
+  assert.equal(families.get("DYNAMIC_EARTH"), "PHYSICAL");
+  assert.deepEqual(new Set(MAP_PRESETS.map((preset) => preset.engine)), new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]));
+
+  const common = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, cityStates: 4, waterPercent: 55, mountainPercent: 20, seed: "three-engines" };
+  const maps = [
+    generateMap({ ...common, engine: "EXCOGITARE", preset: "WILD_REGIONS" }),
+    generateMap({ ...common, engine: "REGION_GRAPH", preset: "LIVING_WORLD" }),
+    generateMap({ ...common, engine: "PHYSICAL", preset: "DYNAMIC_EARTH" }),
+  ];
+  assert.deepEqual(maps.map((map) => map.structure?.engine), ["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]);
+  assert.equal(new Set(maps.map((map) => map.tiles.map((tile) => `${tile.terrain}:${tile.elevation}`).join("|"))).size, 3);
+  for (const map of maps) {
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * 0.55));
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+  }
+
+  const legacy = generateMap({ ...common, engine: "FIELD", preset: "CONTINENTS" } as unknown as typeof common & { engine: "EXCOGITARE"; preset: "CONTINENTS" });
+  assert.equal(legacy.generation?.engine, "EXCOGITARE");
+});
+
+test("Physical generation retains plates, boundaries, erosion controls, climate, and drainage", () => {
+  const options = { ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL" as const, preset: "COLLIDING_PLATES" as const, size: "STANDARD" as const, players: 6, cityStates: 8, waterPercent: 54, mountainPercent: 23, plateActivity: "VIOLENT" as const, erosionStrength: "STRONG" as const, rainfall: "WET" as const, seed: "physical-architecture" };
+  const stages: string[] = [];
+  const first = generateMap(options, (stage) => stages.push(stage));
+  const second = generateMap(options);
+  assert.deepEqual(first.tiles, second.tiles);
+  assert.equal(first.structure?.engine, "PHYSICAL");
+  assert.ok(first.structure!.objects.filter((object) => object.kind === "TECTONIC_PLATE").length >= 6);
+  assert.ok(first.structure!.objects.some((object) => object.kind === "CONTINENT"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "OCEAN_BASIN"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "CLIMATE_REGION"));
+  assert.ok(first.structure!.diagnostics.convergentTiles > 0);
+  assert.ok(first.structure!.diagnostics.divergentTiles > 0);
+  assert.ok(first.structure!.mountainRanges.length > 0);
+  assert.ok(first.structure!.riverSystems.some((river) => river.source !== undefined && river.outlet !== undefined));
+  assert.ok(stages.includes("Simulating tectonic plates and erosion"));
+  assert.ok(stages.includes("Resolving drainage and rivers"));
+  assertMountainPassability(first);
+  assertRiverNetworks(first);
+  assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), []);
+
+  const wetness = (terrain: number) => terrain === 2 ? 1 : terrain === 3 ? 0.55 : terrain === 5 ? 0.4 : terrain === 6 ? 0.25 : 0.05;
+  const rainShadows: number[] = [];
+  for (let y = 3; y < first.height - 3; y += 1) {
+    let x = 4;
+    while (x < first.width - 4) {
+      if (first.tiles[y * first.width + x].elevation !== 2) { x += 1; continue; }
+      const westEdge = x;
+      while (x < first.width - 4 && first.tiles[y * first.width + x].elevation === 2) x += 1;
+      const eastEdge = x - 1;
+      const west = [westEdge - 3, westEdge - 2, westEdge - 1].map((column) => first.tiles[y * first.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
+      const east = [eastEdge + 1, eastEdge + 2, eastEdge + 3].map((column) => first.tiles[y * first.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
+      if (west.length >= 2 && east.length >= 2) rainShadows.push(west.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / west.length - east.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / east.length);
+    }
+  }
+  assert.ok(rainShadows.length > 10);
+  assert.ok(rainShadows.reduce((sum, difference) => sum + difference, 0) / rainShadows.length > 0.1);
+
+  const quiet = generateMap({ ...options, plateActivity: "QUIET", erosionStrength: "LIGHT" });
+  assert.notDeepEqual(quiet.tiles.map((tile) => tile.elevation), first.tiles.map((tile) => tile.elevation));
+});
+
+test("region-built presets remain valid through extreme Pin and String geometries", () => {
+  const presets = MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH");
+  assert.deepEqual(presets.map((preset) => preset.id), ["LIVING_WORLD", "TECTONIC_CONTINENTS", "GREAT_WATERSHEDS", "SHATTERED_BASINS", "MYTHIC_REGIONS"]);
+  for (const [index, geometry] of (["PIN", "STRING"] as const).entries()) {
+    const preset = presets[index === 0 ? 2 : 3];
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      engine: preset.engine,
+      preset: preset.id,
+      size: "DUEL",
+      geometry,
+      players: 2,
+      cityStates: 0,
+      waterPercent: 44,
+      seed: `region-${geometry.toLowerCase()}`,
+    });
+    assert.equal(map.tiles.length, map.width * map.height);
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * 0.44));
+    assert.equal(map.startLocations.filter((start) => !start.cityState).length, 2);
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+  }
+  for (const geometry of ["PIN", "STRING"] as const) {
+    const physical = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "DYNAMIC_EARTH", size: "DUEL", geometry, players: 2, cityStates: 0, waterPercent: 44, seed: `physical-${geometry.toLowerCase()}` });
+    assert.equal(physical.tiles.length, physical.width * physical.height);
+    assert.equal(physical.tiles.filter((tile) => tile.terrain < 2).length, Math.round(physical.tiles.length * 0.44));
+    assert.deepEqual(buildRepairIssues(physical).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(physical);
+  }
+  const shattered = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "REGION_GRAPH", preset: "SHATTERED_BASINS", size: "STANDARD", players: 2, cityStates: 0, seed: "objects-SHATTERED_BASINS" });
+  const kinds = new Set(shattered.structure?.objects.map((object) => object.kind));
+  for (const kind of (["SUBREGION", "POLYGON", "SUPERPOLYGON", "CONTINENT", "OCEAN_BASIN", "INLAND_SEA", "LAKE", "RIFT", "CLIMATE_REGION"] as const)) assert.ok(kinds.has(kind), `missing ${kind}`);
+});
+
 test("generation history retains the newest 30 exact map snapshots", () => {
   const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "history-source" });
   let history: GenerationHistoryEntry[] = [];
@@ -598,8 +734,10 @@ test("generation history retains the newest 30 exact map snapshots", () => {
   const restored = restoreGeneration(history[0]);
   restored.tiles[0].terrain = 99;
   restored.generation!.dominantTerrains.push("DESERT");
+  restored.structure!.objects[0].tileIndices[0] = 999_999;
   assert.notEqual(history[0].map.tiles[0].terrain, 99);
   assert.notDeepEqual(history[0].map.generation?.dominantTerrains, restored.generation?.dominantTerrains);
+  assert.notEqual(history[0].map.structure?.objects[0].tileIndices[0], 999_999);
 });
 
 test("geometry choices preserve the size budget while changing the aspect ratio", () => {
@@ -640,10 +778,12 @@ test("Randomise produces complete valid settings and wrap choices control export
   };
   const wrapTypes = new Set<string>();
   const geometries = new Set<string>();
+  const engines = new Set<string>();
   for (let index = 0; index < 60; index += 1) {
     const options = randomGenerationOptions(random);
     wrapTypes.add(options.wrapType);
     geometries.add(options.geometry);
+    engines.add(options.engine);
     assert.ok(options.waterPercent >= 0 && options.waterPercent <= 90);
     assert.ok(options.mountainPercent >= 0 && options.mountainPercent <= 38);
     assert.ok(options.players >= 2 && options.players <= 22);
@@ -654,6 +794,7 @@ test("Randomise produces complete valid settings and wrap choices control export
   }
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
   assert.deepEqual(geometries, new Set(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "PIN", "STRING", "SQUARE"]));
+  assert.deepEqual(engines, new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });
@@ -765,6 +906,10 @@ test("zero-water worlds remain traversable through mountain passes", () => {
     assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, 0);
     assertMountainPassability(map);
   }
+  const physical = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "COLLIDING_PLATES", size: "DUEL", players: 2, cityStates: 0, waterPercent: 0, mountainPercent: 35, plateActivity: "VIOLENT", seed: "all-land-physical" });
+  assert.equal(physical.tiles.filter((tile) => tile.terrain < 2).length, 0);
+  assertMountainPassability(physical);
+  assert.deepEqual(buildRepairIssues(physical).filter((issue) => issue.id !== "clean"), []);
 });
 
 test("dominant terrain choices visibly control the generated mix", () => {
@@ -831,6 +976,38 @@ test("realistic terrain creates west-to-east rain shadows and softened latitude 
     const terrains = new Set(allLand.tiles.slice(row * allLand.width, (row + 1) * allLand.width).map((tile) => tile.terrain));
     assert.ok(terrains.size >= 2, `latitude row ${row} collapsed into one sharp biome band`);
   }
+});
+
+test("region-built realistic climates retain west-to-east rain shadows", () => {
+  const map = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "REGION_GRAPH",
+    preset: "TECTONIC_CONTINENTS",
+    size: "STANDARD",
+    players: 4,
+    cityStates: 4,
+    style: "REALISTIC",
+    climateRealism: true,
+    waterPercent: 30,
+    mountainPercent: 28,
+    seed: "region-rain-audit",
+  });
+  const wetness = (terrain: number) => terrain === 2 ? 1 : terrain === 3 ? 0.55 : terrain === 5 ? 0.4 : terrain === 6 ? 0.25 : 0.05;
+  const differences: number[] = [];
+  for (let y = 3; y < map.height - 3; y += 1) {
+    let x = 4;
+    while (x < map.width - 4) {
+      if (map.tiles[y * map.width + x].elevation !== 2) { x += 1; continue; }
+      const westEdge = x;
+      while (x < map.width - 4 && map.tiles[y * map.width + x].elevation === 2) x += 1;
+      const eastEdge = x - 1;
+      const west = [westEdge - 3, westEdge - 2, westEdge - 1].map((column) => map.tiles[y * map.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
+      const east = [eastEdge + 1, eastEdge + 2, eastEdge + 3].map((column) => map.tiles[y * map.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
+      if (west.length >= 2 && east.length >= 2) differences.push(west.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / west.length - east.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / east.length);
+    }
+  }
+  assert.ok(differences.length > 40);
+  assert.ok(differences.reduce((sum, difference) => sum + difference, 0) / differences.length > 0.12);
 });
 
 test("generated rivers form continuous mountain-to-water drainage networks", () => {

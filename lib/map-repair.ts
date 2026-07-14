@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
+import { cloneGenerationStructure } from "./generation-structure.ts";
 import { generateRiverNetwork } from "./map-generator.ts";
 import {
   adjacentCoordinates,
@@ -360,5 +361,5 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
 }
 
 export function cloneMap(map: Civ5Map) {
-  return { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })) };
+  return { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })), structure: cloneGenerationStructure(map.structure) };
 }

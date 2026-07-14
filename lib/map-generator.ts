@@ -1,5 +1,8 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
+import { attachRiverSystems, connectedLinearFeatures, connectedTileObjects, type GenerationStructure } from "./generation-structure.ts";
+import { generatePhysicalGeography } from "./physical-generator.ts";
+import { generateRegionGraphGeography } from "./region-graph-generator.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 4 },
@@ -11,7 +14,23 @@ export const MAP_SIZES = [
 ] as const;
 
 export type MapSizeId = (typeof MAP_SIZES)[number]["id"];
-export type MapPresetId = "CONTINENTS" | "PANGAEA" | "ARCHIPELAGO" | "INLAND_SEAS" | "EARTHSEA" | "RIFT_REALMS" | "LABYRINTH" | "WILD_REGIONS";
+export type MapPresetId =
+  | "CONTINENTS"
+  | "PANGAEA"
+  | "ARCHIPELAGO"
+  | "INLAND_SEAS"
+  | "EARTHSEA"
+  | "RIFT_REALMS"
+  | "LABYRINTH"
+  | "WILD_REGIONS"
+  | "LIVING_WORLD"
+  | "TECTONIC_CONTINENTS"
+  | "GREAT_WATERSHEDS"
+  | "SHATTERED_BASINS"
+  | "MYTHIC_REGIONS"
+  | "DYNAMIC_EARTH"
+  | "COLLIDING_PLATES"
+  | "ANCIENT_CRATONS";
 export type MultiplayerBalance = "STANDARD" | "TOURNAMENT" | "TEAMS";
 export type TeamLayout = "CLUSTERED" | "FRONTLINES" | "DISTRIBUTED";
 export type ClimateSetting = "COOL" | "TEMPERATE" | "HOT";
@@ -35,6 +54,12 @@ export type AbundanceSetting = "SCARCE" | "STANDARD" | "ABUNDANT";
 export type ResourceDistribution = "EVEN" | "REGIONAL" | "CLUSTERED";
 export type CoastalPreference = "ANY" | "PREFER" | "REQUIRE";
 export type SiteAbundance = "NONE" | "SCARCE" | "STANDARD" | "RAGING";
+export type GenerationEngine = "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL";
+export type RegionGranularity = "LOW" | "FAIR" | "HIGH" | "VERY_HIGH";
+export type RegionContrast = "BLENDED" | "VARIED" | "EXTREME";
+export type RiverDensity = "SPARSE" | "NORMAL" | "DENSE";
+export type PlateActivity = "QUIET" | "NORMAL" | "VIOLENT";
+export type ErosionStrength = "LIGHT" | "MODERATE" | "STRONG";
 
 export function resolveMapDimensions(sizeId: MapSizeId, geometry: MapGeometry) {
   const size = MAP_SIZES.find((item) => item.id === sizeId) ?? MAP_SIZES[3];
@@ -69,15 +94,23 @@ export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: stri
   { id: "TUNDRA", label: "Tundra" },
 ];
 
-export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number }> = [
-  { id: "CONTINENTS", label: "Convoluted Continents", description: "Broad, asymmetric continents with hooked peninsulas and broken inland coasts.", water: 58, mountains: 12 },
-  { id: "PANGAEA", label: "Broken Pangaea", description: "One dominant landmass cleaved by gulfs, rifts, and difficult interiors.", water: 46, mountains: 14 },
-  { id: "ARCHIPELAGO", label: "Shattered Isles", description: "Dense island chains, coastal empires, and narrow naval routes.", water: 72, mountains: 9 },
-  { id: "INLAND_SEAS", label: "Inland Kingdoms", description: "A land-heavy non-wrapping realm punctured by lakes and irregular inland seas.", water: 24, mountains: 13 },
-  { id: "EARTHSEA", label: "Earthsea Realms", description: "Many irregular continents, isolated minor islands, and long voyages.", water: 64, mountains: 11 },
-  { id: "RIFT_REALMS", label: "Astronomy Rifts", description: "Fantastical basins divided by long deep-water scars and isolated shelves.", water: 61, mountains: 15 },
-  { id: "LABYRINTH", label: "Labyrinth Realm", description: "A non-wrapping maze of land bridges, inland channels, chambers, and chokepoints.", water: 43, mountains: 18 },
-  { id: "WILD_REGIONS", label: "Fantastical Regions", description: "Violently warped coastlines and climate regions with little concern for realism.", water: 55, mountains: 16 },
+export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number; engine: GenerationEngine; climateRealism?: boolean; plateActivity?: PlateActivity; erosionStrength?: ErosionStrength; worldAge?: WorldAgeSetting }> = [
+  { id: "CONTINENTS", label: "Convoluted Continents", description: "Broad, asymmetric continents with hooked peninsulas and broken inland coasts.", water: 58, mountains: 12, engine: "EXCOGITARE" },
+  { id: "PANGAEA", label: "Broken Pangaea", description: "One dominant landmass cleaved by gulfs, rifts, and difficult interiors.", water: 46, mountains: 14, engine: "EXCOGITARE" },
+  { id: "ARCHIPELAGO", label: "Shattered Isles", description: "Dense island chains, coastal empires, and narrow naval routes.", water: 72, mountains: 9, engine: "EXCOGITARE" },
+  { id: "INLAND_SEAS", label: "Inland Kingdoms", description: "A land-heavy non-wrapping realm punctured by lakes and irregular inland seas.", water: 24, mountains: 13, engine: "EXCOGITARE" },
+  { id: "EARTHSEA", label: "Earthsea Realms", description: "Many irregular continents, isolated minor islands, and long voyages.", water: 64, mountains: 11, engine: "EXCOGITARE" },
+  { id: "RIFT_REALMS", label: "Astronomy Rifts", description: "Fantastical basins divided by long deep-water scars and isolated shelves.", water: 61, mountains: 15, engine: "EXCOGITARE" },
+  { id: "LABYRINTH", label: "Labyrinth Realm", description: "A non-wrapping maze of land bridges, inland channels, chambers, and chokepoints.", water: 43, mountains: 18, engine: "EXCOGITARE" },
+  { id: "WILD_REGIONS", label: "Fantastical Regions", description: "Violently warped coastlines and climate regions with little concern for realism.", water: 55, mountains: 16, engine: "EXCOGITARE" },
+  { id: "LIVING_WORLD", label: "Living World", description: "A region-built planet of coherent continents, climatic provinces, watersheds, and open oceans.", water: 58, mountains: 14, engine: "REGION_GRAPH", climateRealism: true },
+  { id: "TECTONIC_CONTINENTS", label: "Tectonic Continents", description: "Continents assembled around coastal arcs, interior boundaries, long ranges, and sheltered basins.", water: 56, mountains: 19, engine: "REGION_GRAPH", climateRealism: true },
+  { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "REGION_GRAPH", climateRealism: true },
+  { id: "SHATTERED_BASINS", label: "Shattered Basins", description: "Several deep oceans divide broken continents, island chains, and astronomy-like rifts.", water: 66, mountains: 13, engine: "REGION_GRAPH", climateRealism: true },
+  { id: "MYTHIC_REGIONS", label: "Mythic Regions", description: "Deliberately composed climate realms divided by epic ranges and implausible transitions.", water: 52, mountains: 17, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "DYNAMIC_EARTH", label: "Dynamic Earth", description: "Moving plates, mixed continental crust, convergent ranges, rifts, erosion, and coupled climate.", water: 62, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL" },
+  { id: "COLLIDING_PLATES", label: "Colliding Plates", description: "Young, active continents dominated by collision belts, high ranges, rain shadows, and difficult interiors.", water: 54, mountains: 23, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "LIGHT", worldAge: "YOUNG" },
+  { id: "ANCIENT_CRATONS", label: "Ancient Cratons", description: "Older eroded landmasses, broad river country, subdued uplands, and mature coastlines.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD" },
 ];
 
 export const WORLD_MODIFIERS: ReadonlyArray<{ id: WorldModifier; label: string; description: string }> = [
@@ -88,6 +121,7 @@ export const WORLD_MODIFIERS: ReadonlyArray<{ id: WorldModifier; label: string; 
 ];
 
 export type MapGenerationOptions = {
+  engine: GenerationEngine;
   preset: MapPresetId;
   size: MapSizeId;
   seed: string;
@@ -126,9 +160,19 @@ export type MapGenerationOptions = {
   barbarianStartDistance: number;
   ruinAbundance: SiteAbundance;
   ruinStartDistance: number;
+  granularity: RegionGranularity;
+  oceanBasins: number;
+  landAtPoles: boolean;
+  climateRealism: boolean;
+  regionContrast: RegionContrast;
+  coastalRangePercent: number;
+  riverDensity: RiverDensity;
+  plateActivity: PlateActivity;
+  erosionStrength: ErosionStrength;
 };
 
 export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
+  engine: "EXCOGITARE",
   preset: "WILD_REGIONS",
   size: "STANDARD",
   seed: "excogitare",
@@ -167,6 +211,15 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   barbarianStartDistance: 5,
   ruinAbundance: "STANDARD",
   ruinStartDistance: 3,
+  granularity: "FAIR",
+  oceanBasins: 2,
+  landAtPoles: true,
+  climateRealism: false,
+  regionContrast: "VARIED",
+  coastalRangePercent: 45,
+  riverDensity: "NORMAL",
+  plateActivity: "NORMAL",
+  erosionStrength: "MODERATE",
 };
 
 function randomItem<T>(items: readonly T[], random: () => number) {
@@ -175,7 +228,8 @@ function randomItem<T>(items: readonly T[], random: () => number) {
 
 export function randomGenerationOptions(random: () => number = Math.random): MapGenerationOptions {
   const style = randomItem(["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const, random);
-  const preset = randomItem(MAP_PRESETS, random).id;
+  const presetConfig = randomItem(MAP_PRESETS, random);
+  const preset = presetConfig.id;
   const size = randomItem(MAP_SIZES, random).id;
   const modifier = randomItem(WORLD_MODIFIERS, random).id;
   const minimumMountains = modifier === "STRATEGIC_DEPTH" ? 22 : modifier === "DOOMSDAY" || style === "BRUTAL" ? 18 : 0;
@@ -187,6 +241,7 @@ export function randomGenerationOptions(random: () => number = Math.random): Map
     preset,
     size,
     modifier,
+    engine: presetConfig.engine,
     wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
     geometry: randomItem(["STANDARD", "TALL", "WIDE", "NEEDLE", "RIBBON", "PIN", "STRING", "SQUARE"] as const, random),
     waterPercent: Math.floor(random() * 91),
@@ -219,6 +274,15 @@ export function randomGenerationOptions(random: () => number = Math.random): Map
     barbarianStartDistance: 3 + Math.floor(random() * 6),
     ruinAbundance: randomItem(["NONE", "SCARCE", "STANDARD", "RAGING"] as const, random),
     ruinStartDistance: 2 + Math.floor(random() * 5),
+    granularity: randomItem(["LOW", "FAIR", "HIGH", "VERY_HIGH"] as const, random),
+    oceanBasins: 1 + Math.floor(random() * 5),
+    landAtPoles: random() > 0.5,
+    climateRealism: presetConfig.climateRealism ?? random() > 0.5,
+    regionContrast: randomItem(["BLENDED", "VARIED", "EXTREME"] as const, random),
+    coastalRangePercent: Math.round(random() * 100),
+    riverDensity: randomItem(["SPARSE", "NORMAL", "DENSE"] as const, random),
+    plateActivity: randomItem(["QUIET", "NORMAL", "VIOLENT"] as const, random),
+    erosionStrength: randomItem(["LIGHT", "MODERATE", "STRONG"] as const, random),
     strategicBalance: false,
     seed: `${seedPart()}-${seedPart()}`,
   };
@@ -648,6 +712,7 @@ export function generateRiverNetwork(
   rainfall: RainfallSetting,
   random: () => number,
   waterMask?: ReadonlyArray<boolean>,
+  density: RiverDensity = "NORMAL",
 ) {
   const isWaterTile = (index: number) => waterMask?.[index] ?? tiles[index].terrain < 2;
   const vertices: RiverVertex[] = [];
@@ -732,6 +797,23 @@ export function generateRiverNetwork(
     }
   }
 
+  // Accumulate the moisture contributed by every upstream junction. This
+  // produces a genuine watershed hierarchy: long, wet catchments become
+  // major rivers while smaller mountain branches become tributaries.
+  const drainageAccumulation = new Float64Array(vertices.length);
+  for (let vertex = 0; vertex < vertices.length; vertex += 1) {
+    if (isWater[vertex]) continue;
+    const moisture = vertices[vertex].tiles.reduce((sum, index) => sum + moistures[index], 0) / Math.max(1, vertices[vertex].tiles.length);
+    drainageAccumulation[vertex] = 0.2 + moisture;
+  }
+  const drainageOrder = Array.from({ length: vertices.length }, (_value, vertex) => vertex)
+    .filter((vertex) => !isWater[vertex] && Number.isFinite(drainageHeight[vertex]))
+    .sort((one, two) => drainageHeight[two] - drainageHeight[one]);
+  for (const vertex of drainageOrder) {
+    const parent = parentVertex[vertex];
+    if (parent >= 0) drainageAccumulation[parent] += drainageAccumulation[vertex];
+  }
+
   const candidates = vertices.flatMap((vertex, vertexNumber) => {
     if (isWater[vertexNumber] || parentEdge[vertexNumber] < 0 || vertex.edges.length < 2) return [];
     const mountainTile = vertex.tiles.find((index) => !isWaterTile(index) && tiles[index].elevation === 2);
@@ -747,13 +829,19 @@ export function generateRiverNetwork(
     }
     if (!isWater[current] || length < 4) return [];
     const moisture = vertex.tiles.reduce((sum, index) => sum + moistures[index], 0) / Math.max(1, vertex.tiles.length);
-    return [{ vertex: vertexNumber, mountainTile, length, score: moisture * 1.25 + rawHeight[vertexNumber] * 0.62 + Math.min(length, 24) * 0.018 + random() * 0.22 }];
+    return [{
+      vertex: vertexNumber,
+      mountainTile,
+      length,
+      score: moisture * 1.05 + rawHeight[vertexNumber] * 0.48 + Math.log1p(drainageAccumulation[vertexNumber]) * 0.72 + Math.min(length, 24) * 0.018 + random() * 0.18,
+    }];
   }).sort((a, b) => b.score - a.score);
 
   const landCount = tiles.reduce((count, _tile, index) => count + (isWaterTile(index) ? 0 : 1), 0);
   const rainfallFactor = rainfall === "WET" ? 1.5 : rainfall === "ARID" ? 0.58 : 1;
   const styleFactor = style === "REALISTIC" ? 1.22 : style === "FANTASTICAL" ? 1.08 : style === "BRUTAL" ? 0.72 : 0.9;
-  const desiredSources = Math.max(1, Math.min(32, Math.round(landCount * 0.0024 * rainfallFactor * styleFactor)));
+  const densityFactor = density === "DENSE" ? 1.55 : density === "SPARSE" ? 0.62 : 1;
+  const desiredSources = Math.max(1, Math.min(48, Math.round(landCount * 0.0024 * rainfallFactor * styleFactor * densityFactor)));
   const selectedMountains: Array<[number, number]> = [];
   const networkVertices = new Set<number>();
   const networkEdges = new Set<number>();
@@ -1318,9 +1406,10 @@ export function regenerateMapRivers(map: Civ5Map, options: MapGenerationOptions,
     return fractalNoise(x + 101, y + 53, seed + 701);
   });
   const tiles = map.tiles.map((tile) => ({ ...tile, river: 0 }));
-  const rivers = generateRiverNetwork(tiles, relief, moistures, map.width, map.height, map.wraps, resolved.style, resolved.rainfall, random);
+  const rivers = generateRiverNetwork(tiles, relief, moistures, map.width, map.height, map.wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity);
   for (let index = 0; index < tiles.length; index += 1) tiles[index].river = rivers[index];
-  return { ...map, tiles, generation: { ...resolved, dominantTerrains: [...resolved.dominantTerrains] } };
+  const regenerated = { ...map, tiles, generation: { ...resolved, dominantTerrains: [...resolved.dominantTerrains] } };
+  return map.structure ? { ...regenerated, structure: attachRiverSystems(regenerated, map.structure) } : regenerated;
 }
 
 export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions, variation = 1) {
@@ -1341,16 +1430,82 @@ export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions
   return enforceGeneratedPlacementLegality(draft);
 }
 
-export function generateMap(options: MapGenerationOptions): Civ5Map {
-  const resolved = { ...DEFAULT_GENERATION_OPTIONS, ...options };
+export function generateMap(options: MapGenerationOptions, onProgress?: (stage: string) => void): Civ5Map {
+  const requestedEngine = String(options.engine);
+  const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : options.engine };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
   const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
   const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
   const geometrySeed = resolved.geometry === "STANDARD" ? "" : `:${resolved.geometry}`;
-  const seed = seedHash(`${resolved.seed}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}`);
+  const seed = seedHash(`${resolved.seed}:${resolved.engine}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}`);
   const random = randomFactory(seed);
   const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
   const wraps = resolved.wrapType === "PRESET" ? presetWraps : resolved.wrapType === "EAST_WEST";
+  const finishStructuredGeography = (geography: {
+    landMask: boolean[];
+    reliefValues: number[];
+    moistures: number[];
+    elevations: number[];
+    tiles: Civ5Tile[];
+    structure: GenerationStructure;
+  }, description: string) => {
+    onProgress?.("Opening mountain passes");
+    carveAccessiblePasses(geography.landMask, geography.elevations, width, height, wraps);
+    const tiles = geography.tiles.map((tile, index) => ({ ...tile, elevation: geography.elevations[index] }));
+    const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
+    const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
+    onProgress?.("Placing players and city states");
+    const majorStarts = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
+    if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
+      normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
+    }
+    const cityStates = placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+    const startLocations = [...majorStarts, ...cityStates];
+    onProgress?.("Placing resources and wonders");
+    applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random);
+    placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
+    if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
+    onProgress?.("Resolving drainage and rivers");
+    const riverNetwork = generateRiverNetwork(tiles, geography.reliefValues, geography.moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity);
+    for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
+    const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
+    const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
+    const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
+      ? Math.max(22, resolved.mountainPercent)
+      : resolved.modifier === "DOOMSDAY" || resolved.style === "BRUTAL" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
+    const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
+    const structure = { ...geography.structure, mountainRanges, diagnostics: { ...geography.structure.diagnostics, mountainRanges: mountainRanges.length } };
+    const legal = enforceGeneratedPlacementLegality({
+      name: `${presetName} — ${resolved.seed}`,
+      description: `${description}${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}.`,
+      worldSize: size.id,
+      version: 12,
+      width,
+      height,
+      players: playerCount,
+      wraps,
+      terrains: [...TERRAINS],
+      features: [...FEATURES],
+      wonders: [...WONDERS],
+      resources: [...RESOURCES],
+      tiles,
+      startLocations,
+      source: "generated",
+      generation: { ...resolved, waterPercent: clamp(resolved.waterPercent, 0, 90), mountainPercent: effectiveMountainPercent },
+      structure,
+    });
+    return { ...legal, structure: attachRiverSystems(legal, structure) };
+  };
+  if (resolved.engine === "REGION_GRAPH") {
+    onProgress?.("Building subregions and polygon graphs");
+    const geography = generateRegionGraphGeography(resolved, width, height, wraps, seed, random);
+    return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "region-graph"} map built by the Region-Graph engine from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.continents} continents, and ${geography.diagnostics.oceanBasins} water basins`);
+  }
+  if (resolved.engine === "PHYSICAL") {
+    onProgress?.("Simulating tectonic plates and erosion");
+    const geography = generatePhysicalGeography(resolved, width, height, wraps, seed, random);
+    return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} physical world formed from ${geography.structure.diagnostics.plates} moving plates, ${geography.structure.diagnostics.continents} continents, erosion, coupled climate, and west-to-east atmospheric moisture`);
+  }
   const centerConfig: Record<MapPresetId, [number, [number, number]]> = {
     CONTINENTS: [4, [0.18, 0.31]],
     PANGAEA: [1, [0.43, 0.54]],
@@ -1360,8 +1515,17 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
     RIFT_REALMS: [9, [0.11, 0.25]],
     LABYRINTH: [13, [0.07, 0.17]],
     WILD_REGIONS: [15, [0.065, 0.2]],
+    LIVING_WORLD: [5, [0.16, 0.3]],
+    TECTONIC_CONTINENTS: [4, [0.17, 0.31]],
+    GREAT_WATERSHEDS: [3, [0.22, 0.36]],
+    SHATTERED_BASINS: [16, [0.06, 0.17]],
+    MYTHIC_REGIONS: [10, [0.08, 0.24]],
+    DYNAMIC_EARTH: [5, [0.17, 0.3]],
+    COLLIDING_PLATES: [3, [0.24, 0.4]],
+    ANCIENT_CRATONS: [4, [0.2, 0.35]],
   };
   const [centerCount, centerRadius] = centerConfig[resolved.preset];
+  onProgress?.("Forming Excogitare terrain fields");
   const centers = createCenters(centerCount, random, centerRadius, !wraps);
   const plateCenters = createCenters(Math.max(6, Math.round(centerCount * 0.7)), random, [0.09, 0.19], !wraps);
   if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
@@ -1394,6 +1558,7 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   // The browser-native realistic style mirrors that two-stage structure with a
   // deterministic denoising/refinement schedule and Earth-like quantile targets.
   if (resolved.style === "REALISTIC") {
+    onProgress?.("Refining terrain fields");
     fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, 4, 0.2, 0.07);
   }
   const waterPercent = clamp(resolved.waterPercent, 0, 90);
@@ -1450,6 +1615,7 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
   const dominantTerrains = Array.isArray(resolved.dominantTerrains) ? resolved.dominantTerrains : [];
   const temperatures = new Array<number>(width * height);
   const moistures = new Array<number>(width * height);
+  onProgress?.("Resolving climate and rain shadows");
 
   for (let y = 0; y < height; y += 1) {
     const latitude = Math.abs(y / Math.max(1, height - 1) - 0.5) * 2;
@@ -1520,23 +1686,36 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
 
   const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
   const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
+  onProgress?.("Placing players and city states");
   const majorStarts = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
     normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
   const cityStates = placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
   const startLocations = [...majorStarts, ...cityStates];
+  onProgress?.("Placing resources and wonders");
   applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random);
   placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
   if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
+  onProgress?.("Resolving drainage and rivers");
   const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random);
   for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
   const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
   const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
 
-  return enforceGeneratedPlacementLegality({
+  const continents = connectedTileObjects("CONTINENT", landMask, width, height, wraps, "Continent");
+  const basins = connectedTileObjects("OCEAN_BASIN", landMask.map((land) => !land), width, height, wraps, "Ocean Basin");
+  const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
+  const structure: GenerationStructure = {
+    engine: "EXCOGITARE",
+    objects: [...continents, ...basins],
+    mountainRanges,
+    riverSystems: [],
+    diagnostics: { continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length },
+  };
+  const legal = enforceGeneratedPlacementLegality({
     name: `${presetName} — ${resolved.seed}`,
-    description: `A seeded ${resolved.style.toLowerCase()} ${presetName.toLowerCase()} map${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}, targeting ${Math.round(waterPercent)}% water and ${Math.round(effectiveMountainPercent)}% mountains.`,
+    description: `A seeded ${resolved.style.toLowerCase()} ${presetName.toLowerCase()} map built by the Excogitare engine${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}, targeting ${Math.round(waterPercent)}% water and ${Math.round(effectiveMountainPercent)}% mountains.`,
     worldSize: size.id,
     version: 12,
     width,
@@ -1551,5 +1730,7 @@ export function generateMap(options: MapGenerationOptions): Civ5Map {
     startLocations,
     source: "generated",
     generation: { ...resolved, waterPercent, mountainPercent: effectiveMountainPercent },
+    structure,
   });
+  return { ...legal, structure: attachRiverSystems(legal, structure) };
 }

@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5Tile } from "./civ5-map.ts";
+import { cloneGenerationStructure } from "./generation-structure.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map, type BalanceReport } from "./map-analysis.ts";
 import {
   balanceMapStarts,
@@ -38,6 +39,7 @@ function snapshotMap(map: Civ5Map): Civ5Map {
     startLocations: map.startLocations.map((start) => ({ ...start })),
     cities: map.cities?.map((city) => ({ ...city })),
     generation: map.generation ? { ...map.generation, dominantTerrains: [...map.generation.dominantTerrains] } : undefined,
+    structure: cloneGenerationStructure(map.structure),
   };
 }
 
