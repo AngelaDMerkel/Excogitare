@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: imageUrl, width: 2400, height: 1260, alt: "High-resolution isometric map rendered by Excogitare" }],
+      images: [{ url: imageUrl, width: 2400, height: 1260, alt: "Excogitare social card with a cropped isometric Civilization V map render" }],
     },
     twitter: {
       card: "summary_large_image",

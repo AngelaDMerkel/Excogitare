@@ -1,5 +1,7 @@
 # Excogitare
 
+![Excogitare — Civilization V Map Viewer & Editor](public/og-editor.png)
+
 *excōgitāre* /ɛk.skoː.ɡɪˈtaː.rɛ/ — Latin: to devise, contrive, or think something into being.
 
 A platform-agnostic, browser-based viewer and basic map editor for Civilization V `.Civ5Map` files. Excogitare parses, renders, generates and edits physical maps directly in the browser.
@@ -40,6 +42,12 @@ The sidebar reports dimensions, Civ V world-size label, tile count, wrap state a
 
 The **Legend** overlay explains terrain colour, coast and river marks, elevation, known features, political and settlement symbols, resources present on the current map, selections and repair highlights. It is descriptive, not an editor, and closes when changing workspace so it cannot sit invisibly over another menu's controls.
 
+### Interface at a glance
+
+![Excogitare workspace controls: Create, Edit, Repair and experimental Lua](public/readme/workspace-controls.png)
+
+*The principal controls reproduced in Excogitare's own palette. The panels are a compact reference rather than a claim that every control fits on one screen.*
+
 The binary format is not blessed with a complete public specification. Unusual versions and heavily modded maps may contain data Excogitare does not recognize, and a successful render proves less than a successful load in Civ V. That distinction is tedious but important.
 
 ## Create
@@ -53,6 +61,10 @@ Create contains three submenus: **Generate**, **Edit** and **Analyze**. Generate
 - **North / south poles** is the conventional layout: cold poles at the top and bottom with an equator through the middle.
 - **Polar centered** places a pole at the centre and radiates climate outward toward an equatorial perimeter.
 - **Equatorial pole** treats the horizontal middle axis as the pole and warms toward the top and bottom edges.
+
+![Projection Type comparison: north and south poles, polar centered and equatorial pole](public/readme/projection-types.png)
+
+*The same Physical-engine concept rendered under each climate projection. Projection moves climate and ice; it does not alter Civ V's rectangular hex adjacency.*
 
 Projection affects temperature, biome placement, ice, polar-land rules and deterministic seeding. It does not change the rectangular Civ V hex grid, invent spherical adjacency, or turn the exported file into a new geometric format. “Projection” is useful shorthand here, not a claim that Civ V has suddenly learned cartography.
 
@@ -89,6 +101,18 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 | Physical | Dynamic Earth | Mixed moving plates, convergence, rifting, moderate erosion and coupled climate. |
 | Physical | Colliding Plates | Young violent collision belts, high ranges, rain shadows and hard interiors. |
 | Physical | Ancient Cratons | Quiet old plates, broad river country, subdued uplands and mature coasts. |
+
+![Excogitare engine map presets](public/readme/excogitare-presets.png)
+
+*The eight field-based Excogitare presets, generated from fixed documentation seeds.*
+
+![Region-Graph engine map presets](public/readme/region-graph-presets.png)
+
+*The five Region-Graph presets. Their retained subregions, polygons, basins, climate provinces and watersheds are built before content placement.*
+
+![Physical engine map presets](public/readme/physical-presets.png)
+
+*The three Physical presets, showing active, violent and old eroded tectonic regimes.*
 
 **Map size** provides Civ V's standard budgets: Duel `40×24`, Tiny `56×36`, Small `66×42`, Standard `80×52`, Large `104×64` and Huge `128×80`. Changing size also restores its recommended major- and city-state counts. **Seed** makes a configuration repeatable; **Shuffle** changes only the seed. The configuration summary states the active projection, engine, character, map type, size, final dimensions and player count. When structural metadata exists, **World structure** reports its retained geographic objects and diagnostics.
 

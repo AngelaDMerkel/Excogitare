@@ -2524,6 +2524,11 @@ export function Civ5MapViewer() {
           </div>
 
           <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>
+          <footer className="sidebar-footer">
+            <a href="https://github.com/AngelaDMerkel/Excogitare#readme" target="_blank" rel="noreferrer">
+              README <span aria-hidden="true">↗</span>
+            </a>
+          </footer>
         </aside>
 
         <div

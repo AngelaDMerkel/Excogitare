@@ -52,10 +52,45 @@ test("social artwork is a high-resolution render of a generated Excogitare map",
   assert.equal(editorArtwork.readUInt32BE(20), 1260);
   assert.deepEqual(editorArtwork, fallbackArtwork);
   assert.match(layout, /width: 2400, height: 1260/);
-  assert.match(layout, /High-resolution isometric map rendered by Excogitare/);
+  assert.match(layout, /Excogitare social card with a cropped isometric Civilization V map render/);
   assert.match(renderer, /generateMap\(options\)/);
   assert.match(renderer, /preset: "WILD_REGIONS"/);
   assert.match(renderer, /const PROJECTION = \{ a: 0\.86, b: 0\.25, c: -0\.52, d: 0\.38 \}/);
+  assert.match(renderer, /clipPath id="mapSlice"/);
+  assert.match(renderer, /SEE THE WORLD\./);
+  assert.match(renderer, /THEN CHANGE IT\./);
+});
+
+test("README visual guide includes every generation engine and the principal workspaces", async () => {
+  const [readme, renderer, excogitare, regionGraph, physical, projection, workspaces] = await Promise.all([
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/render-readme-gallery.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../public/readme/excogitare-presets.png", import.meta.url)),
+    readFile(new URL("../public/readme/region-graph-presets.png", import.meta.url)),
+    readFile(new URL("../public/readme/physical-presets.png", import.meta.url)),
+    readFile(new URL("../public/readme/projection-types.png", import.meta.url)),
+    readFile(new URL("../public/readme/workspace-controls.png", import.meta.url)),
+  ]);
+  for (const image of [excogitare, regionGraph, physical, projection, workspaces]) {
+    assert.equal(image.subarray(1, 4).toString(), "PNG");
+    assert.equal(image.readUInt32BE(16), 2400);
+  }
+  assert.match(readme, /public\/readme\/excogitare-presets\.png/);
+  assert.match(readme, /public\/readme\/region-graph-presets\.png/);
+  assert.match(readme, /public\/readme\/physical-presets\.png/);
+  assert.match(readme, /public\/readme\/projection-types\.png/);
+  assert.match(readme, /public\/readme\/workspace-controls\.png/);
+  assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "EXCOGITARE"\)/);
+  assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "REGION_GRAPH"\)/);
+  assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "PHYSICAL"\)/);
+});
+
+test("site chrome links to the GitHub README", async () => {
+  const source = await readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8");
+  assert.match(source, /href="https:\/\/github\.com\/AngelaDMerkel\/Excogitare#readme"/);
+  assert.match(source, />\s*README\s*<span aria-hidden="true">↗<\/span>/);
+  assert.match(source, /target="_blank" rel="noreferrer"/);
+  assert.match(source, /<footer className="sidebar-footer">[\s\S]*README[\s\S]*<\/footer>\s*<\/aside>/);
 });
 
 test("layer redraws preserve the existing canvas backing buffer", async () => {

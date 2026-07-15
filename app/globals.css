@@ -98,7 +98,6 @@ button { color: inherit; }
 }
 
 .brand h1 { margin: 0; font-family: Georgia, serif; font-size: 24px; font-weight: 500; letter-spacing: 0.02em; }
-
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 
 .history-actions { display: flex; gap: 3px; }
@@ -136,6 +135,8 @@ button { color: inherit; }
 .sidebar {
   position: relative;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 26px 23px 20px;
   overflow-y: auto;
@@ -144,6 +145,26 @@ button { color: inherit; }
   scrollbar-width: thin;
   scrollbar-color: #395257 transparent;
 }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 24px;
+}
+.sidebar-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #718a84;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: .11em;
+  line-height: 1;
+  text-decoration: none;
+}
+.sidebar-footer a:hover,
+.sidebar-footer a:focus-visible { color: var(--gold-bright); }
+.sidebar-footer a:focus-visible { outline: 1px solid rgba(239, 209, 138, .45); outline-offset: 4px; }
 
 .map-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .map-heading h2 { margin: 0; font-family: Georgia, serif; font-size: 22px; font-weight: 500; line-height: 1.18; }

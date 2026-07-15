@@ -101,7 +101,9 @@ const minX = Math.min(...projectedPoints.map((point) => point.x));
 const maxX = Math.max(...projectedPoints.map((point) => point.x));
 const minY = Math.min(...projectedPoints.map((point) => point.y));
 const maxY = Math.max(...projectedPoints.map((point) => point.y));
-const frame = { x: 500, y: 44, width: 1848, height: 1168 };
+// Render the genuine map larger than the card, then reveal only a narrow crop.
+// The social card remains a brand object first and a renderer specimen second.
+const frame = { x: 1080, y: -250, width: 2620, height: 1780 };
 const scale = Math.min(frame.width / (maxX - minX), frame.height / (maxY - minY));
 const offsetX = frame.x + (frame.width - (maxX - minX) * scale) / 2 - minX * scale;
 const offsetY = frame.y + (frame.height - (maxY - minY) * scale) / 2 - minY * scale;
@@ -239,35 +241,49 @@ const startsMarkup = map.startLocations.map((start) => {
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
-    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#091a20"/><stop offset=".52" stop-color="#102c34"/><stop offset="1" stop-color="#0b2027"/></linearGradient>
-    <radialGradient id="mapGlow" cx="67%" cy="46%" r="55%"><stop offset="0" stop-color="#86b4aa" stop-opacity=".16"/><stop offset="1" stop-color="#86b4aa" stop-opacity="0"/></radialGradient>
-    <linearGradient id="panelFade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#07171c" stop-opacity=".98"/><stop offset=".74" stop-color="#07171c" stop-opacity=".88"/><stop offset="1" stop-color="#07171c" stop-opacity="0"/></linearGradient>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06161b"/><stop offset=".58" stop-color="#0b242a"/><stop offset="1" stop-color="#0e2e34"/></linearGradient>
+    <radialGradient id="mapGlow" cx="76%" cy="44%" r="62%"><stop offset="0" stop-color="#8ec2b2" stop-opacity=".22"/><stop offset="1" stop-color="#8ec2b2" stop-opacity="0"/></radialGradient>
+    <linearGradient id="sliceShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#06161b" stop-opacity=".35"/><stop offset=".18" stop-color="#06161b" stop-opacity="0"/><stop offset="1" stop-color="#06161b" stop-opacity=".08"/></linearGradient>
+    <pattern id="quietGrid" width="72" height="72" patternUnits="userSpaceOnUse"><path d="M 72 0 L 0 0 0 72" fill="none" stroke="#86a7a0" stroke-opacity=".035" stroke-width="1"/></pattern>
+    <clipPath id="mapSlice"><path d="M 1788 0 H 2400 V 1260 H 1978 Z"/></clipPath>
     <filter id="mapShadow" x="-20%" y="-20%" width="140%" height="160%"><feGaussianBlur stdDeviation="18"/></filter>
     <filter id="markerShadow" x="-100%" y="-100%" width="300%" height="300%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#051014" flood-opacity=".75"/></filter>
   </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#background)"/>
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#mapGlow)"/>
-  <ellipse cx="1530" cy="1080" rx="860" ry="100" fill="#020b0e" fill-opacity=".5" filter="url(#mapShadow)"/>
-  <g>${tileMarkup.join("")}${startsMarkup}</g>
-  <rect x="0" y="0" width="800" height="${HEIGHT}" fill="url(#panelFade)"/>
-  <g transform="translate(92 104)">
-    <path d="M 0 0 H 78" stroke="#d9b96f" stroke-width="7"/>
-    <text x="0" y="105" fill="#f2ede2" font-family="Arial, Helvetica, sans-serif" font-size="86" font-weight="700" letter-spacing="7">EXCOGITARE</text>
-    <text x="2" y="163" fill="#d9b96f" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" letter-spacing="5">CIVILIZATION V MAP VIEWER &amp; EDITOR</text>
-    <text x="2" y="265" fill="#d9e2df" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="400">A real map. A real render.</text>
-    <text x="2" y="312" fill="#9fb0ad" font-family="Arial, Helvetica, sans-serif" font-size="24">Generated and rendered in Excogitare.</text>
-    <g transform="translate(2 380)">
-      <rect width="184" height="46" rx="23" fill="#d9b96f" fill-opacity=".12" stroke="#d9b96f" stroke-opacity=".62"/>
-      <text x="92" y="31" text-anchor="middle" fill="#ead69f" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="2">ISOMETRIC</text>
-      <rect x="200" width="202" height="46" rx="23" fill="#76a788" fill-opacity=".12" stroke="#86b89b" stroke-opacity=".5"/>
-      <text x="301" y="31" text-anchor="middle" fill="#b7d5c0" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="2">FANTASTICAL</text>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#quietGrid)"/>
+  <g clip-path="url(#mapSlice)">
+    <rect x="1720" width="680" height="${HEIGHT}" fill="#12363d"/>
+    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#mapGlow)"/>
+    <ellipse cx="2290" cy="1120" rx="780" ry="116" fill="#020b0e" fill-opacity=".55" filter="url(#mapShadow)"/>
+    <g>${tileMarkup.join("")}${startsMarkup}</g>
+    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#sliceShade)"/>
+  </g>
+  <path d="M 1788 0 L 1978 1260" fill="none" stroke="#d9b96f" stroke-opacity=".78" stroke-width="4"/>
+  <path d="M 1770 0 L 1960 1260" fill="none" stroke="#8bb3a7" stroke-opacity=".14" stroke-width="1"/>
+
+  <g transform="translate(118 112)">
+    <path d="M 0 0 H 86" stroke="#d9b96f" stroke-width="8"/>
+    <text x="0" y="126" fill="#f3eee3" font-family="Arial, Helvetica, sans-serif" font-size="112" font-weight="700" letter-spacing="9">EXCOGITARE</text>
+    <text x="3" y="190" fill="#d9b96f" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="6">CIVILIZATION V MAP VIEWER &amp; EDITOR</text>
+
+    <text x="0" y="408" fill="#dce7e3" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="400" letter-spacing="1">SEE THE WORLD.</text>
+    <text x="0" y="492" fill="#dce7e3" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="1">THEN CHANGE IT.</text>
+    <text x="3" y="568" fill="#92aaa5" font-family="Arial, Helvetica, sans-serif" font-size="26">Generate, inspect, repair, and export Civilization V maps.</text>
+
+    <g transform="translate(2 664)">
+      <rect width="188" height="48" rx="24" fill="#d9b96f" fill-opacity=".11" stroke="#d9b96f" stroke-opacity=".58"/>
+      <text x="94" y="32" text-anchor="middle" fill="#ead69f" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="2">BROWSER-NATIVE</text>
+      <rect x="208" width="184" height="48" rx="24" fill="#76a788" fill-opacity=".1" stroke="#86b89b" stroke-opacity=".46"/>
+      <text x="300" y="32" text-anchor="middle" fill="#b7d5c0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="2">DETERMINISTIC</text>
+      <rect x="412" width="146" height="48" rx="24" fill="#76a788" fill-opacity=".1" stroke="#86b89b" stroke-opacity=".46"/>
+      <text x="485" y="32" text-anchor="middle" fill="#b7d5c0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="2">CIV5MAP</text>
     </g>
-    <g transform="translate(2 1000)">
-      <circle cx="8" cy="8" r="8" fill="#f1d183"/><text x="30" y="15" fill="#c7d2cf" font-family="Arial, Helvetica, sans-serif" font-size="19">Major civilization</text>
-      <circle cx="228" cy="8" r="8" fill="#78c7d6"/><text x="250" y="15" fill="#c7d2cf" font-family="Arial, Helvetica, sans-serif" font-size="19">City-state</text>
+
+    <g transform="translate(2 982)">
+      <text x="0" y="0" fill="#738e88" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="3">REAL EXCOGITARE RENDER</text>
+      <text x="0" y="38" fill="#56716c" font-family="Arial, Helvetica, sans-serif" font-size="16" letter-spacing="1">${escapeXml(map.width)} × ${escapeXml(map.height)} · FANTASTICAL · STRATEGIC DEPTH</text>
     </g>
   </g>
-  <text x="2310" y="1202" text-anchor="end" fill="#d9b96f" fill-opacity=".76" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="2">${escapeXml(map.width)} × ${escapeXml(map.height)} · STRATEGIC DEPTH</text>
 </svg>`;
 
 const require = createRequire(import.meta.url);
