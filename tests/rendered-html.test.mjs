@@ -62,7 +62,17 @@ test("social artwork is a high-resolution render of a generated Excogitare map",
 });
 
 test("README visual guide includes every generation engine and the principal workspaces", async () => {
-  const [readme, renderer, excogitare, regionGraph, physical, projection, workspaces] = await Promise.all([
+  const [
+    readme,
+    renderer,
+    excogitare,
+    regionGraph,
+    physical,
+    projection,
+    workspaces,
+    createWorkflow,
+    exploreLegend,
+  ] = await Promise.all([
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../scripts/render-readme-gallery.mjs", import.meta.url), "utf8"),
     readFile(new URL("../public/readme/excogitare-presets.png", import.meta.url)),
@@ -70,8 +80,10 @@ test("README visual guide includes every generation engine and the principal wor
     readFile(new URL("../public/readme/physical-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/projection-types.png", import.meta.url)),
     readFile(new URL("../public/readme/workspace-controls.png", import.meta.url)),
+    readFile(new URL("../public/readme/create-workflow.png", import.meta.url)),
+    readFile(new URL("../public/readme/explore-and-legend.png", import.meta.url)),
   ]);
-  for (const image of [excogitare, regionGraph, physical, projection, workspaces]) {
+  for (const image of [excogitare, regionGraph, physical, projection, workspaces, createWorkflow, exploreLegend]) {
     assert.equal(image.subarray(1, 4).toString(), "PNG");
     assert.equal(image.readUInt32BE(16), 2400);
   }
@@ -80,9 +92,13 @@ test("README visual guide includes every generation engine and the principal wor
   assert.match(readme, /public\/readme\/physical-presets\.png/);
   assert.match(readme, /public\/readme\/projection-types\.png/);
   assert.match(readme, /public\/readme\/workspace-controls\.png/);
+  assert.match(readme, /public\/readme\/create-workflow\.png/);
+  assert.match(readme, /public\/readme\/explore-and-legend\.png/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "EXCOGITARE"\)/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "REGION_GRAPH"\)/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "PHYSICAL"\)/);
+  assert.match(renderer, /renderCreateWorkflowSheet\(\)/);
+  assert.match(renderer, /renderExploreSheet\(\)/);
 });
 
 test("site chrome links to the GitHub README", async () => {

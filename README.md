@@ -34,6 +34,10 @@ Desktop controls provide contextual help on hover and keyboard focus. These tool
 
 Explore keeps its full inspection sidebar: dimensions, Civ V world-size label, tile count, wrap state, the terrain census and every layer switch remain visible there. The map toolbar's **Display** panel provides the same controls as a quick canvas-side surface, but does not replace Explore's details. Create omits that inspection block so view controls do not interrupt the design workflow. Layer switches affect only the rendering; they do not delete anything from the map. **Legend** remains beside Display because explaining the iconography and deciding which layers to show are related but distinct jobs.
 
+![Explore inspection controls, a generated isometric map and the map legend](public/readme/explore-and-legend.png)
+
+*Explore retains map facts and layer controls beside the renderer. The companion legend translates the compact iconography without pretending that hiding a layer edits the map.*
+
 - **Political** draws scenario territories and borders when ownership records exist. On generated maps it may instead show projected influence around starts. The colours are inferred from stored civilization or team identifiers, not read from Civ V's complete XML database.
 - **Hex grid** shows the underlying hex geometry.
 - **Features** shows forests, jungles, marshes, ice, oases, fallout and other known feature marks.
@@ -57,6 +61,10 @@ The binary format is not blessed with a complete public specification. Unusual v
 ## Create
 
 Create contains four workflow tabs: **Design**, **Iterate**, **Edit** and **Review**. Design builds a deterministic map from a seed and a set of constraints. Iterate revisits generations and reruns selected passes. Edit changes the result directly. Review reports whether that result is plausible, legal and remotely fair. **Randomise** remains fixed at the top and chooses a new combination of settings before immediately producing a map. It excludes known game-breaking geometries unless their separate risk control has been enabled.
+
+![Create workflow showing Design, Iterate and contextual guidance](public/readme/create-workflow.png)
+
+*Create is arranged as a sequence rather than a thicket: define the world, revisit candidates and checkpoints, then rely on concise contextual help when a control has consequences worth explaining.*
 
 The numbered Design sections behave as a guided sequence, with only one normally expanded at a time. Their summaries report the current choices, and a gold dot marks a section that differs from Excogitare's defaults. Frequently used controls remain visible; specialist simulation, placement and spacing controls live under a **More controls** disclosure within the relevant step. The current recipe and **Generate map** action remain visible at the bottom of the sidebar instead of disappearing after a long scroll.
 
