@@ -93,6 +93,21 @@ test("site chrome links to the GitHub README", async () => {
   assert.match(source, /<footer className="sidebar-footer">[\s\S]*README[\s\S]*<\/footer>\s*<\/aside>/);
 });
 
+test("phone-sized screens reduce the application to generation, map, and download", async () => {
+  const [source, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /className="mobile-map-actions" aria-label="Mobile map actions"/);
+  assert.match(source, /generationRunning \? "Generating…" : "Randomise & Generate"/);
+  assert.match(source, /className="mobile-download-button"[\s\S]{0,300}onClick=\{exportCiv5Map\}/);
+  assert.match(source, />\s*Download \.Civ5Map\s*<\/button>/);
+  assert.match(css, /\.mobile-map-actions \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 640px\), \(pointer: coarse\) and \(max-height: 520px\)/);
+  assert.match(css, /\.topbar,[\s\S]{0,240}\.sidebar,[\s\S]{0,320}display: none !important;/);
+  assert.match(css, /\.mobile-map-actions \{[\s\S]{0,500}display: grid;/);
+});
+
 test("GitHub Pages has an independent static export and deployment workflow", async () => {
   const [nextConfig, packageJson, workflow, verifier] = await Promise.all([
     readFile(new URL("../next.config.ts", import.meta.url), "utf8"),

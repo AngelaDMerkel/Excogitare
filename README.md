@@ -26,6 +26,8 @@ The controls in the top bar remain available in every menu:
 - **Open map** loads another `.Civ5Map`. Unsaved in-memory history is not a substitute for keeping the original file.
 - Clicking the **map name** or **description** offers Edit Mode. Saving changes updates the metadata used by subsequent Civ5Map and PNG exports.
 
+On phone-sized screens Excogitare automatically enters a deliberately reduced mobile view. It presents the map itself, **Randomise & Generate**, and **Download .Civ5Map**—nothing else from the ordinary workspace chrome. The first action chooses a fresh Civ V-safe combination and generates it immediately; the second exports the current result. Turning a phone sideways retains this view when the device reports a coarse touch pointer. Editing, Repair, Lua, layer controls and imported-map work remain desktop tools rather than being crushed into an unusable pocket accordion.
+
 ### Layers and map information
 
 The sidebar reports dimensions, Civ V world-size label, tile count, wrap state and a terrain census. Its layer switches affect only the view; they do not delete anything from the map.

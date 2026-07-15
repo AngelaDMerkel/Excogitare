@@ -2550,6 +2550,26 @@ export function Civ5MapViewer() {
             onWheel={onWheel}
           />
 
+          <div className="mobile-map-actions" aria-label="Mobile map actions">
+            <button
+              className="mobile-randomise-button"
+              type="button"
+              disabled={generationRunning}
+              aria-busy={generationRunning}
+              onClick={() => void randomiseWorld()}
+            >
+              {generationRunning ? "Generating…" : "Randomise & Generate"}
+            </button>
+            <button
+              className="mobile-download-button"
+              type="button"
+              disabled={generationRunning || isEditingMetadata}
+              onClick={exportCiv5Map}
+            >
+              Download .Civ5Map
+            </button>
+          </div>
+
           <div className="map-toolbar" aria-label="Map controls">
             <button type="button" onClick={() => zoomAt(1.2, size.width / 2, size.height / 2)} aria-label="Zoom in">+</button>
             <span>{Math.round(view.zoom * 100)}%</span>
