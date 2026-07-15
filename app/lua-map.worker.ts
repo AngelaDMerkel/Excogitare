@@ -147,8 +147,10 @@ self.onmessage = async (event: MessageEvent<Request>) => {
   let lua: LuaEngine | null = null;
 
   try {
+    const nextAssetMarker = self.location?.pathname.indexOf("/_next/") ?? -1;
+    const publicBasePath = nextAssetMarker >= 0 ? self.location.pathname.slice(0, nextAssetMarker) : "";
     const wasmUrl = self.location?.protocol === "http:" || self.location?.protocol === "https:"
-      ? new URL("/wasmoon.wasm", self.location.href).href
+      ? new URL(`${publicBasePath}/wasmoon.wasm`, self.location.origin).href
       : undefined;
     const factory = new LuaFactory(wasmUrl);
     lua = await factory.createEngine({ functionTimeout: 8_000 });

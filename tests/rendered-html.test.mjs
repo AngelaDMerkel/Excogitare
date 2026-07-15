@@ -93,6 +93,22 @@ test("site chrome links to the GitHub README", async () => {
   assert.match(source, /<footer className="sidebar-footer">[\s\S]*README[\s\S]*<\/footer>\s*<\/aside>/);
 });
 
+test("GitHub Pages has an independent static export and deployment workflow", async () => {
+  const [nextConfig, packageJson, workflow, verifier] = await Promise.all([
+    readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/pages.yml", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/verify-pages-build.mjs", import.meta.url), "utf8"),
+  ]);
+  assert.match(nextConfig, /output: pagesBuild \? "export" : undefined/);
+  assert.match(nextConfig, /pagesBasePath = "\/Excogitare"/);
+  assert.match(packageJson, /"test:pages": "pnpm run build:pages && node scripts\/verify-pages-build\.mjs"/);
+  assert.match(workflow, /actions\/upload-pages-artifact@v4/);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /run: pnpm run test:pages/);
+  assert.match(verifier, /No Next asset may escape to the github\.io origin root/);
+});
+
 test("layer redraws preserve the existing canvas backing buffer", async () => {
   const [source, climateProjection] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
@@ -281,7 +297,7 @@ test("Lua uses an editable, staged, multi-file project workspace", async () => {
   assert.match(worker, /__set_improvement/);
   assert.match(worker, /__set_start/);
   assert.match(worker, /request\.postProcessSource/);
-  assert.match(worker, /let lua: LuaEngine \| null = null;\s+try \{\s+const wasmUrl/);
+  assert.match(worker, /let lua: LuaEngine \| null = null;\s+try \{\s+const nextAssetMarker[\s\S]{0,400}const wasmUrl/);
   assert.match(worker, /lua\?\.global\.close\(\)/);
   assert.match(runtime, /mergeScriptStarts/);
   assert.match(runtime, /worker\.onmessageerror/);

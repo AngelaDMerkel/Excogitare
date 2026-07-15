@@ -246,3 +246,18 @@ The compatibility layer covers a growing subset of `Map`, `GameInfo`, plot mutat
 ## Docker
 
 `docker-compose` is the recommended deployment method for Excogitare.
+
+## GitHub Pages
+
+Excogitare also has a separate static export for GitHub Pages. This is intentionally parallel to the ordinary Vinext and Alpine builds; Pages does not run the Cloudflare worker and should not be mistaken for a replacement server. The present viewer, generator, editor, repair tools and sandboxed Lua runtime all execute in the browser and therefore remain useful there. Any future account system, shared storage or server-side collaboration would require a real application host.
+
+Run `pnpm run test:pages` to build and verify the static site locally. The finished artifact is written to `out/`, uses `/Excogitare` as its base path, and includes the generated workers, `wasmoon.wasm`, social artwork and other public assets. `out/` is disposable build output and remains ignored by Git.
+
+The workflow in `.github/workflows/pages.yml` performs the same verified build when `main` is pushed or when the workflow is started manually. After committing and pushing these files yourself:
+
+1. Open **Settings → Pages** in the GitHub repository.
+2. Set **Build and deployment → Source** to **GitHub Actions**.
+3. Open **Actions → Deploy Excogitare to GitHub Pages** and run the workflow if a push has not already started it.
+4. Once deployment completes, the project site should be available at `https://angeladmerkel.github.io/Excogitare/`.
+
+If the repository is renamed, change `pagesBasePath` in `next.config.ts` and the Pages URL in that file before rebuilding. GitHub project sites live under the repository name; pretending otherwise merely produces a handsome collection of 404 errors.
