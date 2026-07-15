@@ -152,14 +152,14 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Generation history/);
   assert.match(source, /MAX_GENERATION_HISTORY/);
   assert.match(source, /openGeneration/);
-  assert.match(source, /aria-label="Create tools"/);
+  assert.match(source, /aria-label="Create workflow"/);
   assert.match(source, /World shape/);
   assert.match(source, /Climate and terrain/);
   assert.match(source, /Players and starts/);
   assert.match(source, /Resources and wonders/);
-  assert.match(source, /<strong>Excogitare<\/strong>/);
-  assert.match(source, /<strong>Region-Graph<\/strong>/);
-  assert.match(source, /<strong>Physical<\/strong>/);
+  assert.match(source, /label: "Excogitare"/);
+  assert.match(source, /label: "Region-Graph"/);
+  assert.match(source, /label: "Physical"/);
   assert.match(source, /Excogitare worlds/);
   assert.match(source, /Region-Graph worlds/);
   assert.match(source, /Physical worlds/);
@@ -170,11 +170,11 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Erosion/);
   assert.match(source, /World structure/);
   assert.match(source, /retained for editing/);
-  assert.match(source, /After generation/);
+  assert.match(source, /Iteration tools/);
   assert.match(source, /map-generation\.worker/);
   assert.match(source, /kind: "REGENERATE"/);
   assert.match(source, /Cancel · \{generationStage\}/);
-  assert.match(source, />Analyze</);
+  assert.match(source, />Review</);
   assert.match(source, /Multiplayer balance/);
   assert.match(source, /Civ5 validation/);
   assert.match(source, /Automated repair/);
@@ -190,11 +190,11 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Ruined city/);
   assert.match(source, /Fallout/);
   assert.match(source, /<span>Wrap type<\/span>/);
-  assert.match(source, /<span>Projection Type<\/span>/);
+  assert.match(source, /<span>Pole orientation<\/span>/);
   assert.match(climateProjection, /North \/ south poles/);
   assert.match(climateProjection, /Polar centered/);
   assert.match(climateProjection, /Equatorial pole/);
-  assert.ok(source.indexOf("Projection Type") < source.indexOf("World concept"));
+  assert.ok(source.indexOf("World recipe") < source.indexOf("Pole orientation"));
   assert.doesNotMatch(source, /Build order/);
   assert.match(source, />Export PNG<\/button>/);
   assert.match(source, /<span>Geometry<\/span>/);
@@ -220,6 +220,55 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /\[canvasMap\.width, canvasMap\.height, projection\]/);
   assert.match(source, /\}, \[size, fitMap\]\);/);
   assert.doesNotMatch(source, /\}, \[canvasMap, size, fitMap\]\);/);
+});
+
+test("Create sidebar separates design, iteration, editing, and review", async () => {
+  const [source, css, readme] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, />Design<\/button>[\s\S]{0,500}>Iterate<\/button>[\s\S]{0,500}>Edit<\/button>[\s\S]{0,500}>Review<\/button>/);
+  assert.match(source, /createView === "ITERATE"[\s\S]{0,500}className="iteration-workspace"/);
+  assert.match(source, /<h3>World recipe<\/h3>/);
+  assert.match(source, /className="engine-carousel-controls"/);
+  assert.match(source, /className="engine-carousel" aria-label="Generation engines"/);
+  assert.match(source, /aria-label="Previous generation engine"/);
+  assert.match(source, /aria-label="Next generation engine"/);
+  assert.match(source, /<span>\{engine\.label\}<\/span><small>\{engine\.description\}<\/small>/);
+  assert.match(source, /<span>Pole orientation<\/span>/);
+  assert.match(source, /name="world-design-step"/);
+  assert.match(source, /className="advanced-controls"/);
+  assert.match(source, /className="generation-summary action-recipe-summary"/);
+  assert.match(source, /id="map-display-panel"/);
+  assert.match(source, />Display<\/button>/);
+  assert.match(css, /\.create-mode-tabs \{[\s\S]{0,180}grid-template-columns: repeat\(4, 1fr\)/);
+  assert.match(source, /\{mode === "VIEW" && \([\s\S]{0,120}<div className="explore-sidebar-display">/);
+  assert.match(css, /\.advanced-controls/);
+  assert.match(css, /\.engine-carousel > button \{[\s\S]{0,180}flex: 0 0 100%/);
+  assert.match(css, /\.world-recipe-card \{ display: grid; gap: 8px; \}/);
+  assert.doesNotMatch(css, /\.world-model-picker button:not\(\.is-active\) small/);
+  assert.equal((source.match(/className="generation-summary/g) ?? []).length, 1);
+  assert.match(readme, /Design[\s\S]{0,100}Iterate[\s\S]{0,100}Edit[\s\S]{0,100}Review/);
+});
+
+test("dense controls expose unclipped contextual help on hover and focus", async () => {
+  const [source, css, readme] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /const \[uiTooltip, setUiTooltip\] = useState<UiTooltip \| null>\(null\)/);
+  assert.match(source, /closest<HTMLElement>\("\[data-tooltip\]"\)/);
+  assert.match(source, /document\.addEventListener\("pointerover", onPointerOver\)/);
+  assert.match(source, /document\.addEventListener\("focusin", onFocusIn\)/);
+  assert.match(source, /className=\{`ui-tooltip\$\{uiTooltip\.above/);
+  assert.match(source, /role="tooltip"/);
+  assert.ok((source.match(/data-tooltip=/g) ?? []).length >= 30);
+  assert.match(css, /\.ui-tooltip \{[\s\S]{0,120}position: fixed;[\s\S]{0,200}z-index: 30/);
+  assert.match(css, /\.ui-tooltip \{[\s\S]{0,700}pointer-events: none/);
+  assert.match(css, /\.ui-tooltip,[\s\S]{0,180}display: none !important/);
+  assert.match(readme, /contextual help on hover and keyboard focus/);
 });
 
 test("the map legend cannot capture Create controls", async () => {

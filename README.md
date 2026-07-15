@@ -28,9 +28,11 @@ The controls in the top bar remain available in every menu:
 
 On phone-sized screens Excogitare automatically enters a deliberately reduced mobile view. It presents the map itself, **Randomise & Generate**, and **Download .Civ5Map**—nothing else from the ordinary workspace chrome. The first action chooses a fresh Civ V-safe combination and generates it immediately; the second exports the current result. Turning a phone sideways retains this view when the device reports a coarse touch pointer. Editing, Repair, Lua, layer controls and imported-map work remain desktop tools rather than being crushed into an unusable pocket accordion.
 
-### Layers and map information
+Desktop controls provide contextual help on hover and keyboard focus. These tooltips explain consequences and scope rather than merely repeating a button label: generation settings describe which map systems they affect, editor tools state what they change, Repair profiles state how aggressive they are, and export or canvas controls explain their output. The help surface is fixed above the application so sidebar scrolling and nested panels cannot clip it. Touch devices omit the tooltip layer.
 
-The sidebar reports dimensions, Civ V world-size label, tile count, wrap state and a terrain census. Its layer switches affect only the view; they do not delete anything from the map.
+### Display controls and map information
+
+Explore keeps its full inspection sidebar: dimensions, Civ V world-size label, tile count, wrap state, the terrain census and every layer switch remain visible there. The map toolbar's **Display** panel provides the same controls as a quick canvas-side surface, but does not replace Explore's details. Create omits that inspection block so view controls do not interrupt the design workflow. Layer switches affect only the rendering; they do not delete anything from the map. **Legend** remains beside Display because explaining the iconography and deciding which layers to show are related but distinct jobs.
 
 - **Political** draws scenario territories and borders when ownership records exist. On generated maps it may instead show projected influence around starts. The colours are inferred from stored civilization or team identifiers, not read from Civ V's complete XML database.
 - **Hex grid** shows the underlying hex geometry.
@@ -54,17 +56,21 @@ The binary format is not blessed with a complete public specification. Unusual v
 
 ## Create
 
-Create contains three submenus: **Generate**, **Edit** and **Analyze**. Generate builds a deterministic map from a seed and a set of constraints; Edit changes the result directly; Analyze reports whether that result is plausible, legal and remotely fair. **Randomise** at the top chooses a new combination of generation settings and immediately produces a map. It excludes the known game-breaking geometries unless their separate risk control has been enabled.
+Create contains four workflow tabs: **Design**, **Iterate**, **Edit** and **Review**. Design builds a deterministic map from a seed and a set of constraints. Iterate revisits generations and reruns selected passes. Edit changes the result directly. Review reports whether that result is plausible, legal and remotely fair. **Randomise** remains fixed at the top and chooses a new combination of settings before immediately producing a map. It excludes known game-breaking geometries unless their separate risk control has been enabled.
 
-### Generate: projection and world concept
+The numbered Design sections behave as a guided sequence, with only one normally expanded at a time. Their summaries report the current choices, and a gold dot marks a section that differs from Excogitare's defaults. Frequently used controls remain visible; specialist simulation, placement and spacing controls live under a **More controls** disclosure within the relevant step. The current recipe and **Generate map** action remain visible at the bottom of the sidebar instead of disappearing after a long scroll.
 
-**Projection Type** is the first control because it changes the climate coordinate system used by every generation engine:
+### Design: world recipe and pole orientation
+
+**World recipe** collects the generation engine, world character, map type, size and seed into a compact starting surface. The three engines are presented as a full-width carousel rather than compressed adjacent tiles. Arrow controls move between engines, selecting a card applies it, and every card keeps its architectural description visible. The remaining recipe controls and advanced disclosures are deliberately flat: Excogitare avoids stacking decorative cards inside other cards merely to consume the sidebar.
+
+**Pole orientation** appears in World shape because it changes the climate coordinate system used by every generation engine without changing the 2D or isometric camera:
 
 - **North / south poles** is the conventional layout: cold poles at the top and bottom with an equator through the middle.
 - **Polar centered** places a pole at the centre and radiates climate outward toward an equatorial perimeter.
 - **Equatorial pole** treats the horizontal middle axis as the pole and warms toward the top and bottom edges.
 
-![Projection Type comparison: north and south poles, polar centered and equatorial pole](public/readme/projection-types.png)
+![Pole Orientation comparison: north and south poles, polar centered and equatorial pole](public/readme/projection-types.png)
 
 *The same Physical-engine concept rendered under each climate projection. Projection moves climate and ice; it does not alter Civ V's rectangular hex adjacency.*
 
@@ -118,7 +124,7 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 
 **Map size** provides Civ V's standard budgets: Duel `40×24`, Tiny `56×36`, Small `66×42`, Standard `80×52`, Large `104×64` and Huge `128×80`. Changing size also restores its recommended major- and city-state counts. **Seed** makes a configuration repeatable; **Shuffle** changes only the seed. The configuration summary states the active projection, engine, character, map type, size, final dimensions and player count. When structural metadata exists, **World structure** reports its retained geographic objects and diagnostics.
 
-### Generate: World shape
+### Design: World shape
 
 - **World modifier** applies a second rule over the chosen map type. **None** leaves the preset alone; **Strategic Depth** builds long ranges, narrow passes, defended basins and invasion corridors; **Fractured World** breaks land and water into smaller contested regions; **Doomsday** adds scarred highlands, sparse fallout, ruined cities and remnants of roads.
 - **Wrap type** uses the map type's default, forces east-west wrapping, or disables wrapping. It affects adjacency, pathfinding and the exported map flag.
@@ -129,16 +135,16 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 - **Physical controls** set plate activity to quiet, normal or violent; erosion to light, moderate or strong; and river density to sparse, normal or dense. The retained structure records plate motion, crust, boundaries, continents, basins and major ranges for later inspection.
 - **Reset world shape** restores this group without changing the rest of the design.
 
-### Generate: Climate and terrain
+### Design: Climate and terrain
 
 - **Climate** shifts the full temperature field toward Cool, Temperate or Hot.
 - **Rainfall** shifts moisture toward Arid, Normal or Wet. Realistic and Physical maps retain west-to-east atmospheric transport, orographic rainfall and eastern rain shadows.
-- **Climate logic** appears for Region-Graph. **Free regional climates** permits mythic regions without latitude discipline; **Latitude-informed climates** anchors regional temperatures to the selected Projection Type.
+- **Climate logic** appears for Region-Graph under **More climate controls**. **Free regional climates** permits mythic regions without latitude discipline; **Latitude-informed climates** anchors regional temperatures to the selected pole orientation.
 - **Region contrast** blends climate borders, keeps varied provinces, or exaggerates them into extreme realms.
 - **Dominant terrain** biases generation toward any combination of Grassland, Plains, Desert and Tundra. Selecting nothing leaves the mix to climate. It is a bias rather than permission to put deserts under the sea or snow in a furnace.
 - **Reset climate** restores this group and clears terrain dominance.
 
-### Generate: Resources and wonders
+### Design: Resources and wonders
 
 - **Bonus resources**, **Luxuries** and **Strategics** independently choose scarce, standard or abundant placement.
 - **Strategic distribution** spreads deposits evenly, assigns characteristic types to regions, or creates clusters.
@@ -152,7 +158,7 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 
 Camps, ruins, ruined cities and roads are scenario content. Excogitare can preview and analyze them, but a newly generated geography-first Civ5Map does not yet embed every one of those records in a fresh scenario section. Imported maps fare better because their existing scenario structure can be amended rather than invented.
 
-### Generate: Players and starts
+### Design: Players and starts
 
 - **Players** accepts 2–22 major civilizations; **City states** accepts 0–41 minor civilizations.
 - **Layout: Equal separation** spreads major starts apart. **Tournament** places them with a stricter competitive bias. **Paired teams** enables team controls.
@@ -163,7 +169,7 @@ Camps, ruins, ruined cities and roads are scenario content. Excogitare can previ
 
 Generated starts are tested for bounds, passable land, duplicates, spacing, mountain isolation and access to the wider landmass. “Balanced” is nonetheless a heuristic, not a theorem and certainly not a tournament organizer willing to accept blame.
 
-### Generate: iteration and history
+### Iterate: regeneration, candidates and history
 
 - **Generate map** runs all passes in an isolated worker. While running, it becomes a **Cancel** button and reports the active stage.
 - **Generation history** keeps the latest 30 generated maps, including their options and seeds, for the current browser session. Opening an entry restores that snapshot. Reloading the page clears the history.
@@ -181,9 +187,9 @@ Generated starts are tested for bounds, passable land, duplicates, spacing, moun
 
 Edits participate in Undo and Redo, preserve pan and zoom, and are subject to the same export validation as generated content.
 
-### Analyze submenu
+### Review submenu
 
-**Multiplayer balance** grades the map and each major start. Player cards report a heuristic score, workable nearby land, strategic resources, luxuries and nearest-opponent distance; selecting a player focuses that start on the map. **Civ5 validation** lists errors, warnings and informational findings involving dimensions, tile legality, rivers, starts, resources and scenario data. Analyze reports problems but does not alter them; use Edit or Repair for that.
+**Multiplayer balance** grades the map and each major start. Player cards report a heuristic score, workable nearby land, strategic resources, luxuries and nearest-opponent distance; selecting a player focuses that start on the map. **Civ5 validation** lists errors, warnings and informational findings involving dimensions, tile legality, rivers, starts, resources and scenario data. Review reports problems but does not alter them; use Edit or Repair for that.
 
 The generator is an independent approximation of Civ V's rules, not Firaxis code. Region-Graph reproduces Fantastical's broad geographic architecture, not its exact tables, random sequence or every eccentric special case. Generated maps retain private plates, subregions, polygons, continents, basins, climate provinces, mountain ranges and river systems, but `.Civ5Map` has no standard place for all of that model and the renderer does not yet draw a geographic-label layer.
 

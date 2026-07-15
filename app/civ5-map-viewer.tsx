@@ -78,6 +78,7 @@ type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
 type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
 type Projection = "FLAT" | "ISOMETRIC";
 type RepairView = "ORIGINAL" | "CORRECTED" | "DIFFERENCE";
+type UiTooltip = { text: string; x: number; y: number; above: boolean };
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 type GenerationWorkerMessage = { id: number; type: "PROGRESS"; stage: string } | { id: number; type: "COMPLETE"; map: Civ5Map } | { id: number; type: "ERROR"; message: string };
 
@@ -97,6 +98,12 @@ const GEOMETRY_OPTIONS = [
   { id: "PIN", label: "Pin — ultra-extreme vertical", gameBreaking: true },
   { id: "STRING", label: "String — ultra-extreme horizontal", gameBreaking: true },
 ] as const satisfies ReadonlyArray<{ id: MapGenerationOptions["geometry"]; label: string; gameBreaking: boolean }>;
+
+const GENERATION_ENGINES = [
+  { id: "EXCOGITARE", label: "Excogitare", preset: "WILD_REGIONS", description: "The native expressive engine: warped fields, dramatic landforms, and the broadest stylistic range." },
+  { id: "REGION_GRAPH", label: "Region-Graph", preset: "LIVING_WORLD", description: "The Fantastical-inspired hierarchy: subregions, polygons, realms, ranges, basins, and watersheds." },
+  { id: "PHYSICAL", label: "Physical", preset: "DYNAMIC_EARTH", description: "Moving tectonic plates, convergence and rifting, erosion, altitude, atmospheric moisture, and rain shadows." },
+] as const satisfies ReadonlyArray<{ id: MapGenerationOptions["engine"]; label: string; preset: string; description: string }>;
 
 function generationEngineStage(engine: MapGenerationOptions["engine"]) {
   if (engine === "REGION_GRAPH") return "Preparing geographic regions";
@@ -901,7 +908,7 @@ export function Civ5MapViewer() {
   const [activeGenerationId, setActiveGenerationId] = useState<number | null>(null);
   const [generationRunning, setGenerationRunning] = useState(false);
   const [generationStage, setGenerationStage] = useState("");
-  const [createView, setCreateView] = useState<"GENERATE" | "EDIT" | "ANALYZE">("GENERATE");
+  const [createView, setCreateView] = useState<"GENERATE" | "ITERATE" | "EDIT" | "ANALYZE">("GENERATE");
   const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
   const [editTool, setEditTool] = useState<"TILE" | "FILL" | "SELECT" | "START" | "STRUCTURE">("TILE");
   const [brushSize, setBrushSize] = useState(1);
@@ -944,6 +951,8 @@ export function Civ5MapViewer() {
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const [layers, setLayers] = useState<Layers>({ political: false, grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
   const [showLegend, setShowLegend] = useState(false);
+  const [showDisplayPanel, setShowDisplayPanel] = useState(false);
+  const [uiTooltip, setUiTooltip] = useState<UiTooltip | null>(null);
   const [projection, setProjection] = useState<Projection>("FLAT");
   const [hovered, setHovered] = useState<HoveredTile>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -955,6 +964,7 @@ export function Civ5MapViewer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
+  const engineCarouselRef = useRef<HTMLDivElement>(null);
   const exportConfirmationCancelRef = useRef<HTMLButtonElement>(null);
   const gameBreakingGeometryCancelRef = useRef<HTMLButtonElement>(null);
   const luaExperimentalCancelRef = useRef<HTMLButtonElement>(null);
@@ -969,6 +979,58 @@ export function Civ5MapViewer() {
   const checkpointIdRef = useRef(0);
   const mapRef = useRef(map);
   const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    if (mode !== "CREATE" || createView !== "GENERATE" || !engineCarouselRef.current) return;
+    const index = GENERATION_ENGINES.findIndex((item) => item.id === generationOptions.engine);
+    const activeCard = engineCarouselRef.current.children[index] as HTMLElement | undefined;
+    engineCarouselRef.current.scrollTo({ left: activeCard?.offsetLeft ?? index * engineCarouselRef.current.clientWidth, behavior: "smooth" });
+  }, [createView, generationOptions.engine, mode]);
+
+  useEffect(() => {
+    const tooltipTarget = (node: EventTarget | null) => node instanceof Element ? node.closest<HTMLElement>("[data-tooltip]") : null;
+    const showTooltip = (target: HTMLElement) => {
+      const text = target.dataset.tooltip?.trim();
+      if (!text) return;
+      const bounds = target.getBoundingClientRect();
+      const above = bounds.bottom + 104 > window.innerHeight && bounds.top > 104;
+      const halfWidth = Math.min(140, (window.innerWidth - 36) / 2);
+      setUiTooltip({
+        text,
+        x: Math.max(18 + halfWidth, Math.min(window.innerWidth - 18 - halfWidth, bounds.left + bounds.width / 2)),
+        y: above ? bounds.top - 9 : bounds.bottom + 9,
+        above,
+      });
+    };
+    const onPointerOver = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      const target = tooltipTarget(event.target);
+      if (target) showTooltip(target);
+    };
+    const onPointerOut = (event: PointerEvent) => {
+      const target = tooltipTarget(event.target);
+      const related = tooltipTarget(event.relatedTarget);
+      if (!target || target === related) return;
+      setUiTooltip(null);
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const target = tooltipTarget(event.target);
+      if (target) showTooltip(target);
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (tooltipTarget(event.target)) setUiTooltip(null);
+    };
+    document.addEventListener("pointerover", onPointerOver);
+    document.addEventListener("pointerout", onPointerOut);
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("pointerover", onPointerOver);
+      document.removeEventListener("pointerout", onPointerOut);
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
 
   const replaceMap = useCallback((next: Civ5Map, source: ImportedMapSource | null = null) => {
     mapRef.current = next;
@@ -1581,6 +1643,22 @@ export function Civ5MapViewer() {
     setMessage("Game-breaking geometry enabled · Civ V may crash when loading these maps");
   };
 
+  const selectGenerationEngine = (engine: MapGenerationOptions["engine"]) => {
+    const definition = GENERATION_ENGINES.find((item) => item.id === engine)!;
+    const preset = MAP_PRESETS.find((item) => item.id === definition.preset)!;
+    setGenerationOptions((current) => {
+      if (engine === "REGION_GRAPH") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism };
+      if (engine === "PHYSICAL") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: true, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge };
+      return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains };
+    });
+  };
+
+  const stepGenerationEngine = (direction: -1 | 1) => {
+    const currentIndex = GENERATION_ENGINES.findIndex((item) => item.id === generationOptions.engine);
+    const nextIndex = (currentIndex + direction + GENERATION_ENGINES.length) % GENERATION_ENGINES.length;
+    selectGenerationEngine(GENERATION_ENGINES[nextIndex].id);
+  };
+
   const generateNewMap = async () => {
     setShowLegend(false);
     const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
@@ -1824,7 +1902,7 @@ export function Civ5MapViewer() {
         </div>
         <nav className="mode-tabs" aria-label="Workspace mode">
           {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
-            <button key={item} type="button" className={`${mode === item ? "is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`} onClick={() => selectWorkspaceMode(item)}>
+            <button key={item} type="button" data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "REPAIR" ? "Audit an imported Civ5Map and preview automatic corrections for terrain, rivers, resources, scenarios, and starts." : "Experimentally load, inspect, run, and modify Civ V Lua map-generation projects."} className={`${mode === item ? "is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`} onClick={() => selectWorkspaceMode(item)}>
               {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}
               {item === "SCRIPT" && <span className="experimental-badge">Experimental</span>}
             </button>
@@ -1832,22 +1910,23 @@ export function Civ5MapViewer() {
         </nav>
         <div className="topbar-actions">
           <div className="history-actions" aria-label="Edit history">
-            <button type="button" onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
-            <button type="button" onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
+            <button type="button" data-tooltip="Undo the most recent map edit while preserving the current zoom and pan." onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
+            <button type="button" data-tooltip="Restore the most recently undone map edit while preserving the current zoom and pan." onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
           </div>
-          <button className="button button-secondary button-export-view" type="button" onClick={exportView}>Export PNG</button>
-          {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" onClick={exportLua}>Export Lua</button>}
-          {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" onClick={exportModInfo}>Export .modinfo</button>}
+          <button className="button button-secondary button-export-view" type="button" data-tooltip="Export the current rendered view as a transparent-background PNG at high resolution." onClick={exportView}>Export PNG</button>
+          {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" data-tooltip="Download the current map as an Excogitare-compatible Lua generation script." onClick={exportLua}>Export Lua</button>}
+          {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" data-tooltip="Download a Civ V mod manifest for the exported Lua map script." onClick={exportModInfo}>Export .modinfo</button>}
           <button
             className="button button-secondary button-export-map"
             type="button"
             onClick={exportCiv5Map}
             disabled={isEditingMetadata}
+            data-tooltip={isEditingMetadata ? "Save the map name and description before exporting." : "Validate and download the current edited map as a Civ V .Civ5Map file."}
             title={isEditingMetadata ? "Save your edits before exporting" : "Export the current Civ5Map file"}
           >
             Export Civ5Map
           </button>
-          <button className="button button-primary" type="button" onClick={() => fileInputRef.current?.click()}>Open map</button>
+          <button className="button button-primary" type="button" data-tooltip="Open a .Civ5Map file from this device for inspection, editing, or repair." onClick={() => fileInputRef.current?.click()}>Open map</button>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept=".civ5map,.Civ5Map,application/octet-stream" onChange={onFileChange} />
           <input ref={luaInputRef} className="visually-hidden" type="file" accept=".lua,text/x-lua,text/plain" onChange={onLuaFileChange} />
           <input ref={luaDependencyInputRef} className="visually-hidden" type="file" multiple accept=".lua,text/x-lua,text/plain" onChange={onLuaDependencyChange} />
@@ -1857,7 +1936,7 @@ export function Civ5MapViewer() {
       <section className="workspace">
         <aside className="sidebar" aria-label="Map information and layers">
           {mode === "CREATE" && (
-            <button className="randomise-world-button" type="button" disabled={generationRunning} onClick={() => void randomiseWorld()}>
+            <button className="randomise-world-button" type="button" data-tooltip="Choose a completely new safe combination of generation settings and immediately build the resulting map." disabled={generationRunning} onClick={() => void randomiseWorld()}>
               <span>Randomise</span><small>{generationRunning ? generationStage : allowGameBreakingGeometry ? "New map from every option" : "New map from Civ V-safe options"}</small>
             </button>
           )}
@@ -1916,13 +1995,13 @@ export function Civ5MapViewer() {
 
               <div className="repair-profile" role="group" aria-label="Repair profile">
                 {(["SAFE", "STANDARD", "COMPETITIVE"] as const).map((profile) => (
-                  <button key={profile} type="button" className={repairProfile === profile ? "is-active" : ""} onClick={() => selectRepairProfile(profile)}>{profile.toLowerCase()}</button>
+                  <button key={profile} type="button" data-tooltip={profile === "SAFE" ? "Apply only high-confidence structural and scenario corrections." : profile === "STANDARD" ? "Also clean up illegal resources and rebuild complete logical river networks." : "Include competitive start-count, spacing, reachability, and balance-oriented corrections."} className={repairProfile === profile ? "is-active" : ""} onClick={() => selectRepairProfile(profile)}>{profile.toLowerCase()}</button>
                 ))}
               </div>
               <small className="repair-profile-note">{repairProfile === "SAFE" ? "Only certain structural and scenario corrections." : repairProfile === "STANDARD" ? "Safe fixes plus guaranteed resource cleanup and complete river-network rebuilding." : "All automated fixes plus competitive start-location review."}</small>
 
               <div className="repair-view-tabs" role="tablist" aria-label="Repair comparison view">
-                {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
+                {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" data-tooltip={item === "ORIGINAL" ? "Show the imported map before any proposed repairs." : item === "CORRECTED" ? "Preview the map after all currently selected corrections." : "Overlay tiles affected by the proposed repair set."} role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
               </div>
               <p className="repair-preview-note"><strong>Corrected is a live preview.</strong> Apply selected to commit the checked fixes, or export the repaired preview directly.</p>
 
@@ -1962,17 +2041,29 @@ export function Civ5MapViewer() {
 
           {mode === "CREATE" && (
             <div className="creator-panel">
-              <div className="create-mode-tabs" role="tablist" aria-label="Create tools">
-                <button type="button" role="tab" aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Generate</button>
-                <button type="button" role="tab" aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
-                <button type="button" role="tab" aria-selected={createView === "ANALYZE"} className={createView === "ANALYZE" ? "is-active" : ""} onClick={() => setCreateView("ANALYZE")}>Analyze</button>
+              <div className="create-mode-tabs" role="tablist" aria-label="Create workflow">
+                <button type="button" role="tab" data-tooltip="Choose the world engine, shape, climate, content, players, and starting conditions." aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Design</button>
+                <button type="button" role="tab" data-tooltip="Reopen previous generations, rerun individual passes, rank candidate seeds, and compare checkpoints." aria-selected={createView === "ITERATE"} className={createView === "ITERATE" ? "is-active" : ""} onClick={() => setCreateView("ITERATE")}>Iterate</button>
+                <button type="button" role="tab" data-tooltip="Paint individual tiles, flood-fill terrain, modify regions and world structure, or relocate starts." aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
+                <button type="button" role="tab" data-tooltip="Inspect multiplayer balance and Civ V validation findings without changing the map." aria-selected={createView === "ANALYZE"} className={createView === "ANALYZE" ? "is-active" : ""} onClick={() => setCreateView("ANALYZE")}>Review</button>
               </div>
 
-              {createView === "GENERATE" ? (
-                <>
-                  <div className="creator-advanced-title"><span>After generation</span><small>Revisit, compare, and refine completed worlds</small></div>
+              {createView === "GENERATE" || createView === "ITERATE" ? (
+                createView === "ITERATE" ? (
+                  <div className="iteration-workspace">
+                  <div className="creator-advanced-title"><span>Iteration tools</span><small>Revisit, compare, and refine completed worlds</small></div>
+                  {map.structure && (
+                    <details className="world-structure-report">
+                      <summary data-tooltip="Inspect the geographic objects, ranges, basins, climate regions, river systems, and diagnostics retained by the current generated map."><span>Generated structure</span><small>{map.structure.engine.replaceAll("_", " ").toLowerCase()} · retained for editing</small></summary>
+                      <div>
+                        <dl>{Object.entries(map.structure.diagnostics).map(([label, value]) => <div key={label}><dt>{label.replaceAll(/([A-Z])/g, " $1")}</dt><dd>{value}</dd></div>)}</dl>
+                        <p>{map.structure.objects.length} geographic objects, {map.structure.mountainRanges.length} mountain ranges, and {map.structure.riverSystems.length} river systems remain attached to this generation.</p>
+                        <small>{map.structure.objects.slice(0, 8).map((object) => object.name).join(" · ")}{map.structure.objects.length > 8 ? " · …" : ""}</small>
+                      </div>
+                    </details>
+                  )}
                   <details className="generation-history">
-                    <summary><span>Generation history</span><small>{generationHistory.length} / {MAX_GENERATION_HISTORY} saved</small></summary>
+                    <summary data-tooltip="Reopen any of the last 30 maps generated during this browser session, including its exact seed and settings."><span>Generation history</span><small>{generationHistory.length} / {MAX_GENERATION_HISTORY} saved</small></summary>
                     <div className="generation-history-body">
                       {generationHistory.length ? (
                         <div className="generation-history-list">
@@ -1991,7 +2082,7 @@ export function Civ5MapViewer() {
                     </div>
                   </details>
                   <details className="creator-group iteration-group">
-                    <summary><span>Selective regeneration</span><small>rerun one design pass</small></summary>
+                    <summary data-tooltip="Rerun world, climate, rivers, content, or starts while retaining compatible layers from the current map."><span>Selective regeneration</span><small>rerun one design pass</small></summary>
                     <div className="creator-group-body">
                       <p className="iteration-note">Rerun one layer while retaining the parts of the current map that remain compatible. A world pass necessarily rebuilds everything downstream.</p>
                       <div className="selective-pass-grid">
@@ -2004,7 +2095,7 @@ export function Civ5MapViewer() {
                     </div>
                   </details>
                   <details className="creator-group batch-generation-group">
-                    <summary><span>Candidate batch</span><small>{batchRunning ? `${batchProgress} / ${batchCount}` : batchCandidates.length ? `${batchCandidates.length} ranked` : "compare seeds"}</small></summary>
+                    <summary data-tooltip="Generate several related seeds and rank them using validation and multiplayer-balance heuristics."><span>Candidate batch</span><small>{batchRunning ? `${batchProgress} / ${batchCount}` : batchCandidates.length ? `${batchCandidates.length} ranked` : "compare seeds"}</small></summary>
                     <div className="creator-group-body">
                       <div className="batch-controls">
                         <label className="control-field"><span>Candidates</span><select value={batchCount} disabled={batchRunning} onChange={(event) => setBatchCount(Number(event.target.value))}><option value="4">4 quick</option><option value="8">8 standard</option><option value="12">12 thorough</option><option value="20">20 tournament</option></select></label>
@@ -2023,7 +2114,7 @@ export function Civ5MapViewer() {
                     </div>
                   </details>
                   <details className="creator-group checkpoint-group">
-                    <summary><span>Named checkpoints</span><small>{checkpoints.length ? `${checkpoints.length} saved` : "compare revisions"}</small></summary>
+                    <summary data-tooltip="Save deliberate map revisions, compare changed tiles and starts, and restore an earlier checkpoint."><span>Named checkpoints</span><small>{checkpoints.length ? `${checkpoints.length} saved` : "compare revisions"}</small></summary>
                     <div className="creator-group-body">
                       <div className="checkpoint-create"><input aria-label="Checkpoint name" placeholder={`e.g. Before river pass`} value={checkpointName} onChange={(event) => setCheckpointName(event.target.value)} /><button type="button" onClick={saveCheckpoint}>Save current</button></div>
                       {comparisonCheckpoint && mapComparison && (
@@ -2040,29 +2131,26 @@ export function Civ5MapViewer() {
                       ) : <p className="iteration-note">Save a deliberate revision before a risky generation pass or structural edit.</p>}
                     </div>
                   </details>
+                  </div>
+                ) : (
+                <>
                   <div className="world-building-steps">
-                  <label className="control-field projection-type-control">
-                    <span>Projection Type</span>
-                    <select value={generationOptions.projectionType} onChange={(event) => setGenerationOptions((current) => ({ ...current, projectionType: event.target.value as MapGenerationOptions["projectionType"] }))}>
-                      {CLIMATE_PROJECTIONS.map((projectionType) => <option key={projectionType.id} value={projectionType.id}>{projectionType.label}</option>)}
-                    </select>
-                    <small>{CLIMATE_PROJECTIONS.find((projectionType) => projectionType.id === generationOptions.projectionType)?.description}</small>
-                  </label>
-                  <div className="section-title"><h3>World concept</h3><span>step 1</span></div>
+                  <section className="world-recipe-card">
+                  <div className="section-title"><h3>World recipe</h3><span>start here</span></div>
                   <fieldset className="world-model-picker">
                     <legend>Generation engine</legend>
-                    <button type="button" className={generationOptions.engine === "EXCOGITARE" ? "is-active" : ""} onClick={() => setGenerationOptions((current) => {
-                      const preset = MAP_PRESETS.find((item) => item.id === "WILD_REGIONS")!;
-                      return current.engine === "EXCOGITARE" ? current : { ...current, engine: "EXCOGITARE", preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains };
-                    })}><strong>Excogitare</strong><small>The native expressive engine: warped fields, dramatic landforms, and the broadest stylistic range.</small></button>
-                    <button type="button" className={generationOptions.engine === "REGION_GRAPH" ? "is-active" : ""} onClick={() => setGenerationOptions((current) => {
-                      const preset = MAP_PRESETS.find((item) => item.id === "LIVING_WORLD")!;
-                      return current.engine === "REGION_GRAPH" ? current : { ...current, engine: "REGION_GRAPH", preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism };
-                    })}><strong>Region-Graph</strong><small>The Fantastical-inspired hierarchy: subregions, polygons, realms, ranges, basins, and watersheds.</small></button>
-                    <button type="button" className={generationOptions.engine === "PHYSICAL" ? "is-active" : ""} onClick={() => setGenerationOptions((current) => {
-                      const preset = MAP_PRESETS.find((item) => item.id === "DYNAMIC_EARTH")!;
-                      return current.engine === "PHYSICAL" ? current : { ...current, engine: "PHYSICAL", preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: true, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge };
-                    })}><strong>Physical</strong><small>Moving tectonic plates, convergence and rifting, erosion, altitude, atmospheric moisture, and rain shadows.</small></button>
+                    <nav className="engine-carousel-controls" aria-label="Generation engine carousel controls">
+                      <button type="button" data-tooltip="Select the previous generation architecture." aria-label="Previous generation engine" onClick={() => stepGenerationEngine(-1)}>←</button>
+                      <output aria-live="polite">{GENERATION_ENGINES.findIndex((item) => item.id === generationOptions.engine) + 1} / {GENERATION_ENGINES.length}</output>
+                      <button type="button" data-tooltip="Select the next generation architecture." aria-label="Next generation engine" onClick={() => stepGenerationEngine(1)}>→</button>
+                    </nav>
+                    <div ref={engineCarouselRef} className="engine-carousel" aria-label="Generation engines">
+                      {GENERATION_ENGINES.map((engine) => (
+                        <button key={engine.id} type="button" data-tooltip={`Select ${engine.label} and load its recommended baseline map type and physical parameters.`} className={generationOptions.engine === engine.id ? "is-active" : ""} aria-pressed={generationOptions.engine === engine.id} onClick={() => selectGenerationEngine(engine.id)}>
+                          <span>{engine.label}</span><small>{engine.description}</small>
+                        </button>
+                      ))}
+                    </div>
                   </fieldset>
                   <fieldset className="style-picker">
                     <legend>World character</legend>
@@ -2075,6 +2163,7 @@ export function Civ5MapViewer() {
                       <button
                         key={value}
                         type="button"
+                        data-tooltip={`${note}. This changes the character of the selected engine without replacing it.`}
                         className={generationOptions.style === value ? "is-active" : ""}
                         onClick={() => setGenerationOptions((current) => value === "BRUTAL"
                           ? { ...current, style: value, balance: "TOURNAMENT", startQuality: "BALANCED", mountainPercent: Math.max(18, current.mountainPercent) }
@@ -2084,7 +2173,8 @@ export function Civ5MapViewer() {
                       </button>
                     ))}
                   </fieldset>
-                  <label className="control-field">
+                  <div className="recipe-fields">
+                  <label className="control-field" data-tooltip="Choose a geographic archetype. Selecting one also chooses its required engine and recommended physical defaults.">
                     <span>Map type</span>
                     <select value={generationOptions.preset} onChange={(event) => {
                       const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
@@ -2097,7 +2187,7 @@ export function Civ5MapViewer() {
                     </select>
                     <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
                   </label>
-                  <label className="control-field">
+                  <label className="control-field" data-tooltip="Choose Civ V's tile dimensions. Recommended player and city-state counts update with the selected size.">
                     <span>Map size</span>
                     <select value={generationOptions.size} onChange={(event) => {
                       const nextSize = event.target.value as MapGenerationOptions["size"];
@@ -2107,27 +2197,24 @@ export function Civ5MapViewer() {
                       {MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}
                     </select>
                   </label>
-                  <div className="seed-row">
-                    <label className="control-field"><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
-                    <button type="button" onClick={randomizeSeed}>Shuffle</button>
                   </div>
-                  <div className="generation-summary"><span>Configuration</span><strong>{generationSummary}</strong></div>
-                  {map.structure && (
-                    <details className="world-structure-report">
-                      <summary><span>World structure</span><small>{map.structure.engine.replaceAll("_", " ").toLowerCase()} · retained for editing</small></summary>
-                      <div>
-                        <dl>{Object.entries(map.structure.diagnostics).map(([label, value]) => <div key={label}><dt>{label.replaceAll(/([A-Z])/g, " $1")}</dt><dd>{value}</dd></div>)}</dl>
-                        <p>{map.structure.objects.length} geographic objects, {map.structure.mountainRanges.length} mountain ranges, and {map.structure.riverSystems.length} river systems remain attached to this generation.</p>
-                        <small>{map.structure.objects.slice(0, 8).map((object) => object.name).join(" · ")}{map.structure.objects.length > 8 ? " · …" : ""}</small>
-                      </div>
-                    </details>
-                  )}
-
-                  <details className="creator-group" open>
-                    <summary><span>2 · World shape</span><small>{generationOptions.waterPercent}% water · {generationOptions.mountainPercent}% mountains</small></summary>
+                  <div className="seed-row">
+                    <label className="control-field" data-tooltip="The same complete settings and seed produce the same world, making a generation reproducible."><span>Seed</span><input value={generationOptions.seed} maxLength={80} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
+                    <button type="button" data-tooltip="Replace the current seed without changing any other design setting." onClick={randomizeSeed}>Shuffle</button>
+                  </div>
+                  </section>
+                  <details className="creator-group" name="world-design-step" open data-modified={generationOptions.projectionType !== DEFAULT_GENERATION_OPTIONS.projectionType || generationOptions.modifier !== DEFAULT_GENERATION_OPTIONS.modifier || generationOptions.wrapType !== DEFAULT_GENERATION_OPTIONS.wrapType || generationOptions.geometry !== DEFAULT_GENERATION_OPTIONS.geometry || generationOptions.waterPercent !== DEFAULT_GENERATION_OPTIONS.waterPercent || generationOptions.mountainPercent !== DEFAULT_GENERATION_OPTIONS.mountainPercent}>
+                    <summary data-tooltip="Control the map's climate orientation, modifier, wrapping, aspect ratio, land-water balance, relief, and physical structure."><span>1 · World shape</span><small>{generationOptions.waterPercent}% water · {generationOptions.mountainPercent}% mountains</small></summary>
                     <div className="creator-group-body">
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, geometry: DEFAULT_GENERATION_OPTIONS.geometry, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge, granularity: DEFAULT_GENERATION_OPTIONS.granularity, oceanBasins: DEFAULT_GENERATION_OPTIONS.oceanBasins, landAtPoles: DEFAULT_GENERATION_OPTIONS.landAtPoles, coastalRangePercent: DEFAULT_GENERATION_OPTIONS.coastalRangePercent, riverDensity: DEFAULT_GENERATION_OPTIONS.riverDensity, plateActivity: DEFAULT_GENERATION_OPTIONS.plateActivity, erosionStrength: DEFAULT_GENERATION_OPTIONS.erosionStrength }))}>Reset world shape</button>
-                      <label className="control-field">
+                      <label className="control-field projection-type-control" data-tooltip="Relocate the climatic poles without changing Civ V's rectangular tile adjacency or the 2D/3D camera.">
+                        <span>Pole orientation</span>
+                        <select value={generationOptions.projectionType} onChange={(event) => setGenerationOptions((current) => ({ ...current, projectionType: event.target.value as MapGenerationOptions["projectionType"] }))}>
+                          {CLIMATE_PROJECTIONS.map((projectionType) => <option key={projectionType.id} value={projectionType.id}>{projectionType.label}</option>)}
+                        </select>
+                        <small>{CLIMATE_PROJECTIONS.find((projectionType) => projectionType.id === generationOptions.projectionType)?.description}</small>
+                      </label>
+                      <label className="control-field" data-tooltip="Apply a broad thematic transformation such as Strategic Depth or Doomsday on top of the chosen map type.">
                         <span>World modifier</span>
                         <select value={generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier} onChange={(event) => {
                           const modifier = event.target.value as MapGenerationOptions["modifier"];
@@ -2137,7 +2224,7 @@ export function Civ5MapViewer() {
                         </select>
                         <small>{WORLD_MODIFIERS.find((modifier) => modifier.id === (generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier))?.description}</small>
                       </label>
-                      <label className="control-field">
+                      <label className="control-field" data-tooltip="Choose whether east and west edges connect in Civ V. This affects navigation and exported map metadata.">
                         <span>Wrap type</span>
                         <select value={generationOptions.wrapType ?? "PRESET"} onChange={(event) => setGenerationOptions((current) => ({ ...current, wrapType: event.target.value as MapGenerationOptions["wrapType"] }))}>
                           <option value="PRESET">Map type default</option>
@@ -2145,7 +2232,7 @@ export function Civ5MapViewer() {
                           <option value="NONE">No wrapping</option>
                         </select>
                       </label>
-                      <label className="control-field">
+                      <label className="control-field" data-tooltip="Change the map's aspect ratio while retaining approximately the selected size's tile budget.">
                         <span>Geometry</span>
                         <select value={generationOptions.geometry} onChange={(event) => setGenerationOptions((current) => ({ ...current, geometry: event.target.value as MapGenerationOptions["geometry"] }))}>
                           {GEOMETRY_OPTIONS.filter((option) => allowGameBreakingGeometry || !option.gameBreaking).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
@@ -2161,9 +2248,12 @@ export function Civ5MapViewer() {
                         <span><strong>Show game-breaking geometry</strong><small>Unlock aspect ratios known to crash Civ V. Randomise will use them only while this is enabled.</small></span>
                       </label>
                       <div className="percentage-controls">
-                        <label className="control-field percentage-field"><span>Water percent <output>{generationOptions.waterPercent}%</output></span><input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} /></label>
-                        <label className="control-field percentage-field"><span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span><input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" || generationOptions.style === "BRUTAL" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} /></label>
+                        <label className="control-field percentage-field" data-tooltip="Set the target share of water tiles. Zero creates a wholly terrestrial world."><span>Water percent <output>{generationOptions.waterPercent}%</output></span><input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} /></label>
+                        <label className="control-field percentage-field" data-tooltip="Set the target share of impassable mountain tiles. Accessibility passes still preserve routes across every landmass."><span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span><input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" || generationOptions.style === "BRUTAL" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} /></label>
                       </div>
+                      <details className="advanced-controls">
+                        <summary data-tooltip="Reveal engine-specific controls for world age, geographic granularity, basins, tectonics, erosion, coastal ranges, and river density."><span>More world controls</span><small>age, geology, rivers</small></summary>
+                        <div>
                       <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
                       {generationOptions.engine === "REGION_GRAPH" && (
                         <div className="region-architecture-controls">
@@ -2187,11 +2277,13 @@ export function Civ5MapViewer() {
                           <small>Physical worlds retain plate ownership and motion, convergent and divergent boundaries, erosion, continental and ocean-basin objects, altitude cooling, and eastward atmospheric moisture.</small>
                         </div>
                       )}
+                        </div>
+                      </details>
                     </div>
                   </details>
 
-                  <details className="creator-group content-group">
-                    <summary><span>4 · Resources and wonders</span><small>{generationOptions.wonderCount} wonders · {generationOptions.strategicAbundance.toLowerCase()} strategics</small></summary>
+                  <details className="creator-group content-group" name="world-design-step" data-modified={generationOptions.bonusAbundance !== DEFAULT_GENERATION_OPTIONS.bonusAbundance || generationOptions.luxuryAbundance !== DEFAULT_GENERATION_OPTIONS.luxuryAbundance || generationOptions.strategicAbundance !== DEFAULT_GENERATION_OPTIONS.strategicAbundance || generationOptions.wonderCount !== DEFAULT_GENERATION_OPTIONS.wonderCount}>
+                    <summary data-tooltip="Control bonus, luxury and strategic resources, natural wonders, guarantees, barbarians, ruins, and placement spacing."><span>3 · Resources and wonders</span><small>{generationOptions.wonderCount} wonders · {generationOptions.strategicAbundance.toLowerCase()} strategics</small></summary>
                     <div className="creator-group-body">
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, bonusAbundance: DEFAULT_GENERATION_OPTIONS.bonusAbundance, luxuryAbundance: DEFAULT_GENERATION_OPTIONS.luxuryAbundance, luxuryRegional: DEFAULT_GENERATION_OPTIONS.luxuryRegional, luxuryStartGuarantee: DEFAULT_GENERATION_OPTIONS.luxuryStartGuarantee, strategicAbundance: DEFAULT_GENERATION_OPTIONS.strategicAbundance, strategicDistribution: DEFAULT_GENERATION_OPTIONS.strategicDistribution, strategicStartGuarantee: DEFAULT_GENERATION_OPTIONS.strategicStartGuarantee, offshoreOilPercent: DEFAULT_GENERATION_OPTIONS.offshoreOilPercent, wonderCount: DEFAULT_GENERATION_OPTIONS.wonderCount, wonderMinSpacing: DEFAULT_GENERATION_OPTIONS.wonderMinSpacing, wonderStartBuffer: DEFAULT_GENERATION_OPTIONS.wonderStartBuffer, barbarianAbundance: DEFAULT_GENERATION_OPTIONS.barbarianAbundance, barbarianStartDistance: DEFAULT_GENERATION_OPTIONS.barbarianStartDistance, ruinAbundance: DEFAULT_GENERATION_OPTIONS.ruinAbundance, ruinStartDistance: DEFAULT_GENERATION_OPTIONS.ruinStartDistance }))}>Reset content</button>
                       <div className="control-grid three-controls">
@@ -2200,12 +2292,15 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Strategics</span><select value={generationOptions.strategicAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicAbundance: event.target.value as MapGenerationOptions["strategicAbundance"] }))}><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="ABUNDANT">Abundant</option></select></label>
                       </div>
                       <label className="control-field"><span>Strategic distribution</span><select value={generationOptions.strategicDistribution} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicDistribution: event.target.value as MapGenerationOptions["strategicDistribution"] }))}><option value="EVEN">Even</option><option value="REGIONAL">Regional types</option><option value="CLUSTERED">Clustered deposits</option></select></label>
+                      <label className="control-field"><span>Natural wonders</span><input type="number" min="0" max="12" value={generationOptions.wonderCount} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderCount: Number(event.target.value) }))} /></label>
+                      <details className="advanced-controls">
+                        <summary data-tooltip="Reveal start guarantees, regional luxury rules, offshore oil, wonder spacing, barbarian camps, and ancient ruins."><span>More content controls</span><small>guarantees, spacing, sites</small></summary>
+                        <div>
                       <label className="check-row"><input type="checkbox" checked={generationOptions.strategicStartGuarantee} onChange={(event) => setGenerationOptions((current) => ({ ...current, strategicStartGuarantee: event.target.checked }))} /><span>Guarantee iron and horses near every major start</span></label>
                       <label className="check-row"><input type="checkbox" checked={generationOptions.luxuryStartGuarantee} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryStartGuarantee: event.target.checked }))} /><span>Guarantee a luxury near every major start</span></label>
                       <label className="check-row"><input type="checkbox" checked={generationOptions.luxuryRegional} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryRegional: event.target.checked }))} /><span>Create regional luxury monopolies</span></label>
                       <label className="control-field percentage-field"><span>Offshore oil <output>{generationOptions.offshoreOilPercent}%</output></span><input type="range" min="0" max="70" value={generationOptions.offshoreOilPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, offshoreOilPercent: Number(event.target.value) }))} /></label>
-                      <div className="control-grid three-controls">
-                        <label className="control-field"><span>Natural wonders</span><input type="number" min="0" max="12" value={generationOptions.wonderCount} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderCount: Number(event.target.value) }))} /></label>
+                      <div className="control-grid">
                         <label className="control-field"><span>Wonder spacing</span><input type="number" min="3" max="20" value={generationOptions.wonderMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderMinSpacing: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Start buffer</span><input type="number" min="0" max="15" value={generationOptions.wonderStartBuffer} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderStartBuffer: Number(event.target.value) }))} /></label>
                       </div>
@@ -2216,17 +2311,22 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Ruin start distance</span><input type="number" min="1" max="12" value={generationOptions.ruinStartDistance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinStartDistance: Number(event.target.value) }))} /></label>
                       </div>
                       <small className="content-note">Camps, ruins, ruined cities, and roads are scenario content. Excogitare previews and analyzes them; geography-only export reports that they cannot yet be embedded.</small>
+                        </div>
+                      </details>
                     </div>
                   </details>
 
-                  <details className="creator-group climate-group">
-                    <summary><span>3 · Climate and terrain</span><small>{generationOptions.climate.toLowerCase()} · {generationOptions.rainfall.toLowerCase()}</small></summary>
+                  <details className="creator-group climate-group" name="world-design-step" data-modified={generationOptions.climate !== DEFAULT_GENERATION_OPTIONS.climate || generationOptions.rainfall !== DEFAULT_GENERATION_OPTIONS.rainfall || (generationOptions.dominantTerrains ?? []).length > 0 || generationOptions.regionContrast !== DEFAULT_GENERATION_OPTIONS.regionContrast}>
+                    <summary data-tooltip="Set broad temperature, rainfall, dominant terrain, biome logic, and regional climate contrast."><span>2 · Climate and terrain</span><small>{generationOptions.climate.toLowerCase()} · {generationOptions.rainfall.toLowerCase()}</small></summary>
                     <div className="creator-group-body">
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, climate: DEFAULT_GENERATION_OPTIONS.climate, rainfall: DEFAULT_GENERATION_OPTIONS.rainfall, dominantTerrains: [], climateRealism: DEFAULT_GENERATION_OPTIONS.climateRealism, regionContrast: DEFAULT_GENERATION_OPTIONS.regionContrast }))}>Reset climate</button>
                       <div className="control-grid">
                         <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
                         <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
                       </div>
+                      <details className="advanced-controls">
+                        <summary data-tooltip="Reveal engine-specific climate simulation and regional-contrast controls."><span>More climate controls</span><small>simulation and contrast</small></summary>
+                        <div>
                       {generationOptions.engine === "REGION_GRAPH" && (
                         <div className="control-grid">
                           <label className="control-field"><span>Climate logic</span><select value={generationOptions.climateRealism ? "LATITUDE" : "MYTHIC"} onChange={(event) => setGenerationOptions((current) => ({ ...current, climateRealism: event.target.value === "LATITUDE" }))}><option value="MYTHIC">Free regional climates</option><option value="LATITUDE">Latitude-informed climates</option></select></label>
@@ -2234,6 +2334,8 @@ export function Civ5MapViewer() {
                         </div>
                       )}
                       {generationOptions.engine === "PHYSICAL" && <small className="content-note">Physical climate is always coupled to latitude, altitude, ocean moisture, terrain uplift, and west-to-east rain shadows. The climate and rainfall controls shift that simulation rather than replacing it.</small>}
+                        </div>
+                      </details>
                       <fieldset className="terrain-dominance-picker">
                         <legend>Dominant terrain</legend>
                         <small>Select one or more. With none selected, climate determines the mix.</small>
@@ -2247,8 +2349,8 @@ export function Civ5MapViewer() {
                     </div>
                   </details>
 
-                  <details className="creator-group players-group">
-                    <summary><span>5 · Players and starts</span><small>{generationOptions.players} players · {generationOptions.cityStates} city states</small></summary>
+                  <details className="creator-group players-group" name="world-design-step" data-modified={generationOptions.players !== DEFAULT_GENERATION_OPTIONS.players || generationOptions.cityStates !== DEFAULT_GENERATION_OPTIONS.cityStates || generationOptions.balance !== DEFAULT_GENERATION_OPTIONS.balance || generationOptions.startQuality !== DEFAULT_GENERATION_OPTIONS.startQuality}>
+                    <summary data-tooltip="Choose major civilizations, city states, multiplayer layout, team geography, start quality, and settlement spacing."><span>4 · Players and starts</span><small>{generationOptions.players} players · {generationOptions.cityStates} city states</small></summary>
                     <div className="creator-group-body">
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => { const sizePreset = MAP_SIZES.find((item) => item.id === current.size); return { ...current, players: sizePreset?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, cityStates: sizePreset?.recommendedCityStates ?? DEFAULT_GENERATION_OPTIONS.cityStates, balance: DEFAULT_GENERATION_OPTIONS.balance, teamSize: DEFAULT_GENERATION_OPTIONS.teamSize, teamLayout: DEFAULT_GENERATION_OPTIONS.teamLayout, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }; })}>Reset players</button>
                       <div className="control-grid three-controls">
@@ -2263,31 +2365,36 @@ export function Civ5MapViewer() {
                         </div>
                       )}
                       <label className="control-field"><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select><small>{generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}</small></label>
-                      <div className="control-grid three-controls">
+                      <details className="advanced-controls">
+                        <summary data-tooltip="Reveal minimum city-state spacing, regional distribution, and coastal preference."><span>More start controls</span><small>city-state placement</small></summary>
+                        <div className="control-grid three-controls">
                         <label className="control-field"><span>City-state spacing</span><input type="number" min="1" max="12" value={generationOptions.cityStateMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateMinSpacing: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Distribution</span><select value={generationOptions.cityStateDistribution} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateDistribution: event.target.value as MapGenerationOptions["cityStateDistribution"] }))}><option value="EVEN">Even</option><option value="REGIONAL">Regional</option></select></label>
                         <label className="control-field"><span>Coastal preference</span><select value={generationOptions.cityStateCoastalPreference} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateCoastalPreference: event.target.value as MapGenerationOptions["cityStateCoastalPreference"] }))}><option value="ANY">Any</option><option value="PREFER">Prefer coast</option><option value="REQUIRE">Require coast</option></select></label>
-                      </div>
+                        </div>
+                      </details>
                     </div>
                   </details>
                   </div>
 
                   <div className="creator-actions">
+                    <div className="generation-summary action-recipe-summary"><span>Ready to generate</span><strong>{generationSummary}</strong></div>
                     {generationRunning
-                      ? <button className="generate-button generation-cancel" type="button" onClick={cancelGeneration}>Cancel · {generationStage}</button>
-                      : <button className="generate-button" type="button" onClick={() => void generateNewMap()}>Generate map</button>}
+                      ? <button className="generate-button generation-cancel" type="button" data-tooltip="Stop the active worker. The current map remains unchanged unless generation has already completed." onClick={cancelGeneration}>Cancel · {generationStage}</button>
+                      : <button className="generate-button" type="button" data-tooltip="Build a deterministic map from the complete recipe shown above, then add it to generation history." onClick={() => void generateNewMap()}>Generate map</button>}
                     <div className="generation-readout"><span>Current map</span><strong>{generationMetrics.water}% water · {generationMetrics.mountains}% mountains</strong></div>
                   </div>
                 </>
+                )
               ) : createView === "EDIT" ? (
                 <div className="tile-editor">
                   <div className="section-title"><h3>Edit map</h3><span>click a hex</span></div>
                   <div className="tool-tabs">
-                    <button type="button" className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
-                    <button type="button" className={editTool === "FILL" ? "is-active" : ""} onClick={() => setEditTool("FILL")}>Flood fill</button>
-                    <button type="button" className={editTool === "SELECT" ? "is-active" : ""} onClick={() => setEditTool("SELECT")}>Region</button>
-                    <button type="button" className={editTool === "STRUCTURE" ? "is-active" : ""} onClick={() => { setEditTool("STRUCTURE"); setIsPasting(false); }}>World structure</button>
-                    <button type="button" className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
+                    <button type="button" data-tooltip="Paint terrain, elevation, features, or resources across a configurable hex radius." className={editTool === "TILE" ? "is-active" : ""} onClick={() => setEditTool("TILE")}>Tile brush</button>
+                    <button type="button" data-tooltip="Replace an entire connected region matching the clicked tile using the active brush fields." className={editTool === "FILL" ? "is-active" : ""} onClick={() => setEditTool("FILL")}>Flood fill</button>
+                    <button type="button" data-tooltip="Select a rectangular tile region for copy, paste, deletion, or later structural operations." className={editTool === "SELECT" ? "is-active" : ""} onClick={() => setEditTool("SELECT")}>Region</button>
+                    <button type="button" data-tooltip="Apply coherent tectonic, basin, mountain, climate, or watershed changes to a selected region." className={editTool === "STRUCTURE" ? "is-active" : ""} onClick={() => { setEditTool("STRUCTURE"); setIsPasting(false); }}>World structure</button>
+                    <button type="button" data-tooltip="Add, remove, or relocate major-civilization and city-state starting positions." className={editTool === "START" ? "is-active" : ""} onClick={() => setEditTool("START")}>Start positions</button>
                   </div>
                   {editTool === "TILE" || editTool === "FILL" ? (
                     <div className="brush-grid">
@@ -2456,6 +2563,8 @@ export function Civ5MapViewer() {
               </div>
             </div>
           )}
+          {mode === "VIEW" && (
+          <div className="explore-sidebar-display">
           <dl className="map-stats">
             <div><dt>Dimensions</dt><dd>{map.width} × {map.height}</dd></div>
             <div><dt>World</dt><dd>{friendlyName(map.worldSize, "")}</dd></div>
@@ -2522,6 +2631,8 @@ export function Civ5MapViewer() {
               ))}
             </div>
           </div>
+          </div>
+          )}
 
           <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>
           <footer className="sidebar-footer">
@@ -2571,16 +2682,75 @@ export function Civ5MapViewer() {
           </div>
 
           <div className="map-toolbar" aria-label="Map controls">
-            <button type="button" onClick={() => zoomAt(1.2, size.width / 2, size.height / 2)} aria-label="Zoom in">+</button>
+            <button type="button" data-tooltip="Zoom into the map around the centre of the visible canvas." onClick={() => zoomAt(1.2, size.width / 2, size.height / 2)} aria-label="Zoom in">+</button>
             <span>{Math.round(view.zoom * 100)}%</span>
-            <button type="button" onClick={() => zoomAt(0.83, size.width / 2, size.height / 2)} aria-label="Zoom out">−</button>
+            <button type="button" data-tooltip="Zoom away from the map around the centre of the visible canvas." onClick={() => zoomAt(0.83, size.width / 2, size.height / 2)} aria-label="Zoom out">−</button>
             <i aria-hidden="true" />
-            <button className="fit-button" type="button" onClick={() => fitMap(size)}>Fit</button>
+            <button className="fit-button" type="button" data-tooltip="Fit the entire map inside the available canvas, including extreme aspect ratios." onClick={() => fitMap(size)}>Fit</button>
             <i aria-hidden="true" />
-            <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" aria-pressed={projection === "ISOMETRIC"} title={projection === "ISOMETRIC" ? "Return to 2D view" : "Switch to 3D isometric view"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO 3D"}</button>
+            <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" data-tooltip={projection === "ISOMETRIC" ? "Return to the flat 2D hex rendering." : "Tilt the map into the decorative isometric renderer with raised hills and mountains."} aria-pressed={projection === "ISOMETRIC"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO 3D"}</button>
             <i aria-hidden="true" />
-            <button className={`legend-button${showLegend ? " is-active" : ""}`} type="button" aria-expanded={showLegend} aria-controls="map-legend" aria-label={showLegend ? "Hide map legend" : "Show map legend"} onClick={() => setShowLegend((current) => !current)}>Legend</button>
+            <button className={`display-button${showDisplayPanel ? " is-active" : ""}`} type="button" data-tooltip="Show map dimensions, terrain counts, and rendering-layer switches without leaving the canvas." aria-expanded={showDisplayPanel} aria-controls="map-display-panel" aria-label={showDisplayPanel ? "Hide map display controls" : "Show map display controls"} onClick={() => { setShowDisplayPanel((current) => !current); setShowLegend(false); }}>Display</button>
+            <button className={`legend-button${showLegend ? " is-active" : ""}`} type="button" data-tooltip="Explain terrain colours, relief, rivers, resources, wonders, starts, city states, camps, ruins, roads, and scenario symbols." aria-expanded={showLegend} aria-controls="map-legend" aria-label={showLegend ? "Hide map legend" : "Show map legend"} onClick={() => { setShowLegend((current) => !current); setShowDisplayPanel(false); }}>Legend</button>
           </div>
+
+          {showDisplayPanel && (
+            <aside id="map-display-panel" className="map-display-panel" aria-label="Map display controls">
+              <header>
+                <div><span>Map view</span><h2>Display</h2></div>
+                <button type="button" aria-label="Close map display controls" onClick={() => setShowDisplayPanel(false)}>×</button>
+              </header>
+              <dl className="map-stats">
+                <div><dt>Dimensions</dt><dd>{map.width} × {map.height}</dd></div>
+                <div><dt>World</dt><dd>{friendlyName(map.worldSize, "")}</dd></div>
+                <div><dt>Tiles</dt><dd>{map.tiles.length.toLocaleString()}</dd></div>
+                <div><dt>Wrap</dt><dd>{map.wraps ? "East / west" : "None"}</dd></div>
+              </dl>
+              <section>
+                <div className="section-title"><h3>Layers</h3><span>{visibleLayerCount} on</span></div>
+                <div className="layer-list">
+                  <label className={`layer-row${politicalAvailable ? "" : " is-disabled"}`}>
+                    <span><strong>Political</strong><small>{hasScenarioOwnership ? "Scenario territories and borders" : politicalAvailable ? "Projected start influence" : "No ownership data in this map"}</small></span>
+                    <input type="checkbox" checked={layers.political} disabled={!politicalAvailable} onChange={(event) => setLayers((current) => ({ ...current, political: event.target.checked }))} />
+                    <span className="switch" aria-hidden="true" />
+                  </label>
+                  {([
+                    ["grid", "Hex grid", "Map geometry"],
+                    ["features", "Features", "Forest, jungle, ice"],
+                    ["resources", "Resources", "Bonus and strategic"],
+                    ["elevation", "Elevation", "Hills and mountains"],
+                  ] as const).map(([key, label, note]) => (
+                    <label className="layer-row" key={key}>
+                      <span><strong>{label}</strong><small>{note}</small></span>
+                      <input type="checkbox" checked={layers[key]} onChange={(event) => setLayers((current) => ({ ...current, [key]: event.target.checked }))} />
+                      <span className="switch" aria-hidden="true" />
+                    </label>
+                  ))}
+                  <label className={`layer-row${majorStartCount ? "" : " is-disabled"}`}>
+                    <span><strong>Start locations</strong><small>{majorStartCount ? `${majorStartCount} positions` : "Not stored in this map"}</small></span>
+                    <input type="checkbox" checked={layers.starts} disabled={!majorStartCount} onChange={(event) => setLayers((current) => ({ ...current, starts: event.target.checked }))} />
+                    <span className="switch" aria-hidden="true" />
+                  </label>
+                  <label className={`layer-row${cityStateCount ? "" : " is-disabled"}`}>
+                    <span><strong>City states</strong><small>{cityStateCount ? `${cityStateCount} positions` : "Not stored in this map"}</small></span>
+                    <input type="checkbox" checked={layers.cityStates} disabled={!cityStateCount} onChange={(event) => setLayers((current) => ({ ...current, cityStates: event.target.checked }))} />
+                    <span className="switch" aria-hidden="true" />
+                  </label>
+                </div>
+              </section>
+              <details className="display-terrain-breakdown">
+                <summary>Terrain counts</summary>
+                <div className="legend-list">
+                  {terrainBreakdown.map(([name, count]) => (
+                    <div className="legend-row" key={name}>
+                      <span className="legend-swatch" style={{ background: terrainColor(`TERRAIN_${name.toUpperCase()}`) }} />
+                      <span>{name}</span><strong>{count.toLocaleString()}</strong>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </aside>
+          )}
 
           {showLegend && (
             <aside id="map-legend" className="map-legend" aria-label="Map icon legend">
@@ -2679,6 +2849,16 @@ export function Civ5MapViewer() {
           )}
         </div>
       </section>
+
+      {uiTooltip && (
+        <div
+          className={`ui-tooltip${uiTooltip.above ? " is-above" : ""}`}
+          role="tooltip"
+          style={{ left: uiTooltip.x, top: uiTooltip.y }}
+        >
+          {uiTooltip.text}
+        </div>
+      )}
 
       {showGameBreakingGeometryConfirmation && (
         <div
