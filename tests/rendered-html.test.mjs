@@ -103,8 +103,10 @@ test("GitHub Pages has an independent static export and deployment workflow", as
   assert.match(nextConfig, /output: pagesBuild \? "export" : undefined/);
   assert.match(nextConfig, /pagesBasePath = "\/Excogitare"/);
   assert.match(packageJson, /"test:pages": "pnpm run build:pages && node scripts\/verify-pages-build\.mjs"/);
-  assert.match(workflow, /actions\/upload-pages-artifact@v4/);
-  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /pnpm\/action-setup@v6/);
+  assert.match(workflow, /actions\/configure-pages@v6/);
+  assert.match(workflow, /actions\/upload-pages-artifact@v5/);
+  assert.match(workflow, /actions\/deploy-pages@v5/);
   assert.match(workflow, /run: pnpm run test:pages/);
   assert.match(verifier, /No Next asset may escape to the github\.io origin root/);
 });
