@@ -40,9 +40,11 @@ import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile,
 import {
   DEFAULT_GENERATION_OPTIONS,
   DOMINANT_TERRAINS,
+  fantasticalityForPreset,
   isGameBreakingGeometry,
   MAP_PRESETS,
   MAP_SIZES,
+  polisPatternForPreset,
   randomGenerationOptions,
   resolveMapDimensions,
   WORLD_MODIFIERS,
@@ -69,7 +71,7 @@ const APP_VERSION = "0.4.8";
 
 type View = { zoom: number; x: number; y: number };
 type Size = { width: number; height: number };
-type Layers = { political: boolean; grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
+type Layers = { political: boolean; strategy: boolean; grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer; salvaged?: boolean };
 type WorkspaceMode = "VIEW" | "CREATE" | "REPAIR" | "SCRIPT";
@@ -101,13 +103,15 @@ const GEOMETRY_OPTIONS = [
 
 const GENERATION_ENGINES = [
   { id: "EXCOGITARE", label: "Excogitare", preset: "WILD_REGIONS", description: "The native expressive engine: warped fields, dramatic landforms, and the broadest stylistic range." },
-  { id: "REGION_GRAPH", label: "Region-Graph", preset: "LIVING_WORLD", description: "The Fantastical-inspired hierarchy: subregions, polygons, realms, ranges, basins, and watersheds." },
+  { id: "REGION_GRAPH", label: "Fantastical", preset: "MYTHIC_REGIONS", description: "A dense multi-pass Region-Graph world of irregular cells, dissonant biome realms, astronomy rifts, boundary ranges, and watersheds." },
   { id: "PHYSICAL", label: "Physical", preset: "DYNAMIC_EARTH", description: "Moving tectonic plates, convergence and rifting, erosion, altitude, atmospheric moisture, and rain shadows." },
+  { id: "POLIS", label: "Polis", preset: "IMPERIAL_RING", description: "Gameplay-first strategic graphs: safe territories, contested objectives, fronts, protected routes, and auditable balance." },
 ] as const satisfies ReadonlyArray<{ id: MapGenerationOptions["engine"]; label: string; preset: string; description: string }>;
 
 function generationEngineStage(engine: MapGenerationOptions["engine"]) {
-  if (engine === "REGION_GRAPH") return "Preparing geographic regions";
+  if (engine === "REGION_GRAPH") return "Preparing multi-pass world graph";
   if (engine === "PHYSICAL") return "Preparing tectonic simulation";
+  if (engine === "POLIS") return "Preparing strategic graph";
   return "Preparing Excogitare fields";
 }
 
@@ -671,6 +675,16 @@ function drawMap(
   context.scale(view.zoom, view.zoom);
   context.transform(projection.a, projection.b, projection.c, projection.d, projection.e, projection.f);
   const isometric = projection.b !== 0;
+  const strategicRoles = new Uint8Array(map.tiles.length);
+  const strategicProtected = new Uint8Array(map.tiles.length);
+  if (layers.strategy && map.structure?.strategicGraph) {
+    for (const object of map.structure.objects) {
+      if (object.kind !== "STRATEGIC_REGION") continue;
+      const role = object.attributes?.role === "OBJECTIVE" ? 3 : object.attributes?.role === "CONTESTED" ? 2 : object.attributes?.role === "SAFE" ? 1 : 0;
+      for (const index of object.tileIndices) if (index >= 0 && index < strategicRoles.length) strategicRoles[index] = Math.max(strategicRoles[index], role);
+    }
+    for (const index of map.structure.strategicGraph.protectedTileIndices) if (index >= 0 && index < strategicProtected.length) strategicProtected[index] = 1;
+  }
   const renderOrder: Array<{
     row: number;
     col: number;
@@ -710,6 +724,18 @@ function drawMap(
       hexPath(context, center.x, center.y);
       context.fill();
       paintedTiles += 1;
+
+      if (layers.strategy && map.structure?.strategicGraph && !isWater && (strategicRoles[sourceIndex] || strategicProtected[sourceIndex])) {
+        hexPath(context, center.x, center.y);
+        context.fillStyle = strategicRoles[sourceIndex] === 3
+          ? "rgba(241, 209, 131, .34)"
+          : strategicRoles[sourceIndex] === 2
+            ? "rgba(219, 153, 83, .24)"
+            : strategicRoles[sourceIndex] === 1
+              ? "rgba(95, 191, 185, .16)"
+              : "rgba(112, 167, 164, .12)";
+        context.fill();
+      }
 
       if (layers.grid) {
         context.strokeStyle = "rgba(6, 22, 25, .34)";
@@ -774,6 +800,28 @@ function drawMap(
         context.lineWidth = 2.1 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
+  }
+  if (layers.strategy && map.structure?.strategicGraph) {
+    context.save();
+    for (const edge of map.structure.strategicGraph.edges) {
+      context.beginPath();
+      edge.tileIndices.forEach((index, pathIndex) => {
+        const sourceX = index % map.width;
+        const sourceY = Math.floor(index / map.width);
+        const displayRow = map.height - 1 - sourceY;
+        const baseCenter = tileCenter(sourceX, displayRow, sourceY);
+        const tile = map.tiles[index];
+        const center = liftPoint(baseCenter.x, baseCenter.y, tile ? tileReliefHeight(tile, layers.elevation, isometric) : 0, projection);
+        if (pathIndex === 0) context.moveTo(center.x, center.y);
+        else context.lineTo(center.x, center.y);
+      });
+      context.strokeStyle = edge.kind === "NAVAL" ? "rgba(108, 196, 219, .9)" : edge.kind === "PASS" ? "rgba(239, 188, 94, .9)" : "rgba(126, 216, 216, .78)";
+      context.lineWidth = (edge.kind === "LAND_BRIDGE" ? 3 : 2) / Math.max(view.zoom, 0.55);
+      context.setLineDash(edge.kind === "NAVAL" ? [8 / Math.max(view.zoom, 0.55), 6 / Math.max(view.zoom, 0.55)] : []);
+      context.stroke();
+    }
+    context.setLineDash([]);
+    context.restore();
   }
   if (layers.political) drawPoliticalCities(context, map, politicalOwnership, layers.elevation, projection);
   if ((layers.starts || layers.cityStates) && map.startLocations.length) {
@@ -949,7 +997,7 @@ export function Civ5MapViewer() {
   const [luaRunStatus, setLuaRunStatus] = useState("");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
-  const [layers, setLayers] = useState<Layers>({ political: false, grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
+  const [layers, setLayers] = useState<Layers>({ political: false, strategy: false, grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
   const [showLegend, setShowLegend] = useState(false);
   const [showDisplayPanel, setShowDisplayPanel] = useState(false);
   const [uiTooltip, setUiTooltip] = useState<UiTooltip | null>(null);
@@ -1154,6 +1202,7 @@ export function Civ5MapViewer() {
       ? mapComparison.changedTiles
       : new Set<number>(), [mode, repairView, repairIssues, repairSelected, comparisonView, mapComparison]);
   const politicalAvailable = hasPoliticalLayer(canvasMap);
+  const strategyAvailable = Boolean(canvasMap.structure?.strategicGraph);
   const politicalOwnership = useMemo(() => buildPoliticalOwnership(canvasMap), [canvasMap]);
   const hasScenarioOwnership = canvasMap.tiles.some((tile) => tile.owner !== undefined);
 
@@ -1307,7 +1356,7 @@ export function Civ5MapViewer() {
     const presetLabel = MAP_PRESETS.find((item) => item.id === generationOptions.preset)?.label ?? generationOptions.preset;
     const styleLabel = generationOptions.style.toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
     const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
-    const engineLabel = generationOptions.engine === "REGION_GRAPH" ? "Region-Graph" : generationOptions.engine === "PHYSICAL" ? "Physical" : "Excogitare";
+    const engineLabel = generationOptions.engine === "REGION_GRAPH" ? "Fantastical / Region-Graph" : generationOptions.engine === "PHYSICAL" ? "Physical" : generationOptions.engine === "POLIS" ? "Polis" : "Excogitare";
     const projectionLabel = CLIMATE_PROJECTIONS.find((item) => item.id === generationOptions.projectionType)?.label ?? generationOptions.projectionType;
     return `${projectionLabel} · ${engineLabel} · ${styleLabel} · ${presetLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
   }, [generationOptions]);
@@ -1318,6 +1367,7 @@ export function Civ5MapViewer() {
   const cityStateCount = map.startLocations.filter((start) => start.cityState).length;
   const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled
     && (key !== "political" || politicalAvailable)
+    && (key !== "strategy" || strategyAvailable)
     && (key !== "starts" || majorStartCount > 0)
     && (key !== "cityStates" || cityStateCount > 0)).length;
 
@@ -1647,8 +1697,9 @@ export function Civ5MapViewer() {
     const definition = GENERATION_ENGINES.find((item) => item.id === engine)!;
     const preset = MAP_PRESETS.find((item) => item.id === definition.preset)!;
     setGenerationOptions((current) => {
-      if (engine === "REGION_GRAPH") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism };
+      if (engine === "REGION_GRAPH") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, style: "FANTASTICAL", climateRealism: preset.climateRealism ?? false, fantasticality: fantasticalityForPreset(preset.id), regionClimateLogic: preset.climateRealism ? "ORDERED" : "LAWLESS" };
       if (engine === "PHYSICAL") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: true, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge };
+      if (engine === "POLIS") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: false, polisConflictPattern: polisPatternForPreset(preset.id) };
       return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains };
     });
   };
@@ -2058,6 +2109,10 @@ export function Civ5MapViewer() {
                       <div>
                         <dl>{Object.entries(map.structure.diagnostics).map(([label, value]) => <div key={label}><dt>{label.replaceAll(/([A-Z])/g, " $1")}</dt><dd>{value}</dd></div>)}</dl>
                         <p>{map.structure.objects.length} geographic objects, {map.structure.mountainRanges.length} mountain ranges, and {map.structure.riverSystems.length} river systems remain attached to this generation.</p>
+                        {map.structure.engine === "REGION_GRAPH" && <p><strong>Fantastical compiler:</strong> {map.structure.diagnostics.passes ?? 0} retained passes · {map.structure.diagnostics.subregions ?? 0} small regions · {map.structure.diagnostics.climatePalettes ?? 0} biome palettes · {map.structure.diagnostics.biomeTransitions ?? 0} dissonant borders · {map.structure.diagnostics.astronomyBasins ?? 0} navigation basins.</p>}
+                        {map.structure.strategicGraph && (
+                          <p><strong>Polis graph:</strong> {map.structure.strategicGraph.pattern.replaceAll("_", " ").toLowerCase()} · {map.structure.strategicGraph.symmetry.toLowerCase()} · {map.structure.strategicGraph.edges.length} fronts · {map.structure.strategicGraph.protectedTileIndices.length} protected route and safe-territory tiles{map.structure.strategicGraph.relaxations.length ? ` · ${map.structure.strategicGraph.relaxations.join(" ")}` : " · no hard constraints relaxed"}</p>
+                        )}
                         <small>{map.structure.objects.slice(0, 8).map((object) => object.name).join(" · ")}{map.structure.objects.length > 8 ? " · …" : ""}</small>
                       </div>
                     </details>
@@ -2179,11 +2234,12 @@ export function Civ5MapViewer() {
                     <select value={generationOptions.preset} onChange={(event) => {
                       const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
                       if (!preset) return;
-                      setGenerationOptions((current) => ({ ...current, engine: preset.engine, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge }));
+                      setGenerationOptions((current) => ({ ...current, engine: preset.engine, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism, fantasticality: preset.engine === "REGION_GRAPH" ? fantasticalityForPreset(preset.id) : current.fantasticality, regionClimateLogic: preset.engine === "REGION_GRAPH" ? preset.climateRealism ? "ORDERED" : "LAWLESS" : current.regionClimateLogic, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge, polisConflictPattern: preset.engine === "POLIS" ? polisPatternForPreset(preset.id) : current.polisConflictPattern }));
                     }}>
                       <optgroup label="Excogitare worlds">{MAP_PRESETS.filter((preset) => preset.engine === "EXCOGITARE").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
-                      <optgroup label="Region-Graph worlds">{MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
+                      <optgroup label="Fantastical / Region-Graph worlds">{MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Physical worlds">{MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
+                      <optgroup label="Polis worlds">{MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                     </select>
                     <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
                   </label>
@@ -2206,7 +2262,7 @@ export function Civ5MapViewer() {
                   <details className="creator-group" name="world-design-step" open data-modified={generationOptions.projectionType !== DEFAULT_GENERATION_OPTIONS.projectionType || generationOptions.modifier !== DEFAULT_GENERATION_OPTIONS.modifier || generationOptions.wrapType !== DEFAULT_GENERATION_OPTIONS.wrapType || generationOptions.geometry !== DEFAULT_GENERATION_OPTIONS.geometry || generationOptions.waterPercent !== DEFAULT_GENERATION_OPTIONS.waterPercent || generationOptions.mountainPercent !== DEFAULT_GENERATION_OPTIONS.mountainPercent}>
                     <summary data-tooltip="Control the map's climate orientation, modifier, wrapping, aspect ratio, land-water balance, relief, and physical structure."><span>1 · World shape</span><small>{generationOptions.waterPercent}% water · {generationOptions.mountainPercent}% mountains</small></summary>
                     <div className="creator-group-body">
-                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, geometry: DEFAULT_GENERATION_OPTIONS.geometry, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge, granularity: DEFAULT_GENERATION_OPTIONS.granularity, oceanBasins: DEFAULT_GENERATION_OPTIONS.oceanBasins, landAtPoles: DEFAULT_GENERATION_OPTIONS.landAtPoles, coastalRangePercent: DEFAULT_GENERATION_OPTIONS.coastalRangePercent, riverDensity: DEFAULT_GENERATION_OPTIONS.riverDensity, plateActivity: DEFAULT_GENERATION_OPTIONS.plateActivity, erosionStrength: DEFAULT_GENERATION_OPTIONS.erosionStrength }))}>Reset world shape</button>
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, geometry: DEFAULT_GENERATION_OPTIONS.geometry, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge, granularity: DEFAULT_GENERATION_OPTIONS.granularity, oceanBasins: DEFAULT_GENERATION_OPTIONS.oceanBasins, landAtPoles: DEFAULT_GENERATION_OPTIONS.landAtPoles, coastalRangePercent: DEFAULT_GENERATION_OPTIONS.coastalRangePercent, riverDensity: DEFAULT_GENERATION_OPTIONS.riverDensity, fantasticality: DEFAULT_GENERATION_OPTIONS.fantasticality, regionClimateLogic: DEFAULT_GENERATION_OPTIONS.regionClimateLogic, plateActivity: DEFAULT_GENERATION_OPTIONS.plateActivity, erosionStrength: DEFAULT_GENERATION_OPTIONS.erosionStrength, polisConflictPattern: DEFAULT_GENERATION_OPTIONS.polisConflictPattern, polisSymmetry: DEFAULT_GENERATION_OPTIONS.polisSymmetry, polisExpansionPressure: DEFAULT_GENERATION_OPTIONS.polisExpansionPressure, polisNavalImportance: DEFAULT_GENERATION_OPTIONS.polisNavalImportance, polisChokepointDensity: DEFAULT_GENERATION_OPTIONS.polisChokepointDensity, polisSafeRadius: DEFAULT_GENERATION_OPTIONS.polisSafeRadius }))}>Reset world shape</button>
                       <label className="control-field projection-type-control" data-tooltip="Relocate the climatic poles without changing Civ V's rectangular tile adjacency or the 2D/3D camera.">
                         <span>Pole orientation</span>
                         <select value={generationOptions.projectionType} onChange={(event) => setGenerationOptions((current) => ({ ...current, projectionType: event.target.value as MapGenerationOptions["projectionType"] }))}>
@@ -2257,14 +2313,16 @@ export function Civ5MapViewer() {
                       <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
                       {generationOptions.engine === "REGION_GRAPH" && (
                         <div className="region-architecture-controls">
+                          <label className="control-field" data-tooltip="Controls cell irregularity, biome dissonance, palette count, rift breadth, and the willingness of regions to contradict one another."><span>Fantasticality</span><select value={generationOptions.fantasticality} onChange={(event) => setGenerationOptions((current) => ({ ...current, fantasticality: event.target.value as MapGenerationOptions["fantasticality"] }))}><option value="RESTRAINED">Restrained · coherent realms</option><option value="MYTHIC">Mythic · dramatic borders</option><option value="UNBOUND">Unbound · geographic delirium</option></select></label>
                           <div className="control-grid">
                             <label className="control-field"><span>Geographic granularity</span><select value={generationOptions.granularity} onChange={(event) => setGenerationOptions((current) => ({ ...current, granularity: event.target.value as MapGenerationOptions["granularity"] }))}><option value="LOW">Low · vast forms</option><option value="FAIR">Fair · continental</option><option value="HIGH">High · intricate</option><option value="VERY_HIGH">Very high · fractured</option></select></label>
                             <label className="control-field"><span>Ocean basins</span><input type="number" min="1" max="5" value={generationOptions.oceanBasins} onChange={(event) => setGenerationOptions((current) => ({ ...current, oceanBasins: Math.max(1, Math.min(5, Number(event.target.value))) }))} /></label>
                           </div>
+                          <label className="control-field" data-tooltip="Lawless regions ignore latitude, Influenced regions merely consult it, and Ordered climates preserve latitude plus west-to-east rain shadows."><span>Climate logic</span><select value={generationOptions.regionClimateLogic} onChange={(event) => { const regionClimateLogic = event.target.value as MapGenerationOptions["regionClimateLogic"]; setGenerationOptions((current) => ({ ...current, regionClimateLogic, climateRealism: regionClimateLogic === "ORDERED" })); }}><option value="LAWLESS">Lawless · latitude ignored</option><option value="INFLUENCED">Influenced · latitude negotiates</option><option value="ORDERED">Ordered · latitude governs</option></select></label>
                           <label className="check-row"><input type="checkbox" checked={generationOptions.landAtPoles} onChange={(event) => setGenerationOptions((current) => ({ ...current, landAtPoles: event.target.checked }))} /><span>Permit continents and islands at the poles</span></label>
                           <label className="control-field percentage-field"><span>Coastal mountain ranges <output>{generationOptions.coastalRangePercent}%</output></span><input type="range" min="0" max="100" value={generationOptions.coastalRangePercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, coastalRangePercent: Number(event.target.value) }))} /></label>
                           <label className="control-field"><span>River network</span><select value={generationOptions.riverDensity} onChange={(event) => setGenerationOptions((current) => ({ ...current, riverDensity: event.target.value as MapGenerationOptions["riverDensity"] }))}><option value="SPARSE">Sparse · major systems</option><option value="NORMAL">Normal · rivers and tributaries</option><option value="DENSE">Dense · wet watersheds</option></select></label>
-                          <small>Designed regions create the broad geography first. Climate, mountain boundaries, and drainage are then resolved across that structure.</small>
+                          <small>The engine now retains a dense subpolygon mesh, compiles land and astronomy basins over it, assigns several biome palettes to each climate realm, then resolves boundary ranges and drainage. Ordinary maps may contain well over a thousand retained subregions.</small>
                         </div>
                       )}
                       {generationOptions.engine === "PHYSICAL" && (
@@ -2277,6 +2335,19 @@ export function Civ5MapViewer() {
                           <small>Physical worlds retain plate ownership and motion, convergent and divergent boundaries, erosion, continental and ocean-basin objects, altitude cooling, and eastward atmospheric moisture.</small>
                         </div>
                       )}
+                      {generationOptions.engine === "POLIS" && (
+                        <div className="region-architecture-controls polis-architecture-controls">
+                          <div className="control-grid">
+                            <label className="control-field" data-tooltip="Choose the abstract relationship Polis embeds before it creates terrain."><span>Conflict pattern</span><select value={generationOptions.polisConflictPattern} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisConflictPattern: event.target.value as MapGenerationOptions["polisConflictPattern"] }))}><option value="RADIAL">Radial · contested interior</option><option value="OPPOSING_FRONTS">Opposing fronts</option><option value="CROSSROADS">Crossroads · flanking routes</option><option value="RIVAL_CONTINENTS">Rival continents</option></select></label>
+                            <label className="control-field" data-tooltip="Control whether strategic territories are rotational, reflected, approximately equivalent, or deliberately asymmetric."><span>Balance geometry</span><select value={generationOptions.polisSymmetry} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisSymmetry: event.target.value as MapGenerationOptions["polisSymmetry"] }))}><option value="EQUIVALENT">Equivalent · organic variation</option><option value="MIRRORED">Mirrored</option><option value="ROTATIONAL">Rotational</option><option value="ASYMMETRIC">Designed asymmetry</option></select></label>
+                            <label className="control-field"><span>Expansion pressure</span><select value={generationOptions.polisExpansionPressure} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisExpansionPressure: event.target.value as MapGenerationOptions["polisExpansionPressure"] }))}><option value="RELAXED">Relaxed · larger safe hinterlands</option><option value="STANDARD">Standard</option><option value="IMMEDIATE">Immediate · early contact</option></select></label>
+                            <label className="control-field"><span>Naval importance</span><select value={generationOptions.polisNavalImportance} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisNavalImportance: event.target.value as MapGenerationOptions["polisNavalImportance"] }))}><option value="LOW">Low · land crossings</option><option value="BALANCED">Balanced</option><option value="HIGH">High · naval fronts</option></select></label>
+                          </div>
+                          <label className="control-field percentage-field" data-tooltip="Higher values narrow protected routes and raise mountains around their approaches without blocking them."><span>Chokepoint density <output>{generationOptions.polisChokepointDensity}%</output></span><input type="range" min="0" max="100" value={generationOptions.polisChokepointDensity} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisChokepointDensity: Number(event.target.value) }))} /></label>
+                          <label className="control-field"><span>Safe territory radius</span><input type="number" min="2" max="8" value={generationOptions.polisSafeRadius} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisSafeRadius: Math.max(2, Math.min(8, Number(event.target.value))) }))} /></label>
+                          <small>Polis validates this graph before terrain. Safe territories and required land routes are immutable masks during relief generation; mountain passes therefore remain passable by construction.</small>
+                        </div>
+                      )}
                         </div>
                       </details>
                     </div>
@@ -2285,7 +2356,7 @@ export function Civ5MapViewer() {
                   <details className="creator-group content-group" name="world-design-step" data-modified={generationOptions.bonusAbundance !== DEFAULT_GENERATION_OPTIONS.bonusAbundance || generationOptions.luxuryAbundance !== DEFAULT_GENERATION_OPTIONS.luxuryAbundance || generationOptions.strategicAbundance !== DEFAULT_GENERATION_OPTIONS.strategicAbundance || generationOptions.wonderCount !== DEFAULT_GENERATION_OPTIONS.wonderCount}>
                     <summary data-tooltip="Control bonus, luxury and strategic resources, natural wonders, guarantees, barbarians, ruins, and placement spacing."><span>3 · Resources and wonders</span><small>{generationOptions.wonderCount} wonders · {generationOptions.strategicAbundance.toLowerCase()} strategics</small></summary>
                     <div className="creator-group-body">
-                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, bonusAbundance: DEFAULT_GENERATION_OPTIONS.bonusAbundance, luxuryAbundance: DEFAULT_GENERATION_OPTIONS.luxuryAbundance, luxuryRegional: DEFAULT_GENERATION_OPTIONS.luxuryRegional, luxuryStartGuarantee: DEFAULT_GENERATION_OPTIONS.luxuryStartGuarantee, strategicAbundance: DEFAULT_GENERATION_OPTIONS.strategicAbundance, strategicDistribution: DEFAULT_GENERATION_OPTIONS.strategicDistribution, strategicStartGuarantee: DEFAULT_GENERATION_OPTIONS.strategicStartGuarantee, offshoreOilPercent: DEFAULT_GENERATION_OPTIONS.offshoreOilPercent, wonderCount: DEFAULT_GENERATION_OPTIONS.wonderCount, wonderMinSpacing: DEFAULT_GENERATION_OPTIONS.wonderMinSpacing, wonderStartBuffer: DEFAULT_GENERATION_OPTIONS.wonderStartBuffer, barbarianAbundance: DEFAULT_GENERATION_OPTIONS.barbarianAbundance, barbarianStartDistance: DEFAULT_GENERATION_OPTIONS.barbarianStartDistance, ruinAbundance: DEFAULT_GENERATION_OPTIONS.ruinAbundance, ruinStartDistance: DEFAULT_GENERATION_OPTIONS.ruinStartDistance }))}>Reset content</button>
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, bonusAbundance: DEFAULT_GENERATION_OPTIONS.bonusAbundance, luxuryAbundance: DEFAULT_GENERATION_OPTIONS.luxuryAbundance, luxuryRegional: DEFAULT_GENERATION_OPTIONS.luxuryRegional, luxuryStartGuarantee: DEFAULT_GENERATION_OPTIONS.luxuryStartGuarantee, strategicAbundance: DEFAULT_GENERATION_OPTIONS.strategicAbundance, strategicDistribution: DEFAULT_GENERATION_OPTIONS.strategicDistribution, strategicStartGuarantee: DEFAULT_GENERATION_OPTIONS.strategicStartGuarantee, offshoreOilPercent: DEFAULT_GENERATION_OPTIONS.offshoreOilPercent, wonderCount: DEFAULT_GENERATION_OPTIONS.wonderCount, wonderMinSpacing: DEFAULT_GENERATION_OPTIONS.wonderMinSpacing, wonderStartBuffer: DEFAULT_GENERATION_OPTIONS.wonderStartBuffer, barbarianAbundance: DEFAULT_GENERATION_OPTIONS.barbarianAbundance, barbarianStartDistance: DEFAULT_GENERATION_OPTIONS.barbarianStartDistance, ruinAbundance: DEFAULT_GENERATION_OPTIONS.ruinAbundance, ruinStartDistance: DEFAULT_GENERATION_OPTIONS.ruinStartDistance, polisContestedResourcePercent: DEFAULT_GENERATION_OPTIONS.polisContestedResourcePercent }))}>Reset content</button>
                       <div className="control-grid three-controls">
                         <label className="control-field"><span>Bonus resources</span><select value={generationOptions.bonusAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, bonusAbundance: event.target.value as MapGenerationOptions["bonusAbundance"] }))}><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="ABUNDANT">Abundant</option></select></label>
                         <label className="control-field"><span>Luxuries</span><select value={generationOptions.luxuryAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryAbundance: event.target.value as MapGenerationOptions["luxuryAbundance"] }))}><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="ABUNDANT">Abundant</option></select></label>
@@ -2300,6 +2371,7 @@ export function Civ5MapViewer() {
                       <label className="check-row"><input type="checkbox" checked={generationOptions.luxuryStartGuarantee} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryStartGuarantee: event.target.checked }))} /><span>Guarantee a luxury near every major start</span></label>
                       <label className="check-row"><input type="checkbox" checked={generationOptions.luxuryRegional} onChange={(event) => setGenerationOptions((current) => ({ ...current, luxuryRegional: event.target.checked }))} /><span>Create regional luxury monopolies</span></label>
                       <label className="control-field percentage-field"><span>Offshore oil <output>{generationOptions.offshoreOilPercent}%</output></span><input type="range" min="0" max="70" value={generationOptions.offshoreOilPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, offshoreOilPercent: Number(event.target.value) }))} /></label>
+                      {generationOptions.engine === "POLIS" && <label className="control-field percentage-field" data-tooltip="Move this share of ordinary strategic and luxury deposits into the graph's contested regions; start guarantees remain local."><span>Contested resources <output>{generationOptions.polisContestedResourcePercent}%</output></span><input type="range" min="0" max="80" value={generationOptions.polisContestedResourcePercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisContestedResourcePercent: Number(event.target.value) }))} /></label>}
                       <div className="control-grid">
                         <label className="control-field"><span>Wonder spacing</span><input type="number" min="3" max="20" value={generationOptions.wonderMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderMinSpacing: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Start buffer</span><input type="number" min="0" max="15" value={generationOptions.wonderStartBuffer} onChange={(event) => setGenerationOptions((current) => ({ ...current, wonderStartBuffer: Number(event.target.value) }))} /></label>
@@ -2433,6 +2505,21 @@ export function Civ5MapViewer() {
                     <span className={`analysis-grade grade-${balanceReport.grade.toLowerCase()}`}>{balanceReport.grade}</span>
                     <div><h3>Multiplayer balance</h3><p>{balanceReport.summary}</p></div>
                   </div>
+                  {map.structure?.strategicGraph && (
+                    <section className="polis-audit">
+                      <div className="section-title"><h3>Polis strategic audit</h3><span>{map.structure.strategicGraph.relaxations.length ? `${map.structure.strategicGraph.relaxations.length} relaxed` : "hard constraints intact"}</span></div>
+                      <p>{map.structure.strategicGraph.pattern.replaceAll("_", " ").toLowerCase()} · {map.structure.strategicGraph.symmetry.toLowerCase()} geometry. The retained graph is the design model used before terrain, not an interpretation reconstructed afterward.</p>
+                      <dl>
+                        <div><dt>Fronts</dt><dd>{map.structure.strategicGraph.edges.length}</dd></div>
+                        <div><dt>Land routes</dt><dd>{map.structure.strategicGraph.metrics.landRoutes ?? 0}</dd></div>
+                        <div><dt>Naval routes</dt><dd>{map.structure.strategicGraph.metrics.navalRoutes ?? 0}</dd></div>
+                        <div><dt>Protected tiles</dt><dd>{map.structure.strategicGraph.protectedTileIndices.length}</dd></div>
+                        <div><dt>Minimum start distance</dt><dd>{map.structure.strategicGraph.metrics.minimumStartDistance ?? 0}</dd></div>
+                        <div><dt>Average front length</dt><dd>{map.structure.strategicGraph.metrics.averageFrontLength ?? 0}</dd></div>
+                      </dl>
+                      {map.structure.strategicGraph.relaxations.length > 0 && <small>{map.structure.strategicGraph.relaxations.join(" ")}</small>}
+                    </section>
+                  )}
                   <div className="player-balance-list">
                     {balanceReport.players.map((player) => (
                       <button type="button" key={player.player} className={focusedStart?.player === player.player ? "is-active" : ""} onClick={() => setFocusedStart(map.startLocations.find((start) => !start.cityState && start.player === player.player) ?? null)}>
@@ -2585,6 +2672,11 @@ export function Civ5MapViewer() {
                 />
                 <span className="switch" aria-hidden="true" />
               </label>
+              <label className={`layer-row${strategyAvailable ? "" : " is-disabled"}`}>
+                <span><strong>Strategy graph</strong><small>{strategyAvailable ? "Polis regions, fronts, and protected routes" : "Available on Polis generations"}</small></span>
+                <input type="checkbox" checked={layers.strategy} disabled={!strategyAvailable} onChange={(event) => setLayers((current) => ({ ...current, strategy: event.target.checked }))} />
+                <span className="switch" aria-hidden="true" />
+              </label>
               {([
                 ["grid", "Hex grid", "Map geometry"],
                 ["features", "Features", "Forest, jungle, ice"],
@@ -2714,6 +2806,11 @@ export function Civ5MapViewer() {
                     <input type="checkbox" checked={layers.political} disabled={!politicalAvailable} onChange={(event) => setLayers((current) => ({ ...current, political: event.target.checked }))} />
                     <span className="switch" aria-hidden="true" />
                   </label>
+                  <label className={`layer-row${strategyAvailable ? "" : " is-disabled"}`}>
+                    <span><strong>Strategy graph</strong><small>{strategyAvailable ? "Polis regions, fronts, and protected routes" : "Available on Polis generations"}</small></span>
+                    <input type="checkbox" checked={layers.strategy} disabled={!strategyAvailable} onChange={(event) => setLayers((current) => ({ ...current, strategy: event.target.checked }))} />
+                    <span className="switch" aria-hidden="true" />
+                  </label>
                   {([
                     ["grid", "Hex grid", "Map geometry"],
                     ["features", "Features", "Forest, jungle, ice"],
@@ -2792,6 +2889,7 @@ export function Civ5MapViewer() {
                 <h3>Map symbols</h3>
                 <div className="map-symbol-list">
                   <div><i className="legend-icon icon-political" aria-hidden="true" /><span><strong>Political territory</strong><small>Civilization color with an ownership border</small></span></div>
+                  <div><i className="legend-icon icon-strategy" aria-hidden="true">◇</i><span><strong>Polis strategy graph</strong><small>Safe regions, contested objectives, and intended fronts</small></span></div>
                   <div><i className="legend-icon icon-resource" aria-hidden="true"><b /></i><span><strong>Resource</strong><small>Dark badge with a type-colored center</small></span></div>
                   <div><i className="legend-icon icon-wonder" aria-hidden="true">★</i><span><strong>Natural wonder</strong><small>Gold star</small></span></div>
                   <div><i className="legend-icon icon-major-start" aria-hidden="true">1</i><span><strong>Major start</strong><small>Gold numbered marker</small></span></div>

@@ -1,6 +1,6 @@
 import type { Civ5Map } from "./civ5-map.ts";
 
-export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "TECTONIC_PLATE";
+export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "TECTONIC_PLATE" | "STRATEGIC_REGION";
 
 export type GeographicObject = {
   id: string;
@@ -19,12 +19,43 @@ export type LinearGeography = {
   outlet?: number;
 };
 
+export type StrategicNode = {
+  id: string;
+  kind: "MAJOR_START" | "CITY_STATE" | "CONTESTED" | "OBJECTIVE";
+  x: number;
+  y: number;
+  owner?: number;
+  team?: number;
+  regionId?: string;
+};
+
+export type StrategicEdge = {
+  id: string;
+  from: string;
+  to: string;
+  kind: "OPEN" | "PASS" | "RIVER_CROSSING" | "LAND_BRIDGE" | "NAVAL";
+  tileIndices: number[];
+  width: number;
+};
+
+export type StrategicGraph = {
+  version: 1;
+  pattern: string;
+  symmetry: string;
+  nodes: StrategicNode[];
+  edges: StrategicEdge[];
+  protectedTileIndices: number[];
+  relaxations: string[];
+  metrics: Record<string, number>;
+};
+
 export type GenerationStructure = {
-  engine: "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL";
+  engine: "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL" | "POLIS";
   objects: GeographicObject[];
   mountainRanges: LinearGeography[];
   riverSystems: LinearGeography[];
   diagnostics: Record<string, number>;
+  strategicGraph?: StrategicGraph;
 };
 
 function neighbors(index: number, width: number, height: number, wraps: boolean) {
@@ -109,5 +140,13 @@ export function cloneGenerationStructure(structure: GenerationStructure | undefi
     mountainRanges: structure.mountainRanges.map((range) => ({ ...range, tileIndices: [...range.tileIndices] })),
     riverSystems: structure.riverSystems.map((river) => ({ ...river, tileIndices: [...river.tileIndices] })),
     diagnostics: { ...structure.diagnostics },
+    strategicGraph: structure.strategicGraph ? {
+      ...structure.strategicGraph,
+      nodes: structure.strategicGraph.nodes.map((node) => ({ ...node })),
+      edges: structure.strategicGraph.edges.map((edge) => ({ ...edge, tileIndices: [...edge.tileIndices] })),
+      protectedTileIndices: [...structure.strategicGraph.protectedTileIndices],
+      relaxations: [...structure.strategicGraph.relaxations],
+      metrics: { ...structure.strategicGraph.metrics },
+    } : undefined,
   } satisfies GenerationStructure;
 }

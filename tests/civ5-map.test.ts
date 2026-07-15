@@ -636,23 +636,79 @@ test("region-built generation is deterministic, exact, legal, and geographically
   assert.ok(first.structure!.objects.some((object) => object.kind === "CLIMATE_REGION"));
   assert.ok(first.structure!.mountainRanges.length > 0);
   assert.ok(first.structure!.riverSystems.length > 0);
+  assert.equal(first.structure!.diagnostics.passes, 7);
+  assert.ok(first.structure!.diagnostics.subregions > first.tiles.length * 0.5);
+  assert.ok(first.structure!.diagnostics.climatePalettes > first.structure!.diagnostics.climateRegions);
+  assert.ok(first.structure!.diagnostics.biomeTransitions > 0);
 });
 
-test("Excogitare, Region-Graph, and Physical are distinct generation engines", () => {
+test("Fantasticality changes retained regional complexity instead of merely changing copy", () => {
+  const common = {
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "REGION_GRAPH" as const,
+    preset: "MYTHIC_REGIONS" as const,
+    size: "DUEL" as const,
+    players: 2,
+    cityStates: 0,
+    regionClimateLogic: "LAWLESS" as const,
+    waterPercent: 52,
+    seed: "fantasticality-is-architecture",
+  };
+  const restrained = generateMap({ ...common, fantasticality: "RESTRAINED" });
+  const unbound = generateMap({ ...common, fantasticality: "UNBOUND" });
+  assert.notDeepEqual(restrained.tiles.map((tile) => `${tile.terrain}:${tile.feature}:${tile.elevation}`), unbound.tiles.map((tile) => `${tile.terrain}:${tile.feature}:${tile.elevation}`));
+  assert.ok(unbound.structure!.diagnostics.climatePalettes > restrained.structure!.diagnostics.climatePalettes);
+  assert.ok(unbound.structure!.diagnostics.climateRegions >= restrained.structure!.diagnostics.climateRegions);
+  assert.equal(unbound.structure!.diagnostics.passes, 7);
+  assert.deepEqual(buildRepairIssues(unbound).filter((issue) => issue.id !== "clean"), []);
+  assertMountainPassability(unbound);
+  assertRiverNetworks(unbound);
+});
+
+test("Fantastical landmass grammars produce distinct legal navigation architectures", () => {
+  const presets = ["ENCIRCLING_LANDS", "ASTRAL_PANGAEA", "RIFTWORLD", "LONELY_OCEANS", "PENINSULA_REALM", "SHATTERED_ARCHIPELAGO"] as const;
+  const signatures = new Set<string>();
+  for (const preset of presets) {
+    const definition = MAP_PRESETS.find((item) => item.id === preset)!;
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      engine: "REGION_GRAPH",
+      preset,
+      size: "DUEL",
+      players: 2,
+      cityStates: 0,
+      waterPercent: definition.water,
+      fantasticality: "UNBOUND",
+      regionClimateLogic: "LAWLESS",
+      seed: `grammar-${preset}`,
+    });
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * definition.water / 100));
+    assert.equal(map.structure?.diagnostics.passes, 7);
+    assert.ok((map.structure?.diagnostics.subregions ?? 0) > map.tiles.length * 0.5);
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+    signatures.add(`${map.structure?.diagnostics.continents}:${map.structure?.diagnostics.oceanBasins}:${map.structure?.diagnostics.astronomyBasins}:${map.structure?.diagnostics.deepWaterBarriers}:${map.tiles.map((tile) => tile.terrain < 2 ? "0" : "1").join("")}`);
+  }
+  assert.equal(signatures.size, presets.length);
+});
+
+test("Excogitare, Region-Graph, Physical, and Polis are distinct generation engines", () => {
   const families = new Map(MAP_PRESETS.map((preset) => [preset.id, preset.engine]));
   assert.equal(families.get("WILD_REGIONS"), "EXCOGITARE");
   assert.equal(families.get("LIVING_WORLD"), "REGION_GRAPH");
   assert.equal(families.get("DYNAMIC_EARTH"), "PHYSICAL");
-  assert.deepEqual(new Set(MAP_PRESETS.map((preset) => preset.engine)), new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]));
+  assert.equal(families.get("IMPERIAL_RING"), "POLIS");
+  assert.deepEqual(new Set(MAP_PRESETS.map((preset) => preset.engine)), new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]));
 
-  const common = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, cityStates: 4, waterPercent: 55, mountainPercent: 20, seed: "three-engines" };
+  const common = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, cityStates: 4, waterPercent: 55, mountainPercent: 20, seed: "four-engines" };
   const maps = [
     generateMap({ ...common, engine: "EXCOGITARE", preset: "WILD_REGIONS" }),
     generateMap({ ...common, engine: "REGION_GRAPH", preset: "LIVING_WORLD" }),
     generateMap({ ...common, engine: "PHYSICAL", preset: "DYNAMIC_EARTH" }),
+    generateMap({ ...common, engine: "POLIS", preset: "IMPERIAL_RING", polisConflictPattern: "RADIAL" }),
   ];
-  assert.deepEqual(maps.map((map) => map.structure?.engine), ["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]);
-  assert.equal(new Set(maps.map((map) => map.tiles.map((tile) => `${tile.terrain}:${tile.elevation}`).join("|"))).size, 3);
+  assert.deepEqual(maps.map((map) => map.structure?.engine), ["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]);
+  assert.equal(new Set(maps.map((map) => map.tiles.map((tile) => `${tile.terrain}:${tile.elevation}`).join("|"))).size, 4);
   for (const map of maps) {
     assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * 0.55));
     assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
@@ -661,6 +717,121 @@ test("Excogitare, Region-Graph, and Physical are distinct generation engines", (
 
   const legacy = generateMap({ ...common, engine: "FIELD", preset: "CONTINENTS" } as unknown as typeof common & { engine: "EXCOGITARE"; preset: "CONTINENTS" });
   assert.equal(legacy.generation?.engine, "EXCOGITARE");
+});
+
+test("Polis compiles a deterministic strategic graph before terrain and preserves every hard route", () => {
+  const options = {
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "POLIS" as const,
+    preset: "CONTESTED_HEARTLAND" as const,
+    polisConflictPattern: "CROSSROADS" as const,
+    polisSymmetry: "EQUIVALENT" as const,
+    polisExpansionPressure: "IMMEDIATE" as const,
+    polisNavalImportance: "BALANCED" as const,
+    polisChokepointDensity: 82,
+    polisContestedResourcePercent: 60,
+    polisSafeRadius: 4,
+    size: "SMALL" as const,
+    players: 6,
+    cityStates: 10,
+    waterPercent: 28,
+    mountainPercent: 24,
+    strategicStartGuarantee: true,
+    luxuryStartGuarantee: true,
+    seed: "polis-strategic-compiler",
+  };
+  const stages: string[] = [];
+  const first = generateMap(options, (stage) => stages.push(stage));
+  const second = generateMap(options);
+  const graph = first.structure?.strategicGraph;
+
+  assert.deepEqual(first.tiles, second.tiles);
+  assert.deepEqual(first.startLocations, second.startLocations);
+  assert.deepEqual(first.structure, second.structure);
+  assert.equal(first.structure?.engine, "POLIS");
+  assert.ok(graph);
+  assert.equal(graph!.version, 1);
+  assert.equal(graph!.pattern, "CROSSROADS");
+  assert.equal(graph!.symmetry, "EQUIVALENT");
+  assert.equal(graph!.nodes.filter((node) => node.kind === "MAJOR_START").length, 6);
+  assert.equal(graph!.nodes.filter((node) => node.kind === "CITY_STATE").length, 10);
+  assert.ok(graph!.nodes.some((node) => node.kind === "OBJECTIVE"));
+  assert.ok(graph!.edges.length >= 6);
+  assert.equal(first.startLocations.filter((start) => !start.cityState).length, 6);
+  assert.equal(first.startLocations.filter((start) => start.cityState).length, 10);
+  assert.ok(stages.includes("Compiling strategic graph and protected routes"));
+
+  for (const index of graph!.protectedTileIndices) {
+    assert.ok(first.tiles[index].terrain >= 2, `protected tile ${index} became water`);
+    assert.ok(first.tiles[index].elevation < 2, `protected tile ${index} became a mountain`);
+  }
+  for (const edge of graph!.edges.filter((item) => item.kind !== "NAVAL")) {
+    assert.ok(edge.tileIndices.length >= 2);
+    for (let index = 1; index < edge.tileIndices.length; index += 1) {
+      assert.ok(adjacentIndices(edge.tileIndices[index - 1], first.width, first.height, first.wraps).includes(edge.tileIndices[index]), `${edge.id} is discontinuous`);
+    }
+  }
+  for (const start of first.startLocations.filter((item) => !item.cityState)) {
+    const tile = first.tiles[start.y * first.width + start.x];
+    assert.ok(tile.terrain >= 2 && tile.elevation < 2);
+    assert.ok(graph!.nodes.some((node) => node.kind === "MAJOR_START" && node.owner === start.player && node.x === start.x && node.y === start.y));
+  }
+
+  const contested = new Set(first.structure!.objects.filter((object) => object.kind === "STRATEGIC_REGION" && object.attributes?.role !== "SAFE").flatMap((object) => object.tileIndices));
+  assert.ok([...contested].some((index) => first.tiles[index].resource >= 5 && first.tiles[index].resource !== 255));
+  const balance = analyzeMultiplayerBalance(first);
+  assert.ok(balance.spread <= 12, `Polis equivalent starts spread by ${balance.spread} points`);
+  assert.ok(["A", "B"].includes(balance.grade));
+  assert.equal(validateCiv5Map(first).filter((issue) => issue.severity === "ERROR").length, 0);
+  assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), []);
+  assertMountainPassability(first);
+  assertRiverNetworks(first);
+});
+
+test("Polis presets produce distinct audited conflict topologies", () => {
+  const presets = [
+    ["IMPERIAL_RING", "RADIAL"],
+    ["OPPOSING_FRONTS", "OPPOSING_FRONTS"],
+    ["CONTESTED_HEARTLAND", "CROSSROADS"],
+    ["RIVAL_CONTINENTS", "RIVAL_CONTINENTS"],
+  ] as const;
+  const signatures = new Set<string>();
+  for (const [preset, polisConflictPattern] of presets) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "POLIS", preset, polisConflictPattern, size: "DUEL", players: 4, cityStates: 6, waterPercent: preset === "RIVAL_CONTINENTS" ? 54 : 34, seed: `polis-${preset.toLowerCase()}` });
+    assert.equal(map.structure?.strategicGraph?.pattern, polisConflictPattern);
+    assert.equal(map.startLocations.filter((start) => !start.cityState).length, 4);
+    assert.equal(map.startLocations.filter((start) => start.cityState).length, 6);
+    assert.equal(validateCiv5Map(map).filter((issue) => issue.severity === "ERROR").length, 0);
+    signatures.add(map.tiles.map((tile) => `${tile.terrain}:${tile.elevation}`).join("|"));
+  }
+  assert.equal(signatures.size, presets.length);
+});
+
+test("Polis hard constraints survive ordinary sizes, wraps, and repeated seeds", () => {
+  const patterns = [
+    ["IMPERIAL_RING", "RADIAL", 34],
+    ["OPPOSING_FRONTS", "OPPOSING_FRONTS", 28],
+    ["CONTESTED_HEARTLAND", "CROSSROADS", 22],
+    ["RIVAL_CONTINENTS", "RIVAL_CONTINENTS", 54],
+  ] as const;
+  const sizes = [
+    ["DUEL", 4, 4],
+    ["SMALL", 6, 8],
+    ["STANDARD", 8, 12],
+  ] as const;
+  for (const [preset, polisConflictPattern, waterPercent] of patterns) {
+    for (const [size, players, cityStates] of sizes) {
+      const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "POLIS", preset, polisConflictPattern, size, players, cityStates, waterPercent, wrapType: preset === "CONTESTED_HEARTLAND" ? "NONE" : "EAST_WEST", seed: `polis-audit-${preset}-${size}` });
+      const graph = map.structure?.strategicGraph;
+      assert.ok(graph);
+      assert.equal(map.startLocations.filter((start) => !start.cityState).length, players);
+      assert.equal(map.startLocations.filter((start) => start.cityState).length, cityStates);
+      assert.equal(validateCiv5Map(map).filter((issue) => issue.severity === "ERROR").length, 0);
+      assert.ok(analyzeMultiplayerBalance(map).spread <= 18);
+      for (const index of graph!.protectedTileIndices) assert.ok(map.tiles[index].terrain >= 2 && map.tiles[index].elevation < 2);
+      assertMountainPassability(map);
+    }
+  }
 });
 
 test("Physical generation retains plates, boundaries, erosion controls, climate, and drainage", () => {
@@ -707,7 +878,7 @@ test("Physical generation retains plates, boundaries, erosion controls, climate,
 
 test("region-built presets remain valid through extreme Pin and String geometries", () => {
   const presets = MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH");
-  assert.deepEqual(presets.map((preset) => preset.id), ["LIVING_WORLD", "TECTONIC_CONTINENTS", "GREAT_WATERSHEDS", "SHATTERED_BASINS", "MYTHIC_REGIONS"]);
+  assert.deepEqual(presets.map((preset) => preset.id), ["LIVING_WORLD", "TECTONIC_CONTINENTS", "GREAT_WATERSHEDS", "SHATTERED_BASINS", "MYTHIC_REGIONS", "ENCIRCLING_LANDS", "ASTRAL_PANGAEA", "RIFTWORLD", "LONELY_OCEANS", "PENINSULA_REALM", "SHATTERED_ARCHIPELAGO"]);
   for (const [index, geometry] of (["PIN", "STRING"] as const).entries()) {
     const preset = presets[index === 0 ? 2 : 3];
     const map = generateMap({
@@ -813,7 +984,7 @@ test("Randomise produces complete valid settings and wrap choices control export
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
   assert.deepEqual(geometries, new Set(SAFE_MAP_GEOMETRIES));
   assert.deepEqual(gameBreakingGeometries, new Set([...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES]));
-  assert.deepEqual(engines, new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL"]));
+  assert.deepEqual(engines, new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });

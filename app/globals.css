@@ -488,6 +488,13 @@ button { color: inherit; }
 .grade-d { color: #d7836f !important; }
 .analysis-summary h3 { margin: 0; color: #d5dfda; font-family: Georgia, serif; font-size: 15px; font-weight: 500; }
 .analysis-summary p { margin: 3px 0 0; color: #738983; font-size: 8px; line-height: 1.4; }
+.polis-audit { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(217, 185, 111, .24); border-radius: 6px; background: rgba(217, 185, 111, .035); }
+.polis-audit p,
+.polis-audit small { margin: 0; color: #7f9790; font-size: 7px; line-height: 1.5; }
+.polis-audit dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; }
+.polis-audit dl div { padding: 6px; border: 1px solid rgba(188, 207, 197, .1); border-radius: 4px; background: rgba(8, 24, 28, .28); }
+.polis-audit dt { color: #718a84; font-size: 6px; text-transform: uppercase; }
+.polis-audit dd { margin: 3px 0 0; color: #e0c985; font-family: var(--font-geist-mono), monospace; font-size: 10px; }
 .player-balance-list { display: grid; gap: 5px; }
 .player-balance-list > button { display: grid; grid-template-columns: 25px 1fr; gap: 7px; padding: 8px; border: 1px solid var(--line); border-radius: 5px; background: rgba(8, 24, 28, .26); color: inherit; text-align: left; cursor: pointer; }
 .player-balance-list > button.is-active { border-color: rgba(126, 216, 216, .5); background: rgba(67, 142, 145, .12); }
@@ -797,6 +804,7 @@ button { color: inherit; }
 .icon-ice { color: #deeeee; font-size: 16px; }
 .icon-fallout { color: #9ebc5d; font-size: 16px; }
 .icon-political { width: 24px; height: 18px; justify-self: center; border: 2px solid #5a3038; border-radius: 2px; background: #b7648b; box-shadow: 0 0 0 1px rgba(8, 20, 22, .8); }
+.icon-strategy { color: #e0c985; border: 1px dashed #70a7a4; border-radius: 50%; background: rgba(112, 167, 164, .15); }
 .icon-resource { position: relative; }
 .icon-resource::before { content: ""; width: 15px; height: 15px; border-radius: 50%; background: #14282a; }
 .icon-resource b { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #e8bd63; }

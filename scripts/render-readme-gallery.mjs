@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { CLIMATE_PROJECTIONS } from "../lib/climate-projection.ts";
-import { DEFAULT_GENERATION_OPTIONS, generateMap, MAP_PRESETS } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, generateMap, MAP_PRESETS, polisPatternForPreset } from "../lib/map-generator.ts";
 
 const PROJECTION = { a: 0.86, b: 0.25, c: -0.52, d: 0.38 };
 const HEX_RADIUS = 18;
@@ -164,6 +164,7 @@ function makePresetMap(preset, projectionType = "NORTH_SOUTH") {
     plateActivity: preset.plateActivity ?? DEFAULT_GENERATION_OPTIONS.plateActivity,
     erosionStrength: preset.erosionStrength ?? DEFAULT_GENERATION_OPTIONS.erosionStrength,
     worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge,
+    polisConflictPattern: polisPatternForPreset(preset.id),
   });
 }
 
@@ -292,7 +293,7 @@ async function renderCreateWorkflowSheet() {
   const parts = [`<text x="48" y="64" fill="${COLORS.cream}" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" letter-spacing="3">CREATE WORKFLOW</text><text x="50" y="100" fill="${COLORS.muted}" font-family="Arial, Helvetica, sans-serif" font-size="17">Design a recipe, revisit its generations, and learn dense controls without surrendering the map.</text>`];
 
   const design = [
-    `<text x="${x1 + 28}" y="${top + 98}" fill="${COLORS.muted}" font-family="Arial" font-size="11" font-weight="700" letter-spacing="1.5">GENERATION ENGINE · 1 / 3</text>`,
+    `<text x="${x1 + 28}" y="${top + 98}" fill="${COLORS.muted}" font-family="Arial" font-size="11" font-weight="700" letter-spacing="1.5">GENERATION ENGINE · 1 / 4</text>`,
     button(x1 + 28, top + 120, 44, "‹"), button(x1 + 648, top + 120, 44, "›"),
     `<rect x="${x1 + 88}" y="${top + 112}" width="544" height="126" rx="10" fill="#102f35" stroke="${COLORS.gold}"/><text x="${x1 + 112}" y="${top + 150}" fill="${COLORS.cream}" font-family="Georgia, serif" font-size="25" font-weight="700">Excogitare</text><text x="${x1 + 112}" y="${top + 182}" fill="${COLORS.text}" font-family="Arial" font-size="14">Warped fields, expressive landforms, and the</text><text x="${x1 + 112}" y="${top + 204}" fill="${COLORS.text}" font-family="Arial" font-size="14">widest stylistic range.</text>`,
     `<text x="${x1 + 28}" y="${top + 278}" fill="${COLORS.muted}" font-family="Arial" font-size="11" font-weight="700" letter-spacing="1.5">WORLD CHARACTER</text>`,
@@ -392,6 +393,7 @@ await mkdir(resolve("public/readme"), { recursive: true });
 await renderPresetSheet("excogitare-presets.png", "EXCOGITARE PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "EXCOGITARE"), 2);
 await renderPresetSheet("region-graph-presets.png", "REGION-GRAPH PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH"), 2);
 await renderPresetSheet("physical-presets.png", "PHYSICAL PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL"), 3);
+await renderPresetSheet("polis-presets.png", "POLIS PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "POLIS"), 2);
 await renderProjectionSheet();
 await renderInterfaceSheet();
 await renderCreateWorkflowSheet();

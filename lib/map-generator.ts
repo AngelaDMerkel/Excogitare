@@ -3,6 +3,7 @@ import { poleProximity, type ClimateProjection } from "./climate-projection.ts";
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
 import { attachRiverSystems, connectedLinearFeatures, connectedTileObjects, type GenerationStructure } from "./generation-structure.ts";
 import { generatePhysicalGeography } from "./physical-generator.ts";
+import { generatePolisGeography } from "./polis-generator.ts";
 import { generateRegionGraphGeography } from "./region-graph-generator.ts";
 import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
 
@@ -30,9 +31,19 @@ export type MapPresetId =
   | "GREAT_WATERSHEDS"
   | "SHATTERED_BASINS"
   | "MYTHIC_REGIONS"
+  | "ENCIRCLING_LANDS"
+  | "ASTRAL_PANGAEA"
+  | "RIFTWORLD"
+  | "LONELY_OCEANS"
+  | "PENINSULA_REALM"
+  | "SHATTERED_ARCHIPELAGO"
   | "DYNAMIC_EARTH"
   | "COLLIDING_PLATES"
-  | "ANCIENT_CRATONS";
+  | "ANCIENT_CRATONS"
+  | "IMPERIAL_RING"
+  | "OPPOSING_FRONTS"
+  | "CONTESTED_HEARTLAND"
+  | "RIVAL_CONTINENTS";
 export type MultiplayerBalance = "STANDARD" | "TOURNAMENT" | "TEAMS";
 export type TeamLayout = "CLUSTERED" | "FRONTLINES" | "DISTRIBUTED";
 export type ClimateSetting = "COOL" | "TEMPERATE" | "HOT";
@@ -61,12 +72,18 @@ export type AbundanceSetting = "SCARCE" | "STANDARD" | "ABUNDANT";
 export type ResourceDistribution = "EVEN" | "REGIONAL" | "CLUSTERED";
 export type CoastalPreference = "ANY" | "PREFER" | "REQUIRE";
 export type SiteAbundance = "NONE" | "SCARCE" | "STANDARD" | "RAGING";
-export type GenerationEngine = "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL";
+export type GenerationEngine = "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL" | "POLIS";
 export type RegionGranularity = "LOW" | "FAIR" | "HIGH" | "VERY_HIGH";
 export type RegionContrast = "BLENDED" | "VARIED" | "EXTREME";
+export type Fantasticality = "RESTRAINED" | "MYTHIC" | "UNBOUND";
+export type RegionClimateLogic = "LAWLESS" | "INFLUENCED" | "ORDERED";
 export type RiverDensity = "SPARSE" | "NORMAL" | "DENSE";
 export type PlateActivity = "QUIET" | "NORMAL" | "VIOLENT";
 export type ErosionStrength = "LIGHT" | "MODERATE" | "STRONG";
+export type PolisConflictPattern = "RADIAL" | "OPPOSING_FRONTS" | "CROSSROADS" | "RIVAL_CONTINENTS";
+export type PolisSymmetry = "EQUIVALENT" | "MIRRORED" | "ROTATIONAL" | "ASYMMETRIC";
+export type PolisExpansionPressure = "RELAXED" | "STANDARD" | "IMMEDIATE";
+export type PolisNavalImportance = "LOW" | "BALANCED" | "HIGH";
 
 export function resolveMapDimensions(sizeId: MapSizeId, geometry: MapGeometry) {
   const size = MAP_SIZES.find((item) => item.id === sizeId) ?? MAP_SIZES[3];
@@ -115,10 +132,33 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "REGION_GRAPH", climateRealism: true },
   { id: "SHATTERED_BASINS", label: "Shattered Basins", description: "Several deep oceans divide broken continents, island chains, and astronomy-like rifts.", water: 66, mountains: 13, engine: "REGION_GRAPH", climateRealism: true },
   { id: "MYTHIC_REGIONS", label: "Mythic Regions", description: "Deliberately composed climate realms divided by epic ranges and implausible transitions.", water: 52, mountains: 17, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "ENCIRCLING_LANDS", label: "Encircling Lands", description: "A mostly terrestrial world enclosing lakes, inland seas, and remote water kingdoms.", water: 22, mountains: 15, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "ASTRAL_PANGAEA", label: "Astral Pangaea", description: "One immense landmass divided by deep astronomy scars, interior seas, and impossible climate marches.", water: 43, mountains: 18, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "RIFTWORLD", label: "Riftworld", description: "Several habitable basins are isolated by deep-water barriers, broken shelves, and narrow crossings.", water: 61, mountains: 16, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "LONELY_OCEANS", label: "Lonely Oceans", description: "Vast separate oceans hold scattered island realms, remote archipelagos, and dangerous open-water passages.", water: 76, mountains: 12, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "PENINSULA_REALM", label: "Peninsula Realm", description: "A non-wrapping continental realm is invaded by gulfs, estuaries, crooked peninsulas, and inland channels.", water: 39, mountains: 17, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "SHATTERED_ARCHIPELAGO", label: "Shattered Archipelago", description: "Uneven island chains, tiny islets, drowned shelves, and regional climate enclaves fill the world.", water: 71, mountains: 13, engine: "REGION_GRAPH", climateRealism: false },
   { id: "DYNAMIC_EARTH", label: "Dynamic Earth", description: "Moving plates, mixed continental crust, convergent ranges, rifts, erosion, and coupled climate.", water: 62, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL" },
   { id: "COLLIDING_PLATES", label: "Colliding Plates", description: "Young, active continents dominated by collision belts, high ranges, rain shadows, and difficult interiors.", water: 54, mountains: 23, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "LIGHT", worldAge: "YOUNG" },
   { id: "ANCIENT_CRATONS", label: "Ancient Cratons", description: "Older eroded landmasses, broad river country, subdued uplands, and mature coastlines.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD" },
+  { id: "IMPERIAL_RING", label: "Imperial Ring", description: "Civilizations surround a contested interior with neighboring fronts, radial approaches, and deliberately shared objectives.", water: 34, mountains: 16, engine: "POLIS", climateRealism: false },
+  { id: "OPPOSING_FRONTS", label: "Opposing Fronts", description: "Players or teams occupy defended sides of the world, separated by several readable invasion corridors.", water: 28, mountains: 20, engine: "POLIS", climateRealism: false },
+  { id: "CONTESTED_HEARTLAND", label: "Contested Heartland", description: "Safe starting territories open toward a valuable central crossroads with multiple flanking routes.", water: 22, mountains: 18, engine: "POLIS", climateRealism: false },
+  { id: "RIVAL_CONTINENTS", label: "Rival Continents", description: "Balanced continental blocs face one another across naval lanes, islands, and a small number of strategic crossings.", water: 54, mountains: 14, engine: "POLIS", climateRealism: false },
 ];
+
+export function polisPatternForPreset(preset: MapPresetId): PolisConflictPattern {
+  if (preset === "OPPOSING_FRONTS") return "OPPOSING_FRONTS";
+  if (preset === "CONTESTED_HEARTLAND") return "CROSSROADS";
+  if (preset === "RIVAL_CONTINENTS") return "RIVAL_CONTINENTS";
+  return "RADIAL";
+}
+
+export function fantasticalityForPreset(preset: MapPresetId): Fantasticality {
+  if (["MYTHIC_REGIONS", "ASTRAL_PANGAEA", "RIFTWORLD", "LONELY_OCEANS", "PENINSULA_REALM", "SHATTERED_ARCHIPELAGO"].includes(preset)) return "UNBOUND";
+  if (["LIVING_WORLD", "TECTONIC_CONTINENTS"].includes(preset)) return "RESTRAINED";
+  return "MYTHIC";
+}
 
 export const WORLD_MODIFIERS: ReadonlyArray<{ id: WorldModifier; label: string; description: string }> = [
   { id: "NONE", label: "None", description: "Use the selected map type without an additional world rule." },
@@ -173,10 +213,19 @@ export type MapGenerationOptions = {
   landAtPoles: boolean;
   climateRealism: boolean;
   regionContrast: RegionContrast;
+  fantasticality: Fantasticality;
+  regionClimateLogic: RegionClimateLogic;
   coastalRangePercent: number;
   riverDensity: RiverDensity;
   plateActivity: PlateActivity;
   erosionStrength: ErosionStrength;
+  polisConflictPattern: PolisConflictPattern;
+  polisSymmetry: PolisSymmetry;
+  polisExpansionPressure: PolisExpansionPressure;
+  polisNavalImportance: PolisNavalImportance;
+  polisChokepointDensity: number;
+  polisContestedResourcePercent: number;
+  polisSafeRadius: number;
 };
 
 export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
@@ -225,10 +274,19 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   landAtPoles: true,
   climateRealism: false,
   regionContrast: "VARIED",
+  fantasticality: "MYTHIC",
+  regionClimateLogic: "LAWLESS",
   coastalRangePercent: 45,
   riverDensity: "NORMAL",
   plateActivity: "NORMAL",
   erosionStrength: "MODERATE",
+  polisConflictPattern: "RADIAL",
+  polisSymmetry: "EQUIVALENT",
+  polisExpansionPressure: "STANDARD",
+  polisNavalImportance: "BALANCED",
+  polisChokepointDensity: 55,
+  polisContestedResourcePercent: 35,
+  polisSafeRadius: 4,
 };
 
 function randomItem<T>(items: readonly T[], random: () => number) {
@@ -289,10 +347,19 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     landAtPoles: random() > 0.5,
     climateRealism: presetConfig.climateRealism ?? random() > 0.5,
     regionContrast: randomItem(["BLENDED", "VARIED", "EXTREME"] as const, random),
+    fantasticality: randomItem(["RESTRAINED", "MYTHIC", "UNBOUND"] as const, random),
+    regionClimateLogic: randomItem(["LAWLESS", "INFLUENCED", "ORDERED"] as const, random),
     coastalRangePercent: Math.round(random() * 100),
     riverDensity: randomItem(["SPARSE", "NORMAL", "DENSE"] as const, random),
     plateActivity: randomItem(["QUIET", "NORMAL", "VIOLENT"] as const, random),
     erosionStrength: randomItem(["LIGHT", "MODERATE", "STRONG"] as const, random),
+    polisConflictPattern: presetConfig.engine === "POLIS" ? polisPatternForPreset(preset) : randomItem(["RADIAL", "OPPOSING_FRONTS", "CROSSROADS", "RIVAL_CONTINENTS"] as const, random),
+    polisSymmetry: randomItem(["EQUIVALENT", "MIRRORED", "ROTATIONAL", "ASYMMETRIC"] as const, random),
+    polisExpansionPressure: randomItem(["RELAXED", "STANDARD", "IMMEDIATE"] as const, random),
+    polisNavalImportance: randomItem(["LOW", "BALANCED", "HIGH"] as const, random),
+    polisChokepointDensity: 20 + Math.round(random() * 70),
+    polisContestedResourcePercent: 15 + Math.round(random() * 60),
+    polisSafeRadius: 3 + Math.floor(random() * 4),
     strategicBalance: false,
     seed: `${seedPart()}-${seedPart()}`,
   };
@@ -1164,9 +1231,13 @@ function applyResourceRules(
   wraps: boolean,
   options: MapGenerationOptions,
   random: () => number,
+  contestedIndices: number[] = [],
+  safeIndices: number[] = [],
 ) {
   const abundance = { SCARCE: 0.65, STANDARD: 1, ABUNDANT: 1.55 } as const;
   const landCandidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 ? [index] : []);
+  const safeSet = new Set(safeIndices);
+  const ordinaryLandCandidates = landCandidates.filter((index) => !safeSet.has(index));
   const waterCandidates = tiles.flatMap((tile, index) => tile.terrain < 2 ? [index] : []);
   const shuffle = (values: number[]) => values.sort(() => random() - 0.5);
   const place = (candidates: number[], resourceIndices: number[], count: number, selector?: (index: number, placement: number) => number) => {
@@ -1179,17 +1250,21 @@ function applyResourceRules(
       tile.resourceAmount = tile.resource >= 5 && tile.resource <= 10 ? 2 : 1;
       placed += 1;
     }
+    return placed;
   };
 
   const bonusCount = Math.round(landCandidates.length * 0.045 * abundance[options.bonusAbundance]);
-  place(landCandidates, [0, 1, 2, 3], bonusCount);
+  place(ordinaryLandCandidates, [0, 1, 2, 3], bonusCount);
   place(waterCandidates, [4], Math.round(waterCandidates.length * 0.018 * abundance[options.bonusAbundance]));
 
   const strategicCount = Math.round(landCandidates.length * 0.026 * abundance[options.strategicAbundance]);
   const strategicCandidates = options.strategicDistribution === "CLUSTERED"
-    ? landCandidates.filter((index) => valueNoise(index % width, Math.floor(index / width), 7, 1949) > 0.48)
-    : landCandidates;
-  place(strategicCandidates, [5, 6, 7, 8, 9, 10], strategicCount, (index, placement) => {
+    ? ordinaryLandCandidates.filter((index) => valueNoise(index % width, Math.floor(index / width), 7, 1949) > 0.48)
+    : ordinaryLandCandidates;
+  const contestedLandCandidates = contestedIndices.filter((index) => landCandidates.includes(index));
+  const contestedStrategicTarget = options.engine === "POLIS" ? Math.round(strategicCount * clamp(options.polisContestedResourcePercent / 100, 0, 0.8)) : 0;
+  const contestedStrategics = place(contestedLandCandidates, [5, 6, 7, 8, 9, 10], contestedStrategicTarget, (_index, placement) => 5 + (placement % 6));
+  place(strategicCandidates, [5, 6, 7, 8, 9, 10], strategicCount - contestedStrategics, (index, placement) => {
     if (options.strategicDistribution === "REGIONAL") {
       const x = index % width;
       return 5 + Math.min(5, Math.floor(x / Math.max(1, width) * 6));
@@ -1204,7 +1279,9 @@ function applyResourceRules(
   const landLuxuryIndices = luxuryIndices.filter((index) => !waterLuxuryIndices.includes(index));
   const luxuryCount = Math.round(landCandidates.length * 0.018 * abundance[options.luxuryAbundance]);
   const waterLuxuryCount = Math.min(waterCandidates.length, Math.round(luxuryCount * 0.14));
-  place(landCandidates, landLuxuryIndices, luxuryCount - waterLuxuryCount, (index) => {
+  const contestedLuxuryTarget = options.engine === "POLIS" ? Math.round((luxuryCount - waterLuxuryCount) * clamp(options.polisContestedResourcePercent / 100, 0, 0.8)) : 0;
+  const contestedLuxuries = place(contestedLandCandidates, landLuxuryIndices, contestedLuxuryTarget, (_index, placement) => landLuxuryIndices[placement % landLuxuryIndices.length]);
+  place(ordinaryLandCandidates, landLuxuryIndices, luxuryCount - waterLuxuryCount - contestedLuxuries, (index) => {
     if (!options.luxuryRegional) return landLuxuryIndices[Math.floor(random() * landLuxuryIndices.length)];
     const x = index % width;
     return landLuxuryIndices[Math.min(landLuxuryIndices.length - 1, Math.floor(x / Math.max(1, width) * landLuxuryIndices.length))];
@@ -1446,6 +1523,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     elevations: number[];
     tiles: Civ5Tile[];
     structure: GenerationStructure;
+    startLocations?: Civ5StartLocation[];
   }, description: string) => {
     onProgress?.("Opening mountain passes");
     carveAccessiblePasses(geography.landMask, geography.elevations, width, height, wraps);
@@ -1453,14 +1531,24 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
     const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
     onProgress?.("Placing players and city states");
-    const majorStarts = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
+    const majorStarts = geography.startLocations
+      ? geography.startLocations.filter((start) => !start.cityState).map((start) => ({ ...start }))
+      : placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
     if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
       normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
     }
-    const cityStates = placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+    const cityStates = geography.startLocations
+      ? geography.startLocations.filter((start) => start.cityState).map((start) => ({ ...start }))
+      : placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
     const startLocations = [...majorStarts, ...cityStates];
     onProgress?.("Placing resources and wonders");
-    applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random);
+    const contestedTiles = geography.structure.objects
+      .filter((object) => object.kind === "STRATEGIC_REGION" && (object.attributes?.role === "CONTESTED" || object.attributes?.role === "OBJECTIVE"))
+      .flatMap((object) => object.tileIndices);
+    const safeTiles = geography.structure.objects
+      .filter((object) => object.kind === "STRATEGIC_REGION" && object.attributes?.role === "SAFE")
+      .flatMap((object) => object.tileIndices);
+    applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random, contestedTiles, safeTiles);
     placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
     if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
     onProgress?.("Resolving drainage and rivers");
@@ -1495,14 +1583,19 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     return { ...legal, structure: attachRiverSystems(legal, structure) };
   };
   if (resolved.engine === "REGION_GRAPH") {
-    onProgress?.("Building subregions and polygon graphs");
+    onProgress?.("Compiling dense subregions and world grammars");
     const geography = generateRegionGraphGeography(resolved, width, height, wraps, seed, random);
-    return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "region-graph"} map built by the Region-Graph engine from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.continents} continents, and ${geography.diagnostics.oceanBasins} water basins`);
+    return finishStructuredGeography(geography, `A seeded ${resolved.fantasticality.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "region-graph"} map compiled by the Region-Graph engine in ${geography.diagnostics.passes} geographic passes from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.climatePalettes} biome palettes, ${geography.diagnostics.astronomyBasins} astronomy basins, and ${geography.diagnostics.continents} continents`);
   }
   if (resolved.engine === "PHYSICAL") {
     onProgress?.("Simulating tectonic plates and erosion");
     const geography = generatePhysicalGeography(resolved, width, height, wraps, seed, random);
     return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} physical world formed from ${geography.structure.diagnostics.plates} moving plates, ${geography.structure.diagnostics.continents} continents, erosion, coupled climate, and west-to-east atmospheric moisture`);
+  }
+  if (resolved.engine === "POLIS") {
+    onProgress?.("Compiling strategic graph and protected routes");
+    const geography = generatePolisGeography(resolved, width, height, wraps, seed, random);
+    return finishStructuredGeography(geography, `A seeded gameplay-first world compiled by Polis from ${geography.diagnostics.strategicRegions} strategic regions, ${geography.diagnostics.fronts} fronts, ${geography.diagnostics.contestedRegions} contested objectives, and protected routes between every major start`);
   }
   const centerConfig: Record<MapPresetId, [number, [number, number]]> = {
     CONTINENTS: [4, [0.18, 0.31]],
@@ -1518,9 +1611,19 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     GREAT_WATERSHEDS: [3, [0.22, 0.36]],
     SHATTERED_BASINS: [16, [0.06, 0.17]],
     MYTHIC_REGIONS: [10, [0.08, 0.24]],
+    ENCIRCLING_LANDS: [4, [0.18, 0.31]],
+    ASTRAL_PANGAEA: [2, [0.35, 0.49]],
+    RIFTWORLD: [10, [0.08, 0.2]],
+    LONELY_OCEANS: [22, [0.04, 0.1]],
+    PENINSULA_REALM: [6, [0.14, 0.28]],
+    SHATTERED_ARCHIPELAGO: [24, [0.04, 0.11]],
     DYNAMIC_EARTH: [5, [0.17, 0.3]],
     COLLIDING_PLATES: [3, [0.24, 0.4]],
     ANCIENT_CRATONS: [4, [0.2, 0.35]],
+    IMPERIAL_RING: [8, [0.08, 0.2]],
+    OPPOSING_FRONTS: [6, [0.1, 0.22]],
+    CONTESTED_HEARTLAND: [7, [0.09, 0.2]],
+    RIVAL_CONTINENTS: [4, [0.18, 0.32]],
   };
   const [centerCount, centerRadius] = centerConfig[resolved.preset];
   onProgress?.("Forming Excogitare terrain fields");

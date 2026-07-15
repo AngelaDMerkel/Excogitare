@@ -39,6 +39,7 @@ Explore keeps its full inspection sidebar: dimensions, Civ V world-size label, t
 *Explore retains map facts and layer controls beside the renderer. The companion legend translates the compact iconography without pretending that hiding a layer edits the map.*
 
 - **Political** draws scenario territories and borders when ownership records exist. On generated maps it may instead show projected influence around starts. The colours are inferred from stored civilization or team identifiers, not read from Civ V's complete XML database.
+- **Strategy graph** appears on Polis generations and overlays safe territories, contested objectives, protected land routes and intended naval or terrestrial fronts. It is the retained pre-terrain design model, not a balance diagram guessed from the finished map.
 - **Hex grid** shows the underlying hex geometry.
 - **Features** shows forests, jungles, marshes, ice, oases, fallout and other known feature marks.
 - **Resources** shows bonus, luxury and strategic resource icons.
@@ -70,7 +71,7 @@ The numbered Design sections behave as a guided sequence, with only one normally
 
 ### Design: world recipe and pole orientation
 
-**World recipe** collects the generation engine, world character, map type, size and seed into a compact starting surface. The three engines are presented as a full-width carousel rather than compressed adjacent tiles. Arrow controls move between engines, selecting a card applies it, and every card keeps its architectural description visible. The remaining recipe controls and advanced disclosures are deliberately flat: Excogitare avoids stacking decorative cards inside other cards merely to consume the sidebar.
+**World recipe** collects the generation engine, world character, map type, size and seed into a compact starting surface. The four engines are presented as a full-width carousel rather than compressed adjacent tiles. Arrow controls move between engines, selecting a card applies it, and every card keeps its architectural description visible. The remaining recipe controls and advanced disclosures are deliberately flat: Excogitare avoids stacking decorative cards inside other cards merely to consume the sidebar.
 
 **Pole orientation** appears in World shape because it changes the climate coordinate system used by every generation engine without changing the 2D or isometric camera:
 
@@ -89,6 +90,7 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 - **Excogitare** is the original field generator: fast warped noise, dramatic coastlines and the broadest stylistic range.
 - **Region-Graph** independently recreates the useful geographic hierarchy behind Fantastical-style maps. Relaxed subregions become polygons; polygon graphs become continents, oceans, inland basins and rifts; climate provinces and mountain boundaries are resolved over that structure; drainage then builds mountain-fed river systems and tributaries.
 - **Physical** is a separate PerfectWorld-like simulation rather than Realistic wearing a false moustache. It assigns moving continental and oceanic plates, resolves convergent and divergent boundaries, uplifts and erodes their margins, derives sea level from the requested water share, and couples temperature and atmospheric moisture to projection, altitude, ocean exposure and west-to-east wind.
+- **Polis** works in the opposite direction. It compiles a strategic graph of safe territories, contested objectives, land and naval fronts, protected routes and city-state space before terrain exists. Geography is then fitted around that skeleton. Its balance is inspectable rather than implied: the retained graph records nodes, routes, protected tiles, measurements and any constraint that had to be relaxed.
 
 **World character** is independent of engine:
 
@@ -117,6 +119,10 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 | Physical | Dynamic Earth | Mixed moving plates, convergence, rifting, moderate erosion and coupled climate. |
 | Physical | Colliding Plates | Young violent collision belts, high ranges, rain shadows and hard interiors. |
 | Physical | Ancient Cratons | Quiet old plates, broad river country, subdued uplands and mature coasts. |
+| Polis | Imperial Ring | Civilizations surround a contested interior with neighboring fronts and radial approaches. |
+| Polis | Opposing Fronts | Players or teams occupy defended sides joined by several readable invasion corridors. |
+| Polis | Contested Heartland | Safe territories open toward a valuable central crossroads and flanking routes. |
+| Polis | Rival Continents | Balanced continental blocs face one another across naval lanes, islands and limited crossings. |
 
 ![Excogitare engine map presets](public/readme/excogitare-presets.png)
 
@@ -130,6 +136,16 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 
 *The three Physical presets, showing active, violent and old eroded tectonic regimes.*
 
+![Polis gameplay-first map presets](public/readme/polis-presets.png)
+
+*The four Polis presets. Starts, safe territories, fronts, objectives and protected routes are compiled before these maps receive terrain.*
+
+Polis runs as a compiler rather than a decorative post-process. It first places major starts according to the requested conflict pattern and symmetry, constructs a connected graph of land and naval fronts, reserves non-overlapping safe territories, and turns every required land route into an immutable passable mask. Only then does it allocate the requested land budget, raise barriers around approaches, resolve climate, place city states, distribute ordinary and contested resources, build legal rivers, and run the same Civ V legality pass as the other engines. A broken or disconnected graph is rejected before geography exists.
+
+Hard rules include unique legal starts, a connected strategic graph, contiguous front paths, passable protected land routes, legal resource and feature placement, and mountain accessibility. Water percentage, safe-territory radius and city-state spacing are softer because a tiny map cannot obey every extravagant request simultaneously. When those collide with a hard rule, Polis records the reduction under **Generated structure** and **Polis strategic audit** rather than silently lying about what it generated.
+
+The **Strategy graph** layer renders that retained model over the map: teal safe territories, gold contested or objective regions, and distinct land, pass and naval front lines. **Review** reports front counts, protected tiles, actual start distance, average front length and any relaxed constraint beside the ordinary multiplayer balance report. Generation history and checkpoints preserve the graph. Exported `.Civ5Map` files do not, because Civ V's format has no ordinary section for Excogitare's private planning model.
+
 **Map size** provides Civ V's standard budgets: Duel `40×24`, Tiny `56×36`, Small `66×42`, Standard `80×52`, Large `104×64` and Huge `128×80`. Changing size also restores its recommended major- and city-state counts. **Seed** makes a configuration repeatable; **Shuffle** changes only the seed. The configuration summary states the active projection, engine, character, map type, size, final dimensions and player count. When structural metadata exists, **World structure** reports its retained geographic objects and diagnostics.
 
 ### Design: World shape
@@ -141,6 +157,7 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 - **World age** shifts relief toward younger, hillier terrain; normal mature relief; or older, more eroded terrain.
 - **Region-Graph controls** expose geographic granularity from vast to very fractured forms, one to five ocean basins, whether land may occupy the selected projection's poles, the share of mountain ranges placed along coasts, and sparse, normal or dense river networks.
 - **Physical controls** set plate activity to quiet, normal or violent; erosion to light, moderate or strong; and river density to sparse, normal or dense. The retained structure records plate motion, crust, boundaries, continents, basins and major ranges for later inspection.
+- **Polis controls** choose a radial contest, opposing fronts, crossroads or rival continents; equivalent, mirrored, rotational or designed-asymmetric geometry; relaxed, standard or immediate expansion pressure; and low, balanced or high naval importance. **Chokepoint density** narrows protected routes and raises barriers around their approaches without blocking the routes themselves. **Safe territory radius** reserves legal, workable land around every major start. If the requested map cannot honor that radius or city-state spacing, Polis reduces the relevant soft constraint and records the relaxation instead of quietly corrupting the map.
 - **Reset world shape** restores this group without changing the rest of the design.
 
 ### Design: Climate and terrain
@@ -159,6 +176,7 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 - **Guarantee iron and horses** and **Guarantee a luxury** place essential resources near every major start when legal tiles exist.
 - **Regional luxury monopolies** concentrates luxury families geographically instead of distributing every type everywhere.
 - **Offshore oil** sets the requested share of oil deposits placed at sea.
+- **Contested resources** appears for Polis and moves the selected share of ordinary strategic and luxury deposits into contested graph regions. Guaranteed start resources remain local, so competition never removes minimum viability.
 - **Natural wonders** sets the target count; **Wonder spacing** separates wonders from one another; **Start buffer** keeps them away from major starts.
 - **Barbarians** selects none, scarce, standard or raging camps; **Camp start distance** keeps camps away from starts.
 - **Ancient ruins** selects none, scarce, standard or abundant ruins; **Ruin start distance** provides the equivalent buffer.
@@ -199,7 +217,7 @@ Edits participate in Undo and Redo, preserve pan and zoom, and are subject to th
 
 **Multiplayer balance** grades the map and each major start. Player cards report a heuristic score, workable nearby land, strategic resources, luxuries and nearest-opponent distance; selecting a player focuses that start on the map. **Civ5 validation** lists errors, warnings and informational findings involving dimensions, tile legality, rivers, starts, resources and scenario data. Review reports problems but does not alter them; use Edit or Repair for that.
 
-The generator is an independent approximation of Civ V's rules, not Firaxis code. Region-Graph reproduces Fantastical's broad geographic architecture, not its exact tables, random sequence or every eccentric special case. Generated maps retain private plates, subregions, polygons, continents, basins, climate provinces, mountain ranges and river systems, but `.Civ5Map` has no standard place for all of that model and the renderer does not yet draw a geographic-label layer.
+The generator is an independent approximation of Civ V's rules, not Firaxis code. Region-Graph reproduces Fantastical's broad geographic architecture, not its exact tables, random sequence or every eccentric special case. Generated maps retain private plates, subregions, polygons, continents, basins, climate provinces, strategic regions, Polis fronts, protected routes, mountain ranges and river systems, but `.Civ5Map` has no standard place for all of that model and the renderer does not yet draw a geographic-label layer. Polis balance remains a measured heuristic rather than a mathematical proof that eight human beings will make equally sensible decisions.
 
 ## Repair
 

@@ -68,6 +68,7 @@ test("README visual guide includes every generation engine and the principal wor
     excogitare,
     regionGraph,
     physical,
+    polis,
     projection,
     workspaces,
     createWorkflow,
@@ -78,18 +79,20 @@ test("README visual guide includes every generation engine and the principal wor
     readFile(new URL("../public/readme/excogitare-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/region-graph-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/physical-presets.png", import.meta.url)),
+    readFile(new URL("../public/readme/polis-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/projection-types.png", import.meta.url)),
     readFile(new URL("../public/readme/workspace-controls.png", import.meta.url)),
     readFile(new URL("../public/readme/create-workflow.png", import.meta.url)),
     readFile(new URL("../public/readme/explore-and-legend.png", import.meta.url)),
   ]);
-  for (const image of [excogitare, regionGraph, physical, projection, workspaces, createWorkflow, exploreLegend]) {
+  for (const image of [excogitare, regionGraph, physical, polis, projection, workspaces, createWorkflow, exploreLegend]) {
     assert.equal(image.subarray(1, 4).toString(), "PNG");
     assert.equal(image.readUInt32BE(16), 2400);
   }
   assert.match(readme, /public\/readme\/excogitare-presets\.png/);
   assert.match(readme, /public\/readme\/region-graph-presets\.png/);
   assert.match(readme, /public\/readme\/physical-presets\.png/);
+  assert.match(readme, /public\/readme\/polis-presets\.png/);
   assert.match(readme, /public\/readme\/projection-types\.png/);
   assert.match(readme, /public\/readme\/workspace-controls\.png/);
   assert.match(readme, /public\/readme\/create-workflow\.png/);
@@ -97,6 +100,7 @@ test("README visual guide includes every generation engine and the principal wor
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "EXCOGITARE"\)/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "REGION_GRAPH"\)/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "PHYSICAL"\)/);
+  assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "POLIS"\)/);
   assert.match(renderer, /renderCreateWorkflowSheet\(\)/);
   assert.match(renderer, /renderExploreSheet\(\)/);
 });
@@ -174,16 +178,33 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Players and starts/);
   assert.match(source, /Resources and wonders/);
   assert.match(source, /label: "Excogitare"/);
-  assert.match(source, /label: "Region-Graph"/);
+  assert.match(source, /label: "Fantastical"/);
   assert.match(source, /label: "Physical"/);
+  assert.match(source, /label: "Polis"/);
   assert.match(source, /Excogitare worlds/);
-  assert.match(source, /Region-Graph worlds/);
+  assert.match(source, /Fantastical \/ Region-Graph worlds/);
   assert.match(source, /Physical worlds/);
+  assert.match(source, /Polis worlds/);
   assert.match(source, /Geographic granularity/);
   assert.match(source, /Ocean basins/);
+  assert.match(source, /Fantasticality/);
+  assert.match(source, /Climate logic/);
+  assert.match(source, /Lawless · latitude ignored/);
+  assert.match(source, /Unbound · geographic delirium/);
   assert.match(source, /Region contrast/);
   assert.match(source, /Plate activity/);
   assert.match(source, /Erosion/);
+  assert.match(source, /Conflict pattern/);
+  assert.match(source, /Balance geometry/);
+  assert.match(source, /Expansion pressure/);
+  assert.match(source, /Naval importance/);
+  assert.match(source, /Chokepoint density/);
+  assert.match(source, /Contested resources/);
+  assert.match(source, /Polis strategic audit/);
+  assert.match(source, /hard constraints intact/);
+  assert.match(source, /protectedTileIndices\.length/);
+  assert.match(source, /Strategy graph/);
+  assert.match(source, /Polis strategy graph/);
   assert.match(source, /World structure/);
   assert.match(source, /retained for editing/);
   assert.match(source, /Iteration tools/);
