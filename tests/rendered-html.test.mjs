@@ -66,7 +66,7 @@ test("README visual guide includes every generation engine and the principal wor
     readme,
     renderer,
     excogitare,
-    regionGraph,
+    eccentric,
     physical,
     polis,
     projection,
@@ -77,7 +77,7 @@ test("README visual guide includes every generation engine and the principal wor
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../scripts/render-readme-gallery.mjs", import.meta.url), "utf8"),
     readFile(new URL("../public/readme/excogitare-presets.png", import.meta.url)),
-    readFile(new URL("../public/readme/region-graph-presets.png", import.meta.url)),
+    readFile(new URL("../public/readme/eccentric-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/physical-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/polis-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/projection-types.png", import.meta.url)),
@@ -85,12 +85,12 @@ test("README visual guide includes every generation engine and the principal wor
     readFile(new URL("../public/readme/create-workflow.png", import.meta.url)),
     readFile(new URL("../public/readme/explore-and-legend.png", import.meta.url)),
   ]);
-  for (const image of [excogitare, regionGraph, physical, polis, projection, workspaces, createWorkflow, exploreLegend]) {
+  for (const image of [excogitare, eccentric, physical, polis, projection, workspaces, createWorkflow, exploreLegend]) {
     assert.equal(image.subarray(1, 4).toString(), "PNG");
     assert.equal(image.readUInt32BE(16), 2400);
   }
   assert.match(readme, /public\/readme\/excogitare-presets\.png/);
-  assert.match(readme, /public\/readme\/region-graph-presets\.png/);
+  assert.match(readme, /public\/readme\/eccentric-presets\.png/);
   assert.match(readme, /public\/readme\/physical-presets\.png/);
   assert.match(readme, /public\/readme\/polis-presets\.png/);
   assert.match(readme, /public\/readme\/projection-types\.png/);
@@ -98,7 +98,7 @@ test("README visual guide includes every generation engine and the principal wor
   assert.match(readme, /public\/readme\/create-workflow\.png/);
   assert.match(readme, /public\/readme\/explore-and-legend\.png/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "EXCOGITARE"\)/);
-  assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "REGION_GRAPH"\)/);
+  assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "ECCENTRIC"\)/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "PHYSICAL"\)/);
   assert.match(renderer, /MAP_PRESETS\.filter\(\(preset\) => preset\.engine === "POLIS"\)/);
   assert.match(renderer, /renderCreateWorkflowSheet\(\)/);
@@ -178,11 +178,11 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Players and starts/);
   assert.match(source, /Resources and wonders/);
   assert.match(source, /label: "Excogitare"/);
-  assert.match(source, /label: "Fantastical"/);
+  assert.match(source, /label: "Eccentric"/);
   assert.match(source, /label: "Physical"/);
   assert.match(source, /label: "Polis"/);
   assert.match(source, /Excogitare worlds/);
-  assert.match(source, /Fantastical \/ Region-Graph worlds/);
+  assert.match(source, /Eccentric worlds/);
   assert.match(source, /Physical worlds/);
   assert.match(source, /Polis worlds/);
   assert.match(source, /Geographic granularity/);
@@ -192,6 +192,9 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Lawless · latitude ignored/);
   assert.match(source, /Unbound · geographic delirium/);
   assert.match(source, /Region contrast/);
+  assert.match(source, /World extreme/);
+  assert.match(source, /Snowball · frozen world/);
+  assert.match(source, /Arborea · forest world/);
   assert.match(source, /Plate activity/);
   assert.match(source, /Erosion/);
   assert.match(source, /Conflict pattern/);

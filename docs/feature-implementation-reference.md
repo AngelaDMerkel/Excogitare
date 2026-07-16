@@ -33,8 +33,9 @@ Runtime code changes also require the Alpine image/container check when the loca
 
 | Feature | Status | Approved scope | Open work |
 |---|---|---|---|
-| [Start-location correctness](features/start-location-correctness.md) | Implemented | Five-hex global separation; missing-major validation; slot-aware repair; Competitive whole-layout balance; restrained city states; Polis capacity degradation. | One unrelated 1.0.0 baseline regression remains: an extreme Pin/String region preset can omit `INLAND_SEA`. |
-| [Extended tile budgets](features/extended-tile-budgets.md) | Implemented | Game-Breaking-gated Extreme 180×94 and Colossal 170×110 budgets, including Randomise and round trip. | One unrelated 1.0.0 baseline regression remains: an extreme Pin/String region preset can omit `INLAND_SEA`. |
+| [Eccentric generation engine](features/eccentric-generation-engine.md) | Verified | Rename Region-Graph; independently reimplement Fantastical's basin-first polygon architecture, biome collections, boundary ranges, hierarchical hydrology, extremes and retained identities. | No open work in the approved scope; geographic labels remain an explicit future feature. |
+| [Start-location correctness](features/start-location-correctness.md) | Verified | Five-hex global separation; missing-major validation; slot-aware repair; Competitive whole-layout balance; restrained city states; Polis capacity degradation. | No open work in the approved scope. |
+| [Extended tile budgets](features/extended-tile-budgets.md) | Verified | Game-Breaking-gated Extreme 180×94 and Colossal 170×110 budgets, including Randomise and round trip. | No open work in the approved scope. |
 
 ## Claim audit
 

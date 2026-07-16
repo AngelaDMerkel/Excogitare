@@ -88,7 +88,7 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 **Generation engine** chooses the architecture that constructs the world:
 
 - **Excogitare** is the original field generator: fast warped noise, dramatic coastlines and the broadest stylistic range.
-- **Region-Graph** independently recreates the useful geographic hierarchy behind Fantastical-style maps. Relaxed subregions become polygons; polygon graphs become continents, oceans, inland basins and rifts; climate provinces and mountain boundaries are resolved over that structure; drainage then builds mountain-fed river systems and tributaries.
+- **Eccentric** is an independent, Fantastical-inspired geographic compiler. It retains a dense irregular mesh—roughly 600 subregions on Duel, 1,300 on Standard and 2,500 on Huge—beneath a hierarchy of polygons. Deep-water barriers divide that graph into navigation basins before continents and islands are allocated. Regional climate realms receive two to four composed biome collections; dissonant borders and coastlines attract mountain ranges; polygon boundaries guide major rivers while subpolygon boundaries guide tributaries. The result is deliberately more eccentric than noise turned up.
 - **Physical** is a separate PerfectWorld-like simulation rather than Realistic wearing a false moustache. It assigns moving continental and oceanic plates, resolves convergent and divergent boundaries, uplifts and erodes their margins, derives sea level from the requested water share, and couples temperature and atmospheric moisture to projection, altitude, ocean exposure and west-to-east wind.
 - **Polis** works in the opposite direction. It compiles a strategic graph of safe territories, contested objectives, land and naval fronts, protected routes and city-state space before terrain exists. Geography is then fitted around that skeleton. Its balance is inspectable rather than implied: the retained graph records nodes, routes, protected tiles, measurements and any constraint that had to be relaxed.
 
@@ -111,11 +111,17 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 | Excogitare | Astronomy Rifts | Fantastical basins divided by deep scars and isolated shelves. |
 | Excogitare | Labyrinth Realm | A non-wrapping maze of land bridges, inland channels, chambers and chokepoints. |
 | Excogitare | Fantastical Regions | Violently warped coasts and climate regions with little concern for restraint. |
-| Region-Graph | Living World | Coherent continents, climate provinces, watersheds and open oceans. |
-| Region-Graph | Tectonic Continents | Coastal arcs, interior boundaries, long ranges and sheltered basins. |
-| Region-Graph | Great Watersheds | Land-heavy river basins, inland lakes, wet lowlands and mountain drainage. |
-| Region-Graph | Shattered Basins | Deep oceans dividing broken continents, island chains and long rifts. |
-| Region-Graph | Mythic Regions | Deliberately composed climate realms, epic ranges and implausible transitions. |
+| Eccentric | Living World | Coherent continents, climate provinces, watersheds and open oceans. |
+| Eccentric | Tectonic Continents | Coastal arcs, interior boundaries, long ranges and sheltered basins. |
+| Eccentric | Great Watersheds | Land-heavy river basins, inland lakes, wet lowlands and mountain drainage. |
+| Eccentric | Shattered Basins | Deep oceans dividing broken continents, island chains and long rifts. |
+| Eccentric | Mythic Regions | Deliberately composed climate realms, epic ranges and implausible transitions. |
+| Eccentric | Encircling Lands | Exterior land encloses inland seas, lakes and remote water kingdoms. |
+| Eccentric | Astral Pangaea | A dominant continent is cut by deep astronomy scars and impossible climate marches. |
+| Eccentric | Riftworld | Deep-water barriers isolate several navigation basins and their inhabitable shelves. |
+| Eccentric | Lonely Oceans | Vast open seas separate small island realms and remote archipelagos. |
+| Eccentric | Peninsula Realm | An edge-anchored realm is invaded by gulfs, crooked peninsulas and inland channels. |
+| Eccentric | Shattered Archipelago | Uneven island chains, drowned shelves and tiny islets fill the world. |
 | Physical | Dynamic Earth | Mixed moving plates, convergence, rifting, moderate erosion and coupled climate. |
 | Physical | Colliding Plates | Young violent collision belts, high ranges, rain shadows and hard interiors. |
 | Physical | Ancient Cratons | Quiet old plates, broad river country, subdued uplands and mature coasts. |
@@ -128,9 +134,13 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 
 *The eight field-based Excogitare presets, generated from fixed documentation seeds.*
 
-![Region-Graph engine map presets](public/readme/region-graph-presets.png)
+![Eccentric engine map presets](public/readme/eccentric-presets.png)
 
-*The five Region-Graph presets. Their retained subregions, polygons, basins, climate provinces and watersheds are built before content placement.*
+*The eleven Eccentric presets. Their retained subregions, polygons, navigation basins, biome collections, geographic identities and watersheds are built before content placement.*
+
+Eccentric runs eight retained passes. It builds dense subregions; aggregates them into connected polygons; draws protected deep-water barriers; flood-fills the remaining graph into authoritative Astronomy basins; allocates continents, islands, inland waters and exact shoreline budgets within that architecture; composes regional climates from a separate temperature/rainfall space; raises coherent boundary and coastal ranges; then supplies polygon and subpolygon drainage corridors to Excogitare's Civ V-legal river encoder. Bays, capes, straits, archipelagos, forest realms, wastes and river basins remain attached as private geographic objects for inspection and future editing.
+
+This is not a port of the Lua. It is an independently written TypeScript architecture informed by [zoggop's Fantastical Map Script source](https://github.com/zoggop/Civ5FantasticalMapScript) and attributed accordingly. It does not copy Fantastical's functions, option tables, authored vocabulary or random sequence, and it cannot promise visual identity with version 31. The useful borrowing is conceptual: dense polygonal hierarchy, distinct landmass grammars, navigation basins, regionally composed climates and geography organized along the borders between those regions.
 
 ![Physical engine map presets](public/readme/physical-presets.png)
 
@@ -155,7 +165,7 @@ The **Strategy graph** layer renders that retained model over the map: teal safe
 - **Geometry** redistributes the chosen size's approximate tile budget. **Standard** keeps normal proportions; **Tall**, **Wide** and **Square** provide safe alternate shapes. **Needle**, **Ribbon**, **Pin** and **String** are progressively more extreme vertical or horizontal ratios known to crash Civ V. They and the two oversized budgets remain hidden until **Show game-breaking options** is checked and a second modal is confirmed. Only then may Randomise select them. Turning the permission off returns an active unsafe size and geometry to Huge and Standard.
 - **Water percent** ranges from 0% to 90%. Zero is intentionally valid. **Mountain percent** ranges from 0% to 38%, except Strategic Depth, Doomsday and Brutal impose their own minimums. The generator opens passes after relief creation so mountains may make travel miserable without sealing land behind an impassable wall.
 - **World age** shifts relief toward younger, hillier terrain; normal mature relief; or older, more eroded terrain.
-- **Region-Graph controls** expose geographic granularity from vast to very fractured forms, one to five ocean basins, whether land may occupy the selected projection's poles, the share of mountain ranges placed along coasts, and sparse, normal or dense river networks.
+- **Eccentric controls** expose **Fantasticality** (Restrained, Mythic or Unbound), geographic granularity from vast to very fractured forms, one to five authoritative Astronomy basins, whether land may occupy the selected projection's poles, the share of mountain ranges placed along coasts, and sparse, normal or dense hierarchical river networks. On combinations too small or narrow to support a requested basin count, the engine records both requested and achieved counts rather than inventing an invalid topology.
 - **Physical controls** set plate activity to quiet, normal or violent; erosion to light, moderate or strong; and river density to sparse, normal or dense. The retained structure records plate motion, crust, boundaries, continents, basins and major ranges for later inspection.
 - **Polis controls** choose a radial contest, opposing fronts, crossroads or rival continents; equivalent, mirrored, rotational or designed-asymmetric geometry; relaxed, standard or immediate expansion pressure; and low, balanced or high naval importance. **Chokepoint density** narrows protected routes and raises barriers around their approaches without blocking the routes themselves. **Safe territory radius** reserves legal, workable land around every major start. If the requested map cannot honor that radius or city-state spacing, Polis reduces the relevant soft constraint and records the relaxation instead of quietly corrupting the map.
 - **Reset world shape** restores this group without changing the rest of the design.
@@ -164,7 +174,8 @@ The **Strategy graph** layer renders that retained model over the map: teal safe
 
 - **Climate** shifts the full temperature field toward Cool, Temperate or Hot.
 - **Rainfall** shifts moisture toward Arid, Normal or Wet. Realistic and Physical maps retain west-to-east atmospheric transport, orographic rainfall and eastern rain shadows.
-- **Climate logic** appears for Region-Graph under **More climate controls**. **Free regional climates** permits mythic regions without latitude discipline; **Latitude-informed climates** anchors regional temperatures to the selected pole orientation.
+- **Climate logic** appears in Eccentric's advanced world controls. **Lawless** ignores latitude, **Influenced** lets latitude bias rather than dictate a realm, and **Ordered** makes the selected pole orientation authoritative and applies west-to-east rain shadow.
+- **World extreme** is Eccentric-only. **Snowball** compresses the climate into frozen terrain; **Jurassic** produces a hot, wet and heavily vegetated planet; **Arrakis** makes heat and aridity dominant; **Arborea** produces a wet forest world. **None** preserves the full regional spectrum.
 - **Region contrast** blends climate borders, keeps varied provinces, or exaggerates them into extreme realms.
 - **Dominant terrain** biases generation toward any combination of Grassland, Plains, Desert and Tundra. Selecting nothing leaves the mix to climate. It is a bias rather than permission to put deserts under the sea or snow in a furnace.
 - **Reset climate** restores this group and clears terrain dominance.
@@ -217,7 +228,7 @@ Edits participate in Undo and Redo, preserve pan and zoom, and are subject to th
 
 **Multiplayer balance** grades the map and each major start. Player cards report a heuristic score, workable nearby land, strategic resources, luxuries and nearest-opponent distance; selecting a player focuses that start on the map. **Civ5 validation** lists errors, warnings and informational findings involving dimensions, tile legality, rivers, starts, resources and scenario data. Review reports problems but does not alter them; use Edit or Repair for that.
 
-The generator is an independent approximation of Civ V's rules, not Firaxis code. Region-Graph reproduces Fantastical's broad geographic architecture, not its exact tables, random sequence or every eccentric special case. Generated maps retain private plates, subregions, polygons, continents, basins, climate provinces, strategic regions, Polis fronts, protected routes, mountain ranges and river systems, but `.Civ5Map` has no standard place for all of that model and the renderer does not yet draw a geographic-label layer. Polis balance remains a measured heuristic rather than a mathematical proof that eight human beings will make equally sensible decisions.
+The generator is an independent approximation of Civ V's rules, not Firaxis code. Eccentric independently implements ideas visible in Fantastical's architecture, not its exact tables, random sequence or every eccentric special case. Generated maps retain private plates, subregions, polygons, continents, navigation basins, biome collections, geographic identities, strategic regions, Polis fronts, protected routes, mountain ranges and river systems, but `.Civ5Map` has no standard place for all of that model and the renderer does not yet draw a geographic-label layer. Polis balance remains a measured heuristic rather than a mathematical proof that eight human beings will make equally sensible decisions.
 
 ## Repair
 

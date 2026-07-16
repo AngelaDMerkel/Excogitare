@@ -87,7 +87,7 @@ type GenerationWorkerMessage = { id: number; type: "PROGRESS"; stage: string } |
 
 function normalizeGenerationOptions(options: Partial<MapGenerationOptions>, allowGameBreakingOptions = false): MapGenerationOptions {
   const legacyEngine = String(options.engine ?? "");
-  const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: legacyEngine === "FIELD" ? "EXCOGITARE" : options.engine ?? DEFAULT_GENERATION_OPTIONS.engine, cityStateMinSpacing: Math.max(5, options.cityStateMinSpacing ?? DEFAULT_GENERATION_OPTIONS.cityStateMinSpacing), dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
+  const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: legacyEngine === "FIELD" ? "EXCOGITARE" : legacyEngine === "REGION_GRAPH" ? "ECCENTRIC" : options.engine ?? DEFAULT_GENERATION_OPTIONS.engine, cityStateMinSpacing: Math.max(5, options.cityStateMinSpacing ?? DEFAULT_GENERATION_OPTIONS.cityStateMinSpacing), dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
   if (allowGameBreakingOptions) return normalized;
   return {
     ...normalized,
@@ -109,13 +109,13 @@ const GEOMETRY_OPTIONS = [
 
 const GENERATION_ENGINES = [
   { id: "EXCOGITARE", label: "Excogitare", preset: "WILD_REGIONS", description: "The native expressive engine: warped fields, dramatic landforms, and the broadest stylistic range." },
-  { id: "REGION_GRAPH", label: "Fantastical", preset: "MYTHIC_REGIONS", description: "A dense multi-pass Region-Graph world of irregular cells, dissonant biome realms, astronomy rifts, boundary ranges, and watersheds." },
+  { id: "ECCENTRIC", label: "Eccentric", preset: "MYTHIC_REGIONS", description: "A dense Fantastical-inspired compiler of irregular cells, authoritative navigation basins, dissonant biome realms, boundary ranges, and hierarchical watersheds." },
   { id: "PHYSICAL", label: "Physical", preset: "DYNAMIC_EARTH", description: "Moving tectonic plates, convergence and rifting, erosion, altitude, atmospheric moisture, and rain shadows." },
   { id: "POLIS", label: "Polis", preset: "IMPERIAL_RING", description: "Gameplay-first strategic graphs: safe territories, contested objectives, fronts, protected routes, and auditable balance." },
 ] as const satisfies ReadonlyArray<{ id: MapGenerationOptions["engine"]; label: string; preset: string; description: string }>;
 
 function generationEngineStage(engine: MapGenerationOptions["engine"]) {
-  if (engine === "REGION_GRAPH") return "Preparing multi-pass world graph";
+  if (engine === "ECCENTRIC") return "Preparing multi-pass world graph";
   if (engine === "PHYSICAL") return "Preparing tectonic simulation";
   if (engine === "POLIS") return "Preparing strategic graph";
   return "Preparing Excogitare fields";
@@ -1362,7 +1362,7 @@ export function Civ5MapViewer() {
     const presetLabel = MAP_PRESETS.find((item) => item.id === generationOptions.preset)?.label ?? generationOptions.preset;
     const styleLabel = generationOptions.style.toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
     const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
-    const engineLabel = generationOptions.engine === "REGION_GRAPH" ? "Fantastical / Region-Graph" : generationOptions.engine === "PHYSICAL" ? "Physical" : generationOptions.engine === "POLIS" ? "Polis" : "Excogitare";
+    const engineLabel = generationOptions.engine === "ECCENTRIC" ? "Eccentric" : generationOptions.engine === "PHYSICAL" ? "Physical" : generationOptions.engine === "POLIS" ? "Polis" : "Excogitare";
     const projectionLabel = CLIMATE_PROJECTIONS.find((item) => item.id === generationOptions.projectionType)?.label ?? generationOptions.projectionType;
     return `${projectionLabel} · ${engineLabel} · ${styleLabel} · ${presetLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
   }, [generationOptions]);
@@ -1713,7 +1713,7 @@ export function Civ5MapViewer() {
     const definition = GENERATION_ENGINES.find((item) => item.id === engine)!;
     const preset = MAP_PRESETS.find((item) => item.id === definition.preset)!;
     setGenerationOptions((current) => {
-      if (engine === "REGION_GRAPH") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, style: "FANTASTICAL", climateRealism: preset.climateRealism ?? false, fantasticality: fantasticalityForPreset(preset.id), regionClimateLogic: preset.climateRealism ? "ORDERED" : "LAWLESS" };
+      if (engine === "ECCENTRIC") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, style: "FANTASTICAL", climateRealism: preset.climateRealism ?? false, fantasticality: fantasticalityForPreset(preset.id), regionClimateLogic: preset.climateRealism ? "ORDERED" : "LAWLESS", eccentricExtreme: "NONE" };
       if (engine === "PHYSICAL") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: true, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge };
       if (engine === "POLIS") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: false, polisConflictPattern: polisPatternForPreset(preset.id) };
       return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains };
@@ -2125,7 +2125,7 @@ export function Civ5MapViewer() {
                       <div>
                         <dl>{Object.entries(map.structure.diagnostics).map(([label, value]) => <div key={label}><dt>{label.replaceAll(/([A-Z])/g, " $1")}</dt><dd>{value}</dd></div>)}</dl>
                         <p>{map.structure.objects.length} geographic objects, {map.structure.mountainRanges.length} mountain ranges, and {map.structure.riverSystems.length} river systems remain attached to this generation.</p>
-                        {map.structure.engine === "REGION_GRAPH" && <p><strong>Fantastical compiler:</strong> {map.structure.diagnostics.passes ?? 0} retained passes · {map.structure.diagnostics.subregions ?? 0} small regions · {map.structure.diagnostics.climatePalettes ?? 0} biome palettes · {map.structure.diagnostics.biomeTransitions ?? 0} dissonant borders · {map.structure.diagnostics.astronomyBasins ?? 0} navigation basins.</p>}
+                        {map.structure.engine === "ECCENTRIC" && <p><strong>Eccentric compiler:</strong> {map.structure.diagnostics.passes ?? 0} retained passes · {map.structure.diagnostics.subregions ?? 0} small regions · {map.structure.diagnostics.climateCollections ?? 0} biome collections · {map.structure.diagnostics.biomeTransitions ?? 0} dissonant borders · {map.structure.diagnostics.astronomyBasins ?? 0} navigation basins.</p>}
                         {map.structure.strategicGraph && (
                           <p><strong>Polis graph:</strong> {map.structure.strategicGraph.pattern.replaceAll("_", " ").toLowerCase()} · {map.structure.strategicGraph.symmetry.toLowerCase()} · {map.structure.strategicGraph.edges.length} fronts · {map.structure.strategicGraph.protectedTileIndices.length} protected route and safe-territory tiles{map.structure.strategicGraph.relaxations.length ? ` · ${map.structure.strategicGraph.relaxations.join(" ")}` : " · no hard constraints relaxed"}</p>
                         )}
@@ -2250,10 +2250,10 @@ export function Civ5MapViewer() {
                     <select value={generationOptions.preset} onChange={(event) => {
                       const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
                       if (!preset) return;
-                      setGenerationOptions((current) => ({ ...current, engine: preset.engine, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism, fantasticality: preset.engine === "REGION_GRAPH" ? fantasticalityForPreset(preset.id) : current.fantasticality, regionClimateLogic: preset.engine === "REGION_GRAPH" ? preset.climateRealism ? "ORDERED" : "LAWLESS" : current.regionClimateLogic, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge, polisConflictPattern: preset.engine === "POLIS" ? polisPatternForPreset(preset.id) : current.polisConflictPattern }));
+                      setGenerationOptions((current) => ({ ...current, engine: preset.engine, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism, fantasticality: preset.engine === "ECCENTRIC" ? fantasticalityForPreset(preset.id) : current.fantasticality, regionClimateLogic: preset.engine === "ECCENTRIC" ? preset.climateRealism ? "ORDERED" : "LAWLESS" : current.regionClimateLogic, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge, polisConflictPattern: preset.engine === "POLIS" ? polisPatternForPreset(preset.id) : current.polisConflictPattern }));
                     }}>
                       <optgroup label="Excogitare worlds">{MAP_PRESETS.filter((preset) => preset.engine === "EXCOGITARE").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
-                      <optgroup label="Fantastical / Region-Graph worlds">{MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
+                      <optgroup label="Eccentric worlds">{MAP_PRESETS.filter((preset) => preset.engine === "ECCENTRIC").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Physical worlds">{MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Polis worlds">{MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                     </select>
@@ -2328,7 +2328,7 @@ export function Civ5MapViewer() {
                         <summary data-tooltip="Reveal engine-specific controls for world age, geographic granularity, basins, tectonics, erosion, coastal ranges, and river density."><span>More world controls</span><small>age, geology, rivers</small></summary>
                         <div>
                       <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
-                      {generationOptions.engine === "REGION_GRAPH" && (
+                      {generationOptions.engine === "ECCENTRIC" && (
                         <div className="region-architecture-controls">
                           <label className="control-field" data-tooltip="Controls cell irregularity, biome dissonance, palette count, rift breadth, and the willingness of regions to contradict one another."><span>Fantasticality</span><select value={generationOptions.fantasticality} onChange={(event) => setGenerationOptions((current) => ({ ...current, fantasticality: event.target.value as MapGenerationOptions["fantasticality"] }))}><option value="RESTRAINED">Restrained · coherent realms</option><option value="MYTHIC">Mythic · dramatic borders</option><option value="UNBOUND">Unbound · geographic delirium</option></select></label>
                           <div className="control-grid">
@@ -2405,10 +2405,10 @@ export function Civ5MapViewer() {
                     </div>
                   </details>
 
-                  <details className="creator-group climate-group" name="world-design-step" data-modified={generationOptions.climate !== DEFAULT_GENERATION_OPTIONS.climate || generationOptions.rainfall !== DEFAULT_GENERATION_OPTIONS.rainfall || (generationOptions.dominantTerrains ?? []).length > 0 || generationOptions.regionContrast !== DEFAULT_GENERATION_OPTIONS.regionContrast}>
+                  <details className="creator-group climate-group" name="world-design-step" data-modified={generationOptions.climate !== DEFAULT_GENERATION_OPTIONS.climate || generationOptions.rainfall !== DEFAULT_GENERATION_OPTIONS.rainfall || (generationOptions.dominantTerrains ?? []).length > 0 || generationOptions.regionContrast !== DEFAULT_GENERATION_OPTIONS.regionContrast || generationOptions.eccentricExtreme !== DEFAULT_GENERATION_OPTIONS.eccentricExtreme}>
                     <summary data-tooltip="Set broad temperature, rainfall, dominant terrain, biome logic, and regional climate contrast."><span>2 · Climate and terrain</span><small>{generationOptions.climate.toLowerCase()} · {generationOptions.rainfall.toLowerCase()}</small></summary>
                     <div className="creator-group-body">
-                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, climate: DEFAULT_GENERATION_OPTIONS.climate, rainfall: DEFAULT_GENERATION_OPTIONS.rainfall, dominantTerrains: [], climateRealism: DEFAULT_GENERATION_OPTIONS.climateRealism, regionContrast: DEFAULT_GENERATION_OPTIONS.regionContrast }))}>Reset climate</button>
+                      <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, climate: DEFAULT_GENERATION_OPTIONS.climate, rainfall: DEFAULT_GENERATION_OPTIONS.rainfall, dominantTerrains: [], climateRealism: DEFAULT_GENERATION_OPTIONS.climateRealism, regionContrast: DEFAULT_GENERATION_OPTIONS.regionContrast, regionClimateLogic: DEFAULT_GENERATION_OPTIONS.regionClimateLogic, eccentricExtreme: DEFAULT_GENERATION_OPTIONS.eccentricExtreme }))}>Reset climate</button>
                       <div className="control-grid">
                         <label className="control-field"><span>Climate</span><select value={generationOptions.climate} onChange={(event) => setGenerationOptions((current) => ({ ...current, climate: event.target.value as MapGenerationOptions["climate"] }))}><option value="COOL">Cool</option><option value="TEMPERATE">Temperate</option><option value="HOT">Hot</option></select></label>
                         <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
@@ -2416,9 +2416,9 @@ export function Civ5MapViewer() {
                       <details className="advanced-controls">
                         <summary data-tooltip="Reveal engine-specific climate simulation and regional-contrast controls."><span>More climate controls</span><small>simulation and contrast</small></summary>
                         <div>
-                      {generationOptions.engine === "REGION_GRAPH" && (
+                      {generationOptions.engine === "ECCENTRIC" && (
                         <div className="control-grid">
-                          <label className="control-field"><span>Climate logic</span><select value={generationOptions.climateRealism ? "LATITUDE" : "MYTHIC"} onChange={(event) => setGenerationOptions((current) => ({ ...current, climateRealism: event.target.value === "LATITUDE" }))}><option value="MYTHIC">Free regional climates</option><option value="LATITUDE">Latitude-informed climates</option></select></label>
+                          <label className="control-field" data-tooltip="Apply an optional planet-wide climate envelope after regional climates are composed. These are not cosmetic palettes: they change terrain and vegetation."><span>World extreme</span><select value={generationOptions.eccentricExtreme} onChange={(event) => setGenerationOptions((current) => ({ ...current, eccentricExtreme: event.target.value as MapGenerationOptions["eccentricExtreme"] }))}><option value="NONE">None · regional spectrum</option><option value="SNOWBALL">Snowball · frozen world</option><option value="JURASSIC">Jurassic · hot and humid</option><option value="ARRAKIS">Arrakis · hot and arid</option><option value="ARBOREA">Arborea · forest world</option></select></label>
                           <label className="control-field"><span>Region contrast</span><select value={generationOptions.regionContrast} onChange={(event) => setGenerationOptions((current) => ({ ...current, regionContrast: event.target.value as MapGenerationOptions["regionContrast"] }))}><option value="BLENDED">Blended borders</option><option value="VARIED">Varied provinces</option><option value="EXTREME">Extreme realms</option></select></label>
                         </div>
                       )}

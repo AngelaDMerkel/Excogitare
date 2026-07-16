@@ -4,7 +4,7 @@ import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdi
 import { attachRiverSystems, connectedLinearFeatures, connectedTileObjects, type GenerationStructure } from "./generation-structure.ts";
 import { generatePhysicalGeography } from "./physical-generator.ts";
 import { generatePolisGeography } from "./polis-generator.ts";
-import { generateRegionGraphGeography } from "./region-graph-generator.ts";
+import { generateEccentricGeography } from "./eccentric-generator.ts";
 import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 
@@ -80,11 +80,12 @@ export type AbundanceSetting = "SCARCE" | "STANDARD" | "ABUNDANT";
 export type ResourceDistribution = "EVEN" | "REGIONAL" | "CLUSTERED";
 export type CoastalPreference = "ANY" | "PREFER" | "REQUIRE";
 export type SiteAbundance = "NONE" | "SCARCE" | "STANDARD" | "RAGING";
-export type GenerationEngine = "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL" | "POLIS";
+export type GenerationEngine = "EXCOGITARE" | "ECCENTRIC" | "PHYSICAL" | "POLIS";
 export type RegionGranularity = "LOW" | "FAIR" | "HIGH" | "VERY_HIGH";
 export type RegionContrast = "BLENDED" | "VARIED" | "EXTREME";
 export type Fantasticality = "RESTRAINED" | "MYTHIC" | "UNBOUND";
 export type RegionClimateLogic = "LAWLESS" | "INFLUENCED" | "ORDERED";
+export type EccentricExtreme = "NONE" | "SNOWBALL" | "JURASSIC" | "ARRAKIS" | "ARBOREA";
 export type RiverDensity = "SPARSE" | "NORMAL" | "DENSE";
 export type PlateActivity = "QUIET" | "NORMAL" | "VIOLENT";
 export type ErosionStrength = "LIGHT" | "MODERATE" | "STRONG";
@@ -135,17 +136,17 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "RIFT_REALMS", label: "Astronomy Rifts", description: "Fantastical basins divided by long deep-water scars and isolated shelves.", water: 61, mountains: 15, engine: "EXCOGITARE" },
   { id: "LABYRINTH", label: "Labyrinth Realm", description: "A non-wrapping maze of land bridges, inland channels, chambers, and chokepoints.", water: 43, mountains: 18, engine: "EXCOGITARE" },
   { id: "WILD_REGIONS", label: "Fantastical Regions", description: "Violently warped coastlines and climate regions with little concern for realism.", water: 55, mountains: 16, engine: "EXCOGITARE" },
-  { id: "LIVING_WORLD", label: "Living World", description: "A region-built planet of coherent continents, climatic provinces, watersheds, and open oceans.", water: 58, mountains: 14, engine: "REGION_GRAPH", climateRealism: true },
-  { id: "TECTONIC_CONTINENTS", label: "Tectonic Continents", description: "Continents assembled around coastal arcs, interior boundaries, long ranges, and sheltered basins.", water: 56, mountains: 19, engine: "REGION_GRAPH", climateRealism: true },
-  { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "REGION_GRAPH", climateRealism: true },
-  { id: "SHATTERED_BASINS", label: "Shattered Basins", description: "Several deep oceans divide broken continents, island chains, and astronomy-like rifts.", water: 66, mountains: 13, engine: "REGION_GRAPH", climateRealism: true },
-  { id: "MYTHIC_REGIONS", label: "Mythic Regions", description: "Deliberately composed climate realms divided by epic ranges and implausible transitions.", water: 52, mountains: 17, engine: "REGION_GRAPH", climateRealism: false },
-  { id: "ENCIRCLING_LANDS", label: "Encircling Lands", description: "A mostly terrestrial world enclosing lakes, inland seas, and remote water kingdoms.", water: 22, mountains: 15, engine: "REGION_GRAPH", climateRealism: false },
-  { id: "ASTRAL_PANGAEA", label: "Astral Pangaea", description: "One immense landmass divided by deep astronomy scars, interior seas, and impossible climate marches.", water: 43, mountains: 18, engine: "REGION_GRAPH", climateRealism: false },
-  { id: "RIFTWORLD", label: "Riftworld", description: "Several habitable basins are isolated by deep-water barriers, broken shelves, and narrow crossings.", water: 61, mountains: 16, engine: "REGION_GRAPH", climateRealism: false },
-  { id: "LONELY_OCEANS", label: "Lonely Oceans", description: "Vast separate oceans hold scattered island realms, remote archipelagos, and dangerous open-water passages.", water: 76, mountains: 12, engine: "REGION_GRAPH", climateRealism: false },
-  { id: "PENINSULA_REALM", label: "Peninsula Realm", description: "A non-wrapping continental realm is invaded by gulfs, estuaries, crooked peninsulas, and inland channels.", water: 39, mountains: 17, engine: "REGION_GRAPH", climateRealism: false },
-  { id: "SHATTERED_ARCHIPELAGO", label: "Shattered Archipelago", description: "Uneven island chains, tiny islets, drowned shelves, and regional climate enclaves fill the world.", water: 71, mountains: 13, engine: "REGION_GRAPH", climateRealism: false },
+  { id: "LIVING_WORLD", label: "Living World", description: "A region-built planet of coherent continents, climatic provinces, watersheds, and open oceans.", water: 58, mountains: 14, engine: "ECCENTRIC", climateRealism: true },
+  { id: "TECTONIC_CONTINENTS", label: "Tectonic Continents", description: "Continents assembled around coastal arcs, interior boundaries, long ranges, and sheltered basins.", water: 56, mountains: 19, engine: "ECCENTRIC", climateRealism: true },
+  { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "ECCENTRIC", climateRealism: true },
+  { id: "SHATTERED_BASINS", label: "Shattered Basins", description: "Several deep oceans divide broken continents, island chains, and astronomy-like rifts.", water: 66, mountains: 13, engine: "ECCENTRIC", climateRealism: true },
+  { id: "MYTHIC_REGIONS", label: "Mythic Regions", description: "Deliberately composed climate realms divided by epic ranges and implausible transitions.", water: 52, mountains: 17, engine: "ECCENTRIC", climateRealism: false },
+  { id: "ENCIRCLING_LANDS", label: "Encircling Lands", description: "A mostly terrestrial world enclosing lakes, inland seas, and remote water kingdoms.", water: 22, mountains: 15, engine: "ECCENTRIC", climateRealism: false },
+  { id: "ASTRAL_PANGAEA", label: "Astral Pangaea", description: "One immense landmass divided by deep astronomy scars, interior seas, and impossible climate marches.", water: 43, mountains: 18, engine: "ECCENTRIC", climateRealism: false },
+  { id: "RIFTWORLD", label: "Riftworld", description: "Several habitable basins are isolated by deep-water barriers, broken shelves, and narrow crossings.", water: 61, mountains: 16, engine: "ECCENTRIC", climateRealism: false },
+  { id: "LONELY_OCEANS", label: "Lonely Oceans", description: "Vast separate oceans hold scattered island realms, remote archipelagos, and dangerous open-water passages.", water: 76, mountains: 12, engine: "ECCENTRIC", climateRealism: false },
+  { id: "PENINSULA_REALM", label: "Peninsula Realm", description: "A non-wrapping continental realm is invaded by gulfs, estuaries, crooked peninsulas, and inland channels.", water: 39, mountains: 17, engine: "ECCENTRIC", climateRealism: false },
+  { id: "SHATTERED_ARCHIPELAGO", label: "Shattered Archipelago", description: "Uneven island chains, tiny islets, drowned shelves, and regional climate enclaves fill the world.", water: 71, mountains: 13, engine: "ECCENTRIC", climateRealism: false },
   { id: "DYNAMIC_EARTH", label: "Dynamic Earth", description: "Moving plates, mixed continental crust, convergent ranges, rifts, erosion, and coupled climate.", water: 62, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL" },
   { id: "COLLIDING_PLATES", label: "Colliding Plates", description: "Young, active continents dominated by collision belts, high ranges, rain shadows, and difficult interiors.", water: 54, mountains: 23, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "LIGHT", worldAge: "YOUNG" },
   { id: "ANCIENT_CRATONS", label: "Ancient Cratons", description: "Older eroded landmasses, broad river country, subdued uplands, and mature coastlines.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD" },
@@ -223,6 +224,7 @@ export type MapGenerationOptions = {
   regionContrast: RegionContrast;
   fantasticality: Fantasticality;
   regionClimateLogic: RegionClimateLogic;
+  eccentricExtreme: EccentricExtreme;
   coastalRangePercent: number;
   riverDensity: RiverDensity;
   plateActivity: PlateActivity;
@@ -284,6 +286,7 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   regionContrast: "VARIED",
   fantasticality: "MYTHIC",
   regionClimateLogic: "LAWLESS",
+  eccentricExtreme: "NONE",
   coastalRangePercent: 45,
   riverDensity: "NORMAL",
   plateActivity: "NORMAL",
@@ -361,6 +364,7 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     regionContrast: randomItem(["BLENDED", "VARIED", "EXTREME"] as const, random),
     fantasticality: randomItem(["RESTRAINED", "MYTHIC", "UNBOUND"] as const, random),
     regionClimateLogic: randomItem(["LAWLESS", "INFLUENCED", "ORDERED"] as const, random),
+    eccentricExtreme: presetConfig.engine === "ECCENTRIC" && random() < 0.28 ? randomItem(["SNOWBALL", "JURASSIC", "ARRAKIS", "ARBOREA"] as const, random) : "NONE",
     coastalRangePercent: Math.round(random() * 100),
     riverDensity: randomItem(["SPARSE", "NORMAL", "DENSE"] as const, random),
     plateActivity: randomItem(["QUIET", "NORMAL", "VIOLENT"] as const, random),
@@ -788,6 +792,7 @@ export function generateRiverNetwork(
   random: () => number,
   waterMask?: ReadonlyArray<boolean>,
   density: RiverDensity = "NORMAL",
+  corridorGuidance?: ReadonlyArray<number>,
 ) {
   const isWaterTile = (index: number) => waterMask?.[index] ?? tiles[index].terrain < 2;
   const vertices: RiverVertex[] = [];
@@ -837,7 +842,8 @@ export function generateRiverNetwork(
     const land = vertex.tiles.filter((index) => !isWaterTile(index));
     const relief = land.reduce((sum, index) => sum + reliefValues[index], 0) / Math.max(1, land.length);
     const elevation = Math.max(...land.map((index) => tiles[index].elevation));
-    return relief + elevation * 0.28;
+    const guidance = land.reduce((sum, index) => sum + (corridorGuidance?.[index] ?? 0), 0) / Math.max(1, land.length);
+    return relief + elevation * 0.28 - guidance * 0.16;
   });
 
   // Priority-flood fills local depressions just enough to create a monotonic
@@ -902,11 +908,12 @@ export function generateRiverNetwork(
     }
     if (!isWater[current] || length < 4) return [];
     const moisture = vertex.tiles.reduce((sum, index) => sum + moistures[index], 0) / Math.max(1, vertex.tiles.length);
+    const guidance = vertex.tiles.reduce((sum, index) => sum + (corridorGuidance?.[index] ?? 0), 0) / Math.max(1, vertex.tiles.length);
     return [{
       vertex: vertexNumber,
       mountainTile,
       length,
-      score: moisture * 1.05 + rawHeight[vertexNumber] * 0.48 + Math.log1p(drainageAccumulation[vertexNumber]) * 0.72 + Math.min(length, 24) * 0.018 + random() * 0.18,
+      score: moisture * 1.05 + rawHeight[vertexNumber] * 0.48 + guidance * 0.5 + Math.log1p(drainageAccumulation[vertexNumber]) * 0.72 + Math.min(length, 24) * 0.018 + random() * 0.18,
     }];
   }).sort((a, b) => b.score - a.score);
 
@@ -1560,7 +1567,7 @@ export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions
 
 export function generateMap(options: MapGenerationOptions, onProgress?: (stage: string) => void): Civ5Map {
   const requestedEngine = String(options.engine);
-  const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : options.engine };
+  const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : requestedEngine === "REGION_GRAPH" ? "ECCENTRIC" : options.engine };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
   const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
   const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
@@ -1578,6 +1585,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     tiles: Civ5Tile[];
     structure: GenerationStructure;
     startLocations?: Civ5StartLocation[];
+    riverGuidance?: number[];
   }, description: string) => {
     onProgress?.("Opening mountain passes");
     carveAccessiblePasses(geography.landMask, geography.elevations, width, height, wraps);
@@ -1607,7 +1615,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
     if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
     onProgress?.("Resolving drainage and rivers");
-    const riverNetwork = generateRiverNetwork(tiles, geography.reliefValues, geography.moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity);
+    const riverNetwork = generateRiverNetwork(tiles, geography.reliefValues, geography.moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity, geography.riverGuidance);
     for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
     const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
     const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
@@ -1615,7 +1623,13 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       ? Math.max(22, resolved.mountainPercent)
       : resolved.modifier === "DOOMSDAY" || resolved.style === "BRUTAL" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
     const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
-    const structure = { ...geography.structure, mountainRanges, diagnostics: { ...geography.structure.diagnostics, mountainRanges: mountainRanges.length } };
+    const riverTiles = tiles.flatMap((tile, index) => tile.river > 0 ? [index] : []);
+    const majorRiverTiles = riverTiles.filter((index) => (geography.riverGuidance?.[index] ?? 0) >= 0.85).length;
+    const minorRiverTiles = riverTiles.filter((index) => {
+      const guidance = geography.riverGuidance?.[index] ?? 0;
+      return guidance >= 0.45 && guidance < 0.85;
+    }).length;
+    const structure = { ...geography.structure, mountainRanges, diagnostics: { ...geography.structure.diagnostics, mountainRanges: mountainRanges.length, majorRiverTiles, minorRiverTiles, localRiverTiles: riverTiles.length - majorRiverTiles - minorRiverTiles } };
     const legal = enforceGeneratedPlacementLegality({
       name: `${presetName} — ${resolved.seed}`,
       description: `${description}${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}.`,
@@ -1637,10 +1651,10 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     });
     return { ...legal, structure: attachRiverSystems(legal, structure) };
   };
-  if (resolved.engine === "REGION_GRAPH") {
+  if (resolved.engine === "ECCENTRIC") {
     onProgress?.("Compiling dense subregions and world grammars");
-    const geography = generateRegionGraphGeography(resolved, width, height, wraps, seed, random);
-    return finishStructuredGeography(geography, `A seeded ${resolved.fantasticality.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "region-graph"} map compiled by the Region-Graph engine in ${geography.diagnostics.passes} geographic passes from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.climatePalettes} biome palettes, ${geography.diagnostics.astronomyBasins} astronomy basins, and ${geography.diagnostics.continents} continents`);
+    const geography = generateEccentricGeography(resolved, width, height, wraps, seed, random);
+    return finishStructuredGeography(geography, `A seeded ${resolved.fantasticality.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "eccentric"} map compiled by the Eccentric engine in ${geography.diagnostics.passes} geographic passes from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.climatePalettes} biome palettes, ${geography.diagnostics.astronomyBasins} astronomy basins, and ${geography.diagnostics.continents} continents`);
   }
   if (resolved.engine === "PHYSICAL") {
     onProgress?.("Simulating tectonic plates and erosion");

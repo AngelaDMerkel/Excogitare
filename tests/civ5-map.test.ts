@@ -739,7 +739,7 @@ test("Repair replaces overcrowded starts and Competitive balancing changes the w
 test("all generation engines enforce five-hex start spacing", () => {
   const configurations = [
     { engine: "EXCOGITARE", preset: "CONTINENTS" },
-    { engine: "REGION_GRAPH", preset: "LIVING_WORLD" },
+    { engine: "ECCENTRIC", preset: "LIVING_WORLD" },
     { engine: "PHYSICAL", preset: "DYNAMIC_EARTH" },
     { engine: "POLIS", preset: "IMPERIAL_RING" },
   ] as const;
@@ -812,10 +812,10 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 10);
 });
 
-test("region-built generation is deterministic, exact, legal, and geographically structured", () => {
+test("Eccentric generation is deterministic, exact, legal, and geographically structured", () => {
   const options = {
     ...DEFAULT_GENERATION_OPTIONS,
-    engine: "REGION_GRAPH" as const,
+    engine: "ECCENTRIC" as const,
     preset: "LIVING_WORLD" as const,
     size: "DUEL" as const,
     players: 4,
@@ -832,20 +832,20 @@ test("region-built generation is deterministic, exact, legal, and geographically
   assert.deepEqual(first.tiles, second.tiles);
   assert.deepEqual(first.startLocations, second.startLocations);
   assert.equal(first.tiles.filter((tile) => tile.terrain < 2).length, Math.round(first.tiles.length * 0.57));
-  assert.match(first.description, /Region-Graph engine/);
+  assert.match(first.description, /Eccentric engine/);
   assert.equal(first.startLocations.filter((start) => !start.cityState).length, 4);
   assert.equal(first.startLocations.filter((start) => start.cityState).length, 6);
   assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), []);
   assertMountainPassability(first);
   assertRiverNetworks(first);
-  assert.equal(first.structure?.engine, "REGION_GRAPH");
+  assert.equal(first.structure?.engine, "ECCENTRIC");
   assert.ok(first.structure!.objects.some((object) => object.kind === "SUBREGION"));
   assert.ok(first.structure!.objects.some((object) => object.kind === "POLYGON"));
   assert.ok(first.structure!.objects.some((object) => object.kind === "SUPERPOLYGON"));
   assert.ok(first.structure!.objects.some((object) => object.kind === "CLIMATE_REGION"));
   assert.ok(first.structure!.mountainRanges.length > 0);
   assert.ok(first.structure!.riverSystems.length > 0);
-  assert.equal(first.structure!.diagnostics.passes, 7);
+  assert.equal(first.structure!.diagnostics.passes, 8);
   assert.ok(first.structure!.diagnostics.subregions > first.tiles.length * 0.5);
   assert.ok(first.structure!.diagnostics.climatePalettes > first.structure!.diagnostics.climateRegions);
   assert.ok(first.structure!.diagnostics.biomeTransitions > 0);
@@ -854,7 +854,7 @@ test("region-built generation is deterministic, exact, legal, and geographically
 test("Fantasticality changes retained regional complexity instead of merely changing copy", () => {
   const common = {
     ...DEFAULT_GENERATION_OPTIONS,
-    engine: "REGION_GRAPH" as const,
+    engine: "ECCENTRIC" as const,
     preset: "MYTHIC_REGIONS" as const,
     size: "DUEL" as const,
     players: 2,
@@ -868,7 +868,7 @@ test("Fantasticality changes retained regional complexity instead of merely chan
   assert.notDeepEqual(restrained.tiles.map((tile) => `${tile.terrain}:${tile.feature}:${tile.elevation}`), unbound.tiles.map((tile) => `${tile.terrain}:${tile.feature}:${tile.elevation}`));
   assert.ok(unbound.structure!.diagnostics.climatePalettes > restrained.structure!.diagnostics.climatePalettes);
   assert.ok(unbound.structure!.diagnostics.climateRegions >= restrained.structure!.diagnostics.climateRegions);
-  assert.equal(unbound.structure!.diagnostics.passes, 7);
+  assert.equal(unbound.structure!.diagnostics.passes, 8);
   assert.deepEqual(buildRepairIssues(unbound).filter((issue) => issue.id !== "clean"), []);
   assertMountainPassability(unbound);
   assertRiverNetworks(unbound);
@@ -881,7 +881,7 @@ test("Fantastical landmass grammars produce distinct legal navigation architectu
     const definition = MAP_PRESETS.find((item) => item.id === preset)!;
     const map = generateMap({
       ...DEFAULT_GENERATION_OPTIONS,
-      engine: "REGION_GRAPH",
+      engine: "ECCENTRIC",
       preset,
       size: "DUEL",
       players: 2,
@@ -892,7 +892,7 @@ test("Fantastical landmass grammars produce distinct legal navigation architectu
       seed: `grammar-${preset}`,
     });
     assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * definition.water / 100));
-    assert.equal(map.structure?.diagnostics.passes, 7);
+    assert.equal(map.structure?.diagnostics.passes, 8);
     assert.ok((map.structure?.diagnostics.subregions ?? 0) > map.tiles.length * 0.5);
     assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
     assertMountainPassability(map);
@@ -901,22 +901,188 @@ test("Fantastical landmass grammars produce distinct legal navigation architectu
   assert.equal(signatures.size, presets.length);
 });
 
-test("Excogitare, Region-Graph, Physical, and Polis are distinct generation engines", () => {
+test("Eccentric retains its dense hierarchy across stock map budgets", () => {
+  const minimumSubregions = { DUEL: 580, STANDARD: 1300, HUGE: 2400 } as const;
+  for (const size of ["DUEL", "STANDARD", "HUGE"] as const) {
+    const started = performance.now();
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "MYTHIC_REGIONS", size, players: 2, cityStates: 0, seed: `eccentric-density-${size}` });
+    assert.ok((map.structure?.diagnostics.subregions ?? 0) >= minimumSubregions[size]);
+    assert.ok((map.structure?.diagnostics.polygons ?? 0) >= 180);
+    assert.ok(performance.now() - started < 5000, `${size} Eccentric generation exceeded the browser-practical regression budget`);
+  }
+});
+
+test("legacy Region-Graph settings normalize to Eccentric without remaining authoritative", () => {
+  const legacy = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "REGION_GRAPH",
+    preset: "MYTHIC_REGIONS",
+    size: "DUEL",
+    players: 2,
+    cityStates: 0,
+    seed: "legacy-region-graph",
+  } as unknown as Parameters<typeof generateMap>[0]);
+  assert.equal(legacy.structure?.engine, "ECCENTRIC");
+  assert.equal(legacy.generation?.engine, "ECCENTRIC");
+  assert.match(legacy.description, /Eccentric engine/);
+});
+
+test("Eccentric Astronomy basins are authoritative and honor feasible counts", () => {
+  for (const oceanBasins of [1, 2, 3, 4, 5]) {
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      engine: "ECCENTRIC",
+      preset: "RIFTWORLD",
+      size: "DUEL",
+      players: 2,
+      cityStates: 0,
+      oceanBasins,
+      seed: `eccentric-basins-${oceanBasins}`,
+    });
+    assert.equal(map.structure?.diagnostics.requestedAstronomyBasins, oceanBasins);
+    assert.equal(map.structure?.diagnostics.astronomyBasins, oceanBasins);
+    const basins = map.structure!.objects.filter((object) => object.kind === "SUPERPOLYGON" && object.attributes?.geography === "ASTRONOMY_BASIN");
+    assert.equal(basins.length, oceanBasins);
+    assert.ok(basins.every((basin) => basin.attributes?.authoritative === true));
+  }
+});
+
+test("Eccentric climate realms contain contiguous two-to-four-part biome collections", () => {
+  const map = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "ECCENTRIC",
+    preset: "MYTHIC_REGIONS",
+    size: "STANDARD",
+    players: 2,
+    cityStates: 0,
+    fantasticality: "UNBOUND",
+    regionClimateLogic: "LAWLESS",
+    seed: "eccentric-biome-collections",
+  });
+  const collections = map.structure!.objects.filter((object) => object.kind === "BIOME_COLLECTION");
+  assert.ok(collections.length > 20);
+  const regionCollections = new Map<number, Set<number>>();
+  for (const object of collections) {
+    const region = Number(object.attributes?.region);
+    const collection = Number(object.attributes?.collection);
+    if (!regionCollections.has(region)) regionCollections.set(region, new Set());
+    regionCollections.get(region)!.add(collection);
+    const allowed = new Set(object.tileIndices);
+    const reached = new Set<number>([object.tileIndices[0]]);
+    const queue = [object.tileIndices[0]];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      for (const next of adjacentIndices(queue[cursor], map.width, map.height, map.wraps)) {
+        if (!allowed.has(next) || reached.has(next)) continue;
+        reached.add(next);
+        queue.push(next);
+      }
+    }
+    assert.equal(reached.size, object.tileIndices.length, `${object.name} was not graph-contiguous`);
+  }
+  assert.ok([...regionCollections.values()].every((collections) => collections.size >= 2 && collections.size <= 4));
+});
+
+test("Eccentric world extremes materially compose frozen, Jurassic, arid, and arboreal worlds", () => {
+  const maps = Object.fromEntries((["SNOWBALL", "JURASSIC", "ARRAKIS", "ARBOREA"] as const).map((eccentricExtreme) => {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "MYTHIC_REGIONS", size: "DUEL", players: 2, cityStates: 0, eccentricExtreme, seed: "eccentric-extremes" });
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    return [eccentricExtreme, map];
+  }));
+  const landRatio = (map: Civ5Map, predicate: (tile: Civ5Tile) => boolean) => {
+    const land = map.tiles.filter((tile) => tile.terrain >= 2);
+    return land.filter(predicate).length / Math.max(1, land.length);
+  };
+  assert.ok(landRatio(maps.SNOWBALL, (tile) => tile.terrain === 5 || tile.terrain === 6) > 0.75);
+  assert.ok(landRatio(maps.JURASSIC, (tile) => tile.terrain === 2 || tile.feature === 1) > 0.55);
+  assert.ok(landRatio(maps.ARRAKIS, (tile) => tile.terrain === 4) > 0.75);
+  assert.ok(landRatio(maps.ARBOREA, (tile) => tile.feature === 0 || tile.feature === 1) > 0.4);
+});
+
+test("Eccentric retains boundary ranges, river hierarchy, and geographic identities", () => {
+  const map = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "ECCENTRIC",
+    preset: "LIVING_WORLD",
+    size: "DUEL",
+    players: 2,
+    cityStates: 0,
+    waterPercent: 57,
+    mountainPercent: 21,
+    granularity: "HIGH",
+    regionContrast: "EXTREME",
+    riverDensity: "DENSE",
+    rainfall: "WET",
+    seed: "region-world-audit",
+  });
+  assert.ok((map.structure?.diagnostics.boundaryRangeEdges ?? 0) > 0);
+  assert.ok((map.structure?.diagnostics.majorRiverCorridorTiles ?? 0) > 0);
+  assert.ok((map.structure?.diagnostics.minorRiverCorridorTiles ?? 0) > 0);
+  assert.ok((map.structure?.diagnostics.majorRiverTiles ?? 0) + (map.structure?.diagnostics.minorRiverTiles ?? 0) > 0);
+  const kinds = new Set(map.structure?.objects.map((object) => object.kind));
+  for (const kind of ["BAY", "CAPE", "STRAIT", "ARCHIPELAGO", "FOREST_REALM", "WASTE", "RIVER_BASIN"] as const) assert.ok(kinds.has(kind), `missing ${kind}`);
+  assertRiverNetworks(map);
+  assertMountainPassability(map);
+  assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+});
+
+test("all Eccentric landmass grammars remain exact, accessible, spaced, and Repair-clean", () => {
+  for (const preset of MAP_PRESETS.filter((definition) => definition.engine === "ECCENTRIC")) {
+    const map = generateMap({
+      ...DEFAULT_GENERATION_OPTIONS,
+      engine: "ECCENTRIC",
+      preset: preset.id,
+      size: "DUEL",
+      players: 4,
+      cityStates: 4,
+      waterPercent: preset.water,
+      mountainPercent: preset.mountains,
+      seed: `eccentric-legality-${preset.id}`,
+    });
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * preset.water / 100));
+    assertStartSpacing(map);
+    assertMountainPassability(map);
+    assertRiverNetworks(map);
+    const issues = buildRepairIssues(map).filter((issue) => issue.id !== "clean");
+    assert.deepEqual(issues, [], `${preset.label} unexpectedly required Repair: ${issues.map((issue) => issue.detail).join("; ")}`);
+  }
+});
+
+test("Eccentric climate logic and pole projection materially alter regional composition", () => {
+  const common = {
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "ECCENTRIC" as const,
+    preset: "MYTHIC_REGIONS" as const,
+    size: "DUEL" as const,
+    players: 2,
+    cityStates: 0,
+    seed: "eccentric-climate-logic",
+  };
+  const lawless = generateMap({ ...common, regionClimateLogic: "LAWLESS", climateRealism: false });
+  const influenced = generateMap({ ...common, regionClimateLogic: "INFLUENCED", climateRealism: false });
+  const ordered = generateMap({ ...common, regionClimateLogic: "ORDERED", climateRealism: true });
+  const centered = generateMap({ ...common, regionClimateLogic: "ORDERED", climateRealism: true, projectionType: "POLAR_CENTERED" });
+  const signature = (map: Civ5Map) => map.tiles.map((tile) => `${tile.terrain}:${tile.feature}`);
+  assert.notDeepEqual(signature(lawless), signature(influenced));
+  assert.notDeepEqual(signature(influenced), signature(ordered));
+  assert.notDeepEqual(signature(ordered), signature(centered));
+});
+
+test("Excogitare, Eccentric, Physical, and Polis are distinct generation engines", () => {
   const families = new Map(MAP_PRESETS.map((preset) => [preset.id, preset.engine]));
   assert.equal(families.get("WILD_REGIONS"), "EXCOGITARE");
-  assert.equal(families.get("LIVING_WORLD"), "REGION_GRAPH");
+  assert.equal(families.get("LIVING_WORLD"), "ECCENTRIC");
   assert.equal(families.get("DYNAMIC_EARTH"), "PHYSICAL");
   assert.equal(families.get("IMPERIAL_RING"), "POLIS");
-  assert.deepEqual(new Set(MAP_PRESETS.map((preset) => preset.engine)), new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]));
+  assert.deepEqual(new Set(MAP_PRESETS.map((preset) => preset.engine)), new Set(["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"]));
 
   const common = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, cityStates: 4, waterPercent: 55, mountainPercent: 20, seed: "four-engines" };
   const maps = [
     generateMap({ ...common, engine: "EXCOGITARE", preset: "WILD_REGIONS" }),
-    generateMap({ ...common, engine: "REGION_GRAPH", preset: "LIVING_WORLD" }),
+    generateMap({ ...common, engine: "ECCENTRIC", preset: "LIVING_WORLD" }),
     generateMap({ ...common, engine: "PHYSICAL", preset: "DYNAMIC_EARTH" }),
     generateMap({ ...common, engine: "POLIS", preset: "IMPERIAL_RING", polisConflictPattern: "RADIAL" }),
   ];
-  assert.deepEqual(maps.map((map) => map.structure?.engine), ["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]);
+  assert.deepEqual(maps.map((map) => map.structure?.engine), ["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"]);
   assert.equal(new Set(maps.map((map) => map.tiles.map((tile) => `${tile.terrain}:${tile.elevation}`).join("|"))).size, 4);
   for (const map of maps) {
     assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * 0.55));
@@ -1085,8 +1251,8 @@ test("Physical generation retains plates, boundaries, erosion controls, climate,
   assert.notDeepEqual(quiet.tiles.map((tile) => tile.elevation), first.tiles.map((tile) => tile.elevation));
 });
 
-test("region-built presets remain valid through extreme Pin and String geometries", () => {
-  const presets = MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH");
+test("Eccentric presets remain valid through extreme Pin and String geometries", () => {
+  const presets = MAP_PRESETS.filter((preset) => preset.engine === "ECCENTRIC");
   assert.deepEqual(presets.map((preset) => preset.id), ["LIVING_WORLD", "TECTONIC_CONTINENTS", "GREAT_WATERSHEDS", "SHATTERED_BASINS", "MYTHIC_REGIONS", "ENCIRCLING_LANDS", "ASTRAL_PANGAEA", "RIFTWORLD", "LONELY_OCEANS", "PENINSULA_REALM", "SHATTERED_ARCHIPELAGO"]);
   for (const [index, geometry] of (["PIN", "STRING"] as const).entries()) {
     const preset = presets[index === 0 ? 2 : 3];
@@ -1114,7 +1280,7 @@ test("region-built presets remain valid through extreme Pin and String geometrie
     assert.deepEqual(buildRepairIssues(physical).filter((issue) => issue.id !== "clean"), []);
     assertMountainPassability(physical);
   }
-  const shattered = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "REGION_GRAPH", preset: "SHATTERED_BASINS", size: "STANDARD", players: 2, cityStates: 0, seed: "objects-SHATTERED_BASINS" });
+  const shattered = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "SHATTERED_BASINS", size: "STANDARD", players: 2, cityStates: 0, seed: "objects-SHATTERED_BASINS" });
   const kinds = new Set(shattered.structure?.objects.map((object) => object.kind));
   for (const kind of (["SUBREGION", "POLYGON", "SUPERPOLYGON", "CONTINENT", "OCEAN_BASIN", "INLAND_SEA", "LAKE", "RIFT", "CLIMATE_REGION"] as const)) assert.ok(kinds.has(kind), `missing ${kind}`);
 });
@@ -1237,7 +1403,7 @@ test("Randomise produces complete valid settings and wrap choices control export
   assert.deepEqual(sizes, new Set(SAFE_MAP_SIZES));
   assert.deepEqual(gameBreakingGeometries, new Set([...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES]));
   assert.deepEqual(gameBreakingSizes, new Set([...SAFE_MAP_SIZES, ...GAME_BREAKING_MAP_SIZES]));
-  assert.deepEqual(engines, new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]));
+  assert.deepEqual(engines, new Set(["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });
@@ -1421,16 +1587,17 @@ test("realistic terrain creates west-to-east rain shadows and softened latitude 
   }
 });
 
-test("region-built realistic climates retain west-to-east rain shadows", () => {
+test("Eccentric Ordered climates retain west-to-east rain shadows", () => {
   const map = generateMap({
     ...DEFAULT_GENERATION_OPTIONS,
-    engine: "REGION_GRAPH",
+    engine: "ECCENTRIC",
     preset: "TECTONIC_CONTINENTS",
     size: "STANDARD",
     players: 4,
     cityStates: 4,
     style: "REALISTIC",
     climateRealism: true,
+    regionClimateLogic: "ORDERED",
     waterPercent: 30,
     mountainPercent: 28,
     seed: "region-rain-audit",

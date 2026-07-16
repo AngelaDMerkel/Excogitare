@@ -143,11 +143,11 @@ function svgShell(width, height, content) {
 }
 
 function engineLabel(engine) {
-  return engine === "REGION_GRAPH" ? "REGION-GRAPH" : engine;
+  return engine === "ECCENTRIC" ? "ECCENTRIC" : engine;
 }
 
 function makePresetMap(preset, projectionType = "NORTH_SOUTH") {
-  const style = preset.engine === "PHYSICAL" ? "REALISTIC" : preset.id === "MYTHIC_REGIONS" ? "FANTASTICAL" : preset.engine === "REGION_GRAPH" ? "REALISTIC" : "FANTASTICAL";
+  const style = preset.engine === "PHYSICAL" ? "REALISTIC" : preset.id === "MYTHIC_REGIONS" ? "FANTASTICAL" : preset.engine === "ECCENTRIC" ? "REALISTIC" : "FANTASTICAL";
   return generateMap({
     ...DEFAULT_GENERATION_OPTIONS,
     engine: preset.engine,
@@ -238,7 +238,7 @@ async function renderInterfaceSheet() {
     button(left + 28, top + 86, 150, "Generate", true), button(left + 190, top + 86, 120, "Edit"), button(left + 322, top + 86, 130, "Analyze"),
     field(left + 28, top + 166, 500, "Projection Type", "Polar centered"),
     `<text x="${left + 28}" y="${top + 252}" fill="${COLORS.muted}" font-family="Arial" font-size="11" font-weight="700" letter-spacing="1">GENERATION ENGINE</text>`,
-    button(left + 28, top + 270, 240, "Excogitare", true), button(left + 280, top + 270, 240, "Region-Graph"), button(left + 532, top + 270, 240, "Physical"),
+    button(left + 28, top + 270, 240, "Excogitare", true), button(left + 280, top + 270, 240, "Eccentric"), button(left + 532, top + 270, 240, "Physical"),
     field(left + 28, top + 348, 360, "Map type", "Fantastical Regions"), field(left + 408, top + 348, 270, "Map size", "Standard · 80×52"),
     `<text x="${left + 28}" y="${top + 455}" fill="${COLORS.text}" font-family="Arial" font-size="15">World shape</text><rect x="${left + 28}" y="${top + 474}" width="720" height="8" rx="4" fill="#16363c"/><rect x="${left + 28}" y="${top + 474}" width="390" height="8" rx="4" fill="${COLORS.gold}"/><circle cx="${left + 418}" cy="${top + 478}" r="10" fill="${COLORS.gold}"/>`,
   ].join("");
@@ -301,7 +301,7 @@ async function renderCreateWorkflowSheet() {
     field(x1 + 28, top + 370, 320, "Map type", "Fantastical Regions"), field(x1 + 370, top + 370, 322, "Map size", "Standard · 80×52"),
     field(x1 + 28, top + 458, 664, "Seed", "readme-world-031"),
     workflowRow(x1 + 28, top + 548, 664, "World shape", "East / west wrap · 48% water · Standard geometry", "1"),
-    workflowRow(x1 + 28, top + 632, 664, "Climate and terrain", "Temperate · Normal rainfall · Free regional climates", "2"),
+    workflowRow(x1 + 28, top + 632, 664, "Climate and terrain", "Temperate · Normal rainfall · Lawless climate logic", "2"),
     button(x1 + 28, top + 730, 664, "Generate map", true),
   ].join("");
   parts.push(workspacePanel(x1, top, panelWidth, panelHeight, "Design", "START WITH A RECIPE", design));
@@ -391,7 +391,7 @@ async function writePng(fileName, svg) {
 
 await mkdir(resolve("public/readme"), { recursive: true });
 await renderPresetSheet("excogitare-presets.png", "EXCOGITARE PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "EXCOGITARE"), 2);
-await renderPresetSheet("region-graph-presets.png", "REGION-GRAPH PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "REGION_GRAPH"), 2);
+await renderPresetSheet("eccentric-presets.png", "ECCENTRIC PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "ECCENTRIC"), 2);
 await renderPresetSheet("physical-presets.png", "PHYSICAL PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL"), 3);
 await renderPresetSheet("polis-presets.png", "POLIS PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "POLIS"), 2);
 await renderProjectionSheet();

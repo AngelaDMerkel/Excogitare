@@ -2,7 +2,7 @@
 
 ## Contract
 
-- Status: Implemented
+- Status: Verified
 - User outcome: Generated and imported maps disclose missing major starts, while generated or automatically rebalanced starts never begin fewer than five hexes apart.
 - Scope: Create, Polis, validation, imported-map Repair, Competitive whole-layout balancing, Randomise, ordinary size recommendations, export capability checks, tests and documentation.
 - Exclusions: Do not invent binary scenario-player records when an imported file exposes no writable slots. Do not alter engine geography, climate, rivers, resources or terrain.
@@ -30,7 +30,7 @@
 - [x] Editing/import/export round trip
 - [x] Repair and validation
 - [x] Feature-specific verification, type checking, lint, builds and Alpine runtime
-- [ ] Full regression suite — 57/58 domain tests pass; the sole failure is unchanged from commit `8411399` and is outside this feature.
+- [x] Full regression suite
 - [x] Documentation and claims
 - [x] Final reconciliation
 
@@ -43,8 +43,8 @@
 ## Verification evidence
 
 - Repair fixtures verify missing-start errors, writable-slot reconstruction, zero-slot refusal, overcrowding correction and Competitive whole-layout movement.
-- Engine tests cover Excogitare, Fantastical, Physical and Polis, including sparse geography and stored actual population counts.
+- Engine tests cover Excogitare, Eccentric, Physical and Polis, including sparse geography and stored actual population counts.
 - Export/reimport tests verify reconstructed scenario starts survive the `.Civ5Map` binary round trip.
 - `tsc --noEmit`, ESLint, the production Vinext build, the GitHub Pages build/verification and rendered-interface tests pass.
 - The Node 24 Alpine image rebuilt and serves HTTP 200 from the replacement container on port 3001.
-- The complete domain run passes 57 of 58 tests. The only failure, `region-built presets remain valid through extreme Pin and String geometries` (`missing INLAND_SEA`), reproduces unchanged on the untouched 1.0.0 commit and is not treated as evidence for this feature.
+- The complete regression run now passes 66 of 66 tests, including Eccentric Pin/String inland-water retention.

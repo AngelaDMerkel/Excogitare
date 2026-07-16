@@ -1,6 +1,6 @@
 import type { Civ5Map } from "./civ5-map.ts";
 
-export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "TECTONIC_PLATE" | "STRATEGIC_REGION";
+export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "BIOME_COLLECTION" | "TECTONIC_PLATE" | "STRATEGIC_REGION" | "BAY" | "CAPE" | "STRAIT" | "ARCHIPELAGO" | "FOREST_REALM" | "WASTE" | "RIVER_BASIN";
 
 export type GeographicObject = {
   id: string;
@@ -50,7 +50,7 @@ export type StrategicGraph = {
 };
 
 export type GenerationStructure = {
-  engine: "EXCOGITARE" | "REGION_GRAPH" | "PHYSICAL" | "POLIS";
+  engine: "EXCOGITARE" | "ECCENTRIC" | "PHYSICAL" | "POLIS";
   objects: GeographicObject[];
   mountainRanges: LinearGeography[];
   riverSystems: LinearGeography[];
@@ -129,7 +129,10 @@ export function attachRiverSystems(map: Civ5Map, structure: GenerationStructure)
     system.source = system.tileIndices.reduce((best, index) => map.tiles[index].elevation > map.tiles[best].elevation ? index : best, system.tileIndices[0]);
     system.outlet = system.tileIndices.find((index) => neighbors(index, map.width, map.height, map.wraps).some((next) => map.tiles[next].terrain < 2));
   }
-  return { ...structure, riverSystems: systems, diagnostics: { ...structure.diagnostics, riverSystems: systems.length } };
+  const retainedObjects = structure.engine === "ECCENTRIC"
+    ? [...structure.objects.filter((object) => object.kind !== "RIVER_BASIN"), ...systems.map((system, index) => ({ id: `river-basin-${index + 1}`, name: `River Basin ${index + 1}`, kind: "RIVER_BASIN" as const, tileIndices: [...system.tileIndices], attributes: { source: system.source ?? -1, outlet: system.outlet ?? -1 } }))]
+    : structure.objects;
+  return { ...structure, objects: retainedObjects, riverSystems: systems, diagnostics: { ...structure.diagnostics, riverSystems: systems.length, riverBasins: structure.engine === "ECCENTRIC" ? systems.length : structure.diagnostics.riverBasins ?? 0 } };
 }
 
 export function cloneGenerationStructure(structure: GenerationStructure | undefined) {

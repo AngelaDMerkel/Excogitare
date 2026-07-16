@@ -1,14 +1,14 @@
 # Generation Architecture Audit
 
-This checklist records the architecture proposed and approved during the Region-Graph and three-engine discussions. It exists because a passing build is not evidence that the requested design was actually built.
+This checklist records the architecture proposed and approved during the Eccentric and four-engine discussions. It exists because a passing build is not evidence that the requested design was actually built.
 
 ## Engine contract
 
 - [x] **Excogitare** is an explicitly named engine rather than an ambiguous “terrain fields” label.
-- [x] **Region-Graph** is an independent graph-based engine.
+- [x] **Eccentric** is the authoritative name for the independent Fantastical-inspired graph compiler.
 - [x] **Physical** is an independent simulation path rather than a Realistic-style branch inside Excogitare.
-- [x] Legacy saved settings containing `FIELD` migrate to `EXCOGITARE` when loaded or generated.
-- [x] Randomise reaches all three engines through their preset families.
+- [x] Legacy saved settings containing `FIELD` or `REGION_GRAPH` migrate to `EXCOGITARE` or `ECCENTRIC` when loaded or generated.
+- [x] Randomise reaches all four engines through their preset families.
 - [x] Seeds include engine identity, so changing engines cannot silently produce the same world sequence.
 
 ## Excogitare
@@ -17,19 +17,24 @@ This checklist records the architecture proposed and approved during the Region-
 - [x] Has its own map-type family.
 - [x] Retains continents, ocean basins, mountain ranges and river systems as structural metadata.
 
-## Region-Graph
+## Eccentric
 
-- [x] Relaxed subregions are generated and retained.
+- [x] Resolution-scaled dense subregions are generated and retained: roughly 600 on Duel, 1,300 on Standard and 2,500 on Huge.
 - [x] Subregions are partitioned into connected polygons with adjacency.
-- [x] Connected land and water superpolygons are retained.
+- [x] Protected deep-water barriers are compiled before land and divide the polygon graph into authoritative Astronomy basins.
+- [x] Connected land and water superpolygons are retained, including the Astronomy-basin ownership used during land allocation.
 - [x] Continents, islands, ocean basins, inland seas and lakes are classified independently.
+- [x] Eleven presets use distinct continent, island, coast, inland-water and basin grammars.
+- [x] Exact water reconciliation prefers whole subregions followed by contiguous shoreline runs.
 - [x] Rifts are generated and retained where the selected topology uses them.
-- [x] Climate provinces are graph-partitioned and retained.
-- [x] Regional or latitude-informed climate logic is selectable.
-- [x] Mountain ranges follow selected polygon boundaries and remain named objects.
-- [x] Drainage accumulation produces continuous mountain-to-water river networks and retained river-system objects.
+- [x] Climate provinces are graph-partitioned and retain two to four logical biome collections drawn from an abstract temperature/rainfall field.
+- [x] Lawless, Influenced and Ordered climate logic is selectable; Ordered retains the selected projection and west-to-east rain shadow.
+- [x] Snowball, Jurassic, Arrakis and Arborea world extremes materially alter terrain and vegetation.
+- [x] Mountain ranges prefer dissonant climate boundaries or selected coasts, avoid range intersections and remain named objects.
+- [x] Drainage accumulation prefers polygon boundaries for major rivers and subregion boundaries for tributaries while retaining the shared continuous mountain-to-water river encoder.
+- [x] Bays, capes, straits, archipelagos, forest realms, wastes and river basins are retained as geographic objects.
 - [x] Water percentage is exact and mountain barriers cannot isolate otherwise passable land.
-- [x] Living World, Tectonic Continents, Great Watersheds, Shattered Basins and Mythic Regions are separate presets.
+- [x] Living World, Tectonic Continents, Great Watersheds, Shattered Basins, Mythic Regions, Encircling Lands, Astral Pangaea, Riftworld, Lonely Oceans, Peninsula Realm and Shattered Archipelago are separate presets.
 
 The implementation is independent. It does not copy Fantastical's Lua, tables, authored names or random sequence. Its retained generic names are structural identifiers, not an imitation of Fantastical's vocabulary.
 
@@ -62,13 +67,13 @@ The implementation is independent. It does not copy Fantastical's Lua, tables, a
 
 ## Validation
 
-- [x] Determinism is tested independently for Region-Graph and Physical output.
-- [x] The three engines are tested as distinct code paths and produce distinct geography.
+- [x] Determinism is tested independently for Eccentric and Physical output.
+- [x] The four engines are tested as distinct code paths and produce distinct geography.
 - [x] Exact water shares, mountain accessibility, river correctness and Repair cleanliness are tested.
-- [x] Region-Graph hierarchy and Physical plate metadata are tested.
-- [x] Realistic rain shadows are tested in Excogitare, Region-Graph and Physical generation.
+- [x] Eccentric density, basin counts, biome collection contiguity, extremes, geographic identities and river hierarchy are tested; Physical plate metadata is tested independently.
+- [x] Realistic rain shadows are tested in Excogitare, Eccentric and Physical generation.
 - [x] Legacy engine migration is tested.
-- [x] The rendered source is tested for the three engine controls, preset families, Physical controls, structural report and background selective regeneration.
+- [x] The rendered source is tested for the four engine controls, preset families, Eccentric extremes, Physical controls, structural report and background selective regeneration.
 
 ## Deliberate remaining boundaries
 
