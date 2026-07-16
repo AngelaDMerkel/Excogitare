@@ -1209,7 +1209,7 @@ test("Polis hard constraints survive ordinary sizes, wraps, and repeated seeds",
   }
 });
 
-test("Physical generation retains plates, boundaries, erosion controls, climate, and drainage", () => {
+test("Physical generation retains its nine-pass tectonic, climate, and drainage model", () => {
   const options = { ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL" as const, preset: "COLLIDING_PLATES" as const, size: "STANDARD" as const, players: 6, cityStates: 8, waterPercent: 54, mountainPercent: 23, plateActivity: "VIOLENT" as const, erosionStrength: "STRONG" as const, rainfall: "WET" as const, seed: "physical-architecture" };
   const stages: string[] = [];
   const first = generateMap(options, (stage) => stages.push(stage));
@@ -1220,35 +1220,124 @@ test("Physical generation retains plates, boundaries, erosion controls, climate,
   assert.ok(first.structure!.objects.some((object) => object.kind === "CONTINENT"));
   assert.ok(first.structure!.objects.some((object) => object.kind === "OCEAN_BASIN"));
   assert.ok(first.structure!.objects.some((object) => object.kind === "CLIMATE_REGION"));
+  assert.equal(first.structure!.objects.filter((object) => object.kind === "ATMOSPHERIC_CELL").length, 3);
+  assert.ok(first.structure!.objects.some((object) => object.kind === "RAIN_SHADOW"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "GLACIAL_REGION"));
+  assert.ok(first.structure!.objects.some((object) => object.kind === "WATERSHED"));
+  assert.equal(first.structure!.diagnostics.passes, 9);
   assert.ok(first.structure!.diagnostics.convergentTiles > 0);
   assert.ok(first.structure!.diagnostics.divergentTiles > 0);
+  assert.ok(first.structure!.diagnostics.interiorAnnualRange > first.structure!.diagnostics.coastalAnnualRange);
+  assert.ok(first.structure!.diagnostics.windwardPrecipitation > first.structure!.diagnostics.leewardPrecipitation * 2);
+  assert.ok(first.structure!.diagnostics.drainageCorridorTiles > 0);
   assert.ok(first.structure!.mountainRanges.length > 0);
   assert.ok(first.structure!.riverSystems.some((river) => river.source !== undefined && river.outlet !== undefined));
-  assert.ok(stages.includes("Simulating tectonic plates and erosion"));
+  assert.ok(stages.includes("Simulating plates, circulation, climate, and watersheds"));
   assert.ok(stages.includes("Resolving drainage and rivers"));
   assertMountainPassability(first);
   assertRiverNetworks(first);
   assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), []);
 
-  const wetness = (terrain: number) => terrain === 2 ? 1 : terrain === 3 ? 0.55 : terrain === 5 ? 0.4 : terrain === 6 ? 0.25 : 0.05;
-  const rainShadows: number[] = [];
-  for (let y = 3; y < first.height - 3; y += 1) {
-    let x = 4;
-    while (x < first.width - 4) {
-      if (first.tiles[y * first.width + x].elevation !== 2) { x += 1; continue; }
-      const westEdge = x;
-      while (x < first.width - 4 && first.tiles[y * first.width + x].elevation === 2) x += 1;
-      const eastEdge = x - 1;
-      const west = [westEdge - 3, westEdge - 2, westEdge - 1].map((column) => first.tiles[y * first.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
-      const east = [eastEdge + 1, eastEdge + 2, eastEdge + 3].map((column) => first.tiles[y * first.width + column]).filter((tile) => tile.terrain >= 2 && tile.elevation < 2);
-      if (west.length >= 2 && east.length >= 2) rainShadows.push(west.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / west.length - east.reduce((sum, tile) => sum + wetness(tile.terrain), 0) / east.length);
-    }
-  }
-  assert.ok(rainShadows.length > 10);
-  assert.ok(rainShadows.reduce((sum, difference) => sum + difference, 0) / rainShadows.length > 0.1);
-
   const quiet = generateMap({ ...options, plateActivity: "QUIET", erosionStrength: "LIGHT" });
   assert.notDeepEqual(quiet.tiles.map((tile) => tile.elevation), first.tiles.map((tile) => tile.elevation));
+});
+
+test("Physical circulation reverses with rotation and remains spatially smooth", () => {
+  const common = { ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL" as const, preset: "DYNAMIC_EARTH" as const, size: "STANDARD" as const, players: 4, cityStates: 0, seed: "physical-rotation" };
+  const prograde = generateMap({ ...common, physicalRotation: "PROGRADE" });
+  const retrograde = generateMap({ ...common, physicalRotation: "RETROGRADE" });
+  assert.ok(prograde.structure!.diagnostics.meanWindX < 0);
+  assert.ok(retrograde.structure!.diagnostics.meanWindX > 0);
+  assert.ok(prograde.structure!.diagnostics.maximumWindJump < 900);
+  assert.ok(prograde.structure!.diagnostics.maximumTemperatureJump < 240);
+  assert.notDeepEqual(prograde.tiles.map((tile) => [tile.terrain, tile.feature]), retrograde.tiles.map((tile) => [tile.terrain, tile.feature]));
+});
+
+test("Physical seasonality and maritime influence alter climate rather than metadata alone", () => {
+  const common = { ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL" as const, preset: "DYNAMIC_EARTH" as const, size: "STANDARD" as const, players: 4, cityStates: 0, seed: "physical-climate-controls" };
+  const maritime = generateMap({ ...common, physicalSeasonality: "MILD", physicalOceanInfluence: "STRONG" });
+  const continental = generateMap({ ...common, physicalSeasonality: "EXTREME", physicalOceanInfluence: "WEAK" });
+  assert.ok(continental.structure!.diagnostics.meanAnnualRange > maritime.structure!.diagnostics.meanAnnualRange * 2);
+  assert.ok(continental.structure!.diagnostics.interiorAnnualRange > continental.structure!.diagnostics.coastalAnnualRange);
+  assert.ok(maritime.structure!.diagnostics.meanMoisture > continental.structure!.diagnostics.meanMoisture);
+  assert.notDeepEqual(maritime.tiles.map((tile) => [tile.terrain, tile.feature]), continental.tiles.map((tile) => [tile.terrain, tile.feature]));
+});
+
+test("all seven Physical presets have distinct, legal climate signatures", () => {
+  const presets = MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL");
+  assert.deepEqual(presets.map((preset) => preset.id), ["DYNAMIC_EARTH", "COLLIDING_PLATES", "ANCIENT_CRATONS", "ISLAND_ARC_EARTH", "SUPERCONTINENT_INTERIOR", "MONSOON_CONTINENTS", "ICEHOUSE_EARTH"]);
+  const maps = presets.map((preset) => generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "PHYSICAL",
+    preset: preset.id,
+    size: "STANDARD",
+    players: 4,
+    cityStates: 0,
+    waterPercent: preset.water,
+    mountainPercent: preset.mountains,
+    plateActivity: preset.plateActivity ?? DEFAULT_GENERATION_OPTIONS.plateActivity,
+    erosionStrength: preset.erosionStrength ?? DEFAULT_GENERATION_OPTIONS.erosionStrength,
+    worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge,
+    climate: preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate,
+    rainfall: preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall,
+    physicalRotation: preset.physicalRotation ?? DEFAULT_GENERATION_OPTIONS.physicalRotation,
+    physicalSeasonality: preset.physicalSeasonality ?? DEFAULT_GENERATION_OPTIONS.physicalSeasonality,
+    physicalOceanInfluence: preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence,
+    seed: "physical-preset-signatures",
+  }));
+  const signatures = maps.map((map) => map.tiles.map((tile) => `${tile.terrain}${tile.elevation}${tile.feature}`).join(""));
+  assert.equal(new Set(signatures).size, presets.length);
+  for (const [index, map] of maps.entries()) {
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * presets[index].water / 100));
+    assert.ok(map.structure!.diagnostics.atmosphericCells === 3);
+    assert.ok(map.structure!.diagnostics.watersheds > 0);
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+    assertRiverNetworks(map);
+  }
+  const byPreset = new Map(presets.map((preset, index) => [preset.id, maps[index]]));
+  const island = byPreset.get("ISLAND_ARC_EARTH")!;
+  const supercontinent = byPreset.get("SUPERCONTINENT_INTERIOR")!;
+  const monsoon = byPreset.get("MONSOON_CONTINENTS")!;
+  const icehouse = byPreset.get("ICEHOUSE_EARTH")!;
+  const dynamic = byPreset.get("DYNAMIC_EARTH")!;
+  assert.ok(island.structure!.diagnostics.meanMoisture > supercontinent.structure!.diagnostics.meanMoisture);
+  assert.ok(island.structure!.diagnostics.meanAnnualRange < supercontinent.structure!.diagnostics.meanAnnualRange);
+  assert.ok(monsoon.tiles.filter((tile) => tile.feature === 1).length > dynamic.tiles.filter((tile) => tile.feature === 1).length);
+  assert.ok(icehouse.tiles.filter((tile) => tile.terrain === 6).length > dynamic.tiles.filter((tile) => tile.terrain === 6).length);
+});
+
+test("Physical preserves exact sea level and reports waterless drainage honestly", () => {
+  for (const waterPercent of [0, 35, 55, 75, 90]) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "DYNAMIC_EARTH", size: "DUEL", players: 2, cityStates: 0, waterPercent, seed: `physical-water-${waterPercent}` });
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * waterPercent / 100));
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+    if (waterPercent === 0) {
+      assert.equal(map.structure!.diagnostics.outletBasins, 0);
+      assert.equal(map.structure!.diagnostics.drainageCorridorTiles, 0);
+      assert.equal(map.structure!.riverSystems.length, 0);
+    } else {
+      assert.ok(map.structure!.diagnostics.outletBasins > 0);
+    }
+  }
+});
+
+test("Physical supports every safe size, wrap mode, and climate projection", () => {
+  for (const [index, size] of SAFE_MAP_SIZES.entries()) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "DYNAMIC_EARTH", size, wrapType: index % 2 ? "NONE" : "EAST_WEST", players: 2, cityStates: 0, waterPercent: 55, seed: `physical-size-${size.toLowerCase()}` });
+    const dimensions = resolveMapDimensions(size, "STANDARD");
+    assert.deepEqual([map.width, map.height], [dimensions.width, dimensions.height]);
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * 0.55));
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+  }
+  const projected = (["NORTH_SOUTH", "POLAR_CENTERED", "EQUATORIAL_POLE"] as const).map((projectionType) => generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "DYNAMIC_EARTH", size: "DUEL", projectionType, players: 2, cityStates: 0, seed: "physical-projections" }));
+  assert.equal(new Set(projected.map((map) => map.tiles.map((tile) => `${tile.terrain}${tile.feature}`).join(""))).size, 3);
+  for (const map of projected) {
+    assert.equal(map.structure!.diagnostics.atmosphericCells, 3);
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+  }
 });
 
 test("Eccentric presets remain valid through extreme Pin and String geometries", () => {

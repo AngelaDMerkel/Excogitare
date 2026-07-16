@@ -164,6 +164,11 @@ function makePresetMap(preset, projectionType = "NORTH_SOUTH") {
     plateActivity: preset.plateActivity ?? DEFAULT_GENERATION_OPTIONS.plateActivity,
     erosionStrength: preset.erosionStrength ?? DEFAULT_GENERATION_OPTIONS.erosionStrength,
     worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge,
+    climate: preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate,
+    rainfall: preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall,
+    physicalRotation: preset.physicalRotation ?? DEFAULT_GENERATION_OPTIONS.physicalRotation,
+    physicalSeasonality: preset.physicalSeasonality ?? DEFAULT_GENERATION_OPTIONS.physicalSeasonality,
+    physicalOceanInfluence: preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence,
     polisConflictPattern: polisPatternForPreset(preset.id),
   });
 }
@@ -392,7 +397,7 @@ async function writePng(fileName, svg) {
 await mkdir(resolve("public/readme"), { recursive: true });
 await renderPresetSheet("excogitare-presets.png", "EXCOGITARE PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "EXCOGITARE"), 2);
 await renderPresetSheet("eccentric-presets.png", "ECCENTRIC PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "ECCENTRIC"), 2);
-await renderPresetSheet("physical-presets.png", "PHYSICAL PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL"), 3);
+await renderPresetSheet("physical-presets.png", "PHYSICAL PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL"), 4);
 await renderPresetSheet("polis-presets.png", "POLIS PRESETS", MAP_PRESETS.filter((preset) => preset.engine === "POLIS"), 2);
 await renderProjectionSheet();
 await renderInterfaceSheet();

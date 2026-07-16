@@ -147,9 +147,10 @@ test("GitHub Pages has an independent static export and deployment workflow", as
 });
 
 test("layer redraws preserve the existing canvas backing buffer", async () => {
-  const [source, climateProjection] = await Promise.all([
+  const [source, climateProjection, generator] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/climate-projection.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/map-generator.ts", import.meta.url), "utf8"),
   ]);
   assert.match(source, /useLayoutEffect\(\(\) => \{/);
   assert.match(source, /if \(canvas\.width !== backingWidth\) canvas\.width = backingWidth/);
@@ -197,6 +198,15 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Arborea · forest world/);
   assert.match(source, /Plate activity/);
   assert.match(source, /Erosion/);
+  assert.match(generator, /Island Arc Earth/);
+  assert.match(generator, /Supercontinent Interior/);
+  assert.match(generator, /Monsoon Continents/);
+  assert.match(generator, /Icehouse Earth/);
+  assert.match(source, /Rotation/);
+  assert.match(source, /Retrograde · reversed winds/);
+  assert.match(source, /Axial seasonality/);
+  assert.match(source, /Ocean influence/);
+  assert.match(source, /Physical system:/);
   assert.match(source, /Conflict pattern/);
   assert.match(source, /Balance geometry/);
   assert.match(source, /Expansion pressure/);

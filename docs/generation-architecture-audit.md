@@ -45,11 +45,15 @@ The implementation is independent. It does not copy Fantastical's Lua, tables, a
 - [x] Plate activity changes boundary intensity.
 - [x] Erosion strength changes the number and strength of relief-smoothing passes.
 - [x] Sea level is derived from the exact requested water share.
-- [x] Terrain temperature couples latitude, regional variation and altitude.
-- [x] West-to-east atmospheric moisture recharges over water, precipitates during uplift and produces eastern rain shadows.
-- [x] Shared accumulated drainage produces legal continuous rivers and tributaries.
-- [x] Dynamic Earth, Colliding Plates and Ancient Cratons form a distinct preset family.
-- [x] Physical output retains plates, continents, ocean basins, climate zones, ranges and rivers.
+- [x] Continentality is measured from actual water access rather than inferred from latitude or continent identifiers.
+- [x] Temperature couples projected insolation, altitude, ocean moderation, regional variation and axial seasonal range, then receives a spatial smoothing pass.
+- [x] Tropical, temperate and polar circulation cells blend continuously and reverse their zonal component on retrograde worlds.
+- [x] Atmospheric vapor iteratively advects downwind, recharges over water, recycles over wet land and condenses under convergence, cooling and terrain uplift.
+- [x] Windward precipitation, leeward rain shadows, evaporation demand, cold retention and maritime influence feed biome selection.
+- [x] Priority-flood drainage accumulates runoff toward real ocean or lake outlets and guides the shared legal river encoder.
+- [x] Waterless maps report zero outlet basins and do not invent rivers that terminate in imaginary seas.
+- [x] Dynamic Earth, Colliding Plates, Ancient Cratons, Island Arc Earth, Supercontinent Interior, Monsoon Continents and Icehouse Earth form a distinct preset family.
+- [x] Physical output retains plates, continents, ocean basins, atmospheric cells, contiguous climate regions, rain shadows, glacial regions, watersheds, ranges and rivers.
 
 ## Shared generation and workflow
 
@@ -70,8 +74,8 @@ The implementation is independent. It does not copy Fantastical's Lua, tables, a
 - [x] Determinism is tested independently for Eccentric and Physical output.
 - [x] The four engines are tested as distinct code paths and produce distinct geography.
 - [x] Exact water shares, mountain accessibility, river correctness and Repair cleanliness are tested.
-- [x] Eccentric density, basin counts, biome collection contiguity, extremes, geographic identities and river hierarchy are tested; Physical plate metadata is tested independently.
-- [x] Realistic rain shadows are tested in Excogitare, Eccentric and Physical generation.
+- [x] Eccentric density, basin counts, biome collection contiguity, extremes, geographic identities and river hierarchy are tested; Physical tectonics, rotation, seasonality, maritime influence, climate continuity, rain shadows, drainage and preset signatures are tested independently.
+- [x] Rain shadows are tested through measured windward/leeward precipitation rather than assuming every latitude has the same prevailing wind.
 - [x] Legacy engine migration is tested.
 - [x] The rendered source is tested for the four engine controls, preset families, Eccentric extremes, Physical controls, structural report and background selective regeneration.
 

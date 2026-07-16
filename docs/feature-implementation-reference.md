@@ -33,6 +33,7 @@ Runtime code changes also require the Alpine image/container check when the loca
 
 | Feature | Status | Approved scope | Open work |
 |---|---|---|---|
+| [Physical generation engine](features/physical-generation-engine.md) | Verified | Expand Physical into a retained tectonic, circulation, moisture, biome and watershed simulation informed by the Space Calc and Mythcreants climate models. | No open work in the approved scope; pressure, ocean currents, fluid dynamics and actual Civ V seasons remain explicit scientific boundaries. |
 | [Eccentric generation engine](features/eccentric-generation-engine.md) | Verified | Rename Region-Graph; independently reimplement Fantastical's basin-first polygon architecture, biome collections, boundary ranges, hierarchical hydrology, extremes and retained identities. | No open work in the approved scope; geographic labels remain an explicit future feature. |
 | [Start-location correctness](features/start-location-correctness.md) | Verified | Five-hex global separation; missing-major validation; slot-aware repair; Competitive whole-layout balance; restrained city states; Polis capacity degradation. | No open work in the approved scope. |
 | [Extended tile budgets](features/extended-tile-budgets.md) | Verified | Game-Breaking-gated Extreme 180×94 and Colossal 170×110 budgets, including Randomise and round trip. | No open work in the approved scope. |

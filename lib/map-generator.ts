@@ -48,6 +48,10 @@ export type MapPresetId =
   | "DYNAMIC_EARTH"
   | "COLLIDING_PLATES"
   | "ANCIENT_CRATONS"
+  | "ISLAND_ARC_EARTH"
+  | "SUPERCONTINENT_INTERIOR"
+  | "MONSOON_CONTINENTS"
+  | "ICEHOUSE_EARTH"
   | "IMPERIAL_RING"
   | "OPPOSING_FRONTS"
   | "CONTESTED_HEARTLAND"
@@ -89,6 +93,9 @@ export type EccentricExtreme = "NONE" | "SNOWBALL" | "JURASSIC" | "ARRAKIS" | "A
 export type RiverDensity = "SPARSE" | "NORMAL" | "DENSE";
 export type PlateActivity = "QUIET" | "NORMAL" | "VIOLENT";
 export type ErosionStrength = "LIGHT" | "MODERATE" | "STRONG";
+export type PhysicalRotation = "PROGRADE" | "RETROGRADE";
+export type PhysicalSeasonality = "MILD" | "EARTHLIKE" | "EXTREME";
+export type PhysicalOceanInfluence = "WEAK" | "NORMAL" | "STRONG";
 export type PolisConflictPattern = "RADIAL" | "OPPOSING_FRONTS" | "CROSSROADS" | "RIVAL_CONTINENTS";
 export type PolisSymmetry = "EQUIVALENT" | "MIRRORED" | "ROTATIONAL" | "ASYMMETRIC";
 export type PolisExpansionPressure = "RELAXED" | "STANDARD" | "IMMEDIATE";
@@ -127,7 +134,7 @@ export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: stri
   { id: "TUNDRA", label: "Tundra" },
 ];
 
-export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number; engine: GenerationEngine; climateRealism?: boolean; plateActivity?: PlateActivity; erosionStrength?: ErosionStrength; worldAge?: WorldAgeSetting }> = [
+export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number; engine: GenerationEngine; climateRealism?: boolean; plateActivity?: PlateActivity; erosionStrength?: ErosionStrength; worldAge?: WorldAgeSetting; climate?: ClimateSetting; rainfall?: RainfallSetting; physicalRotation?: PhysicalRotation; physicalSeasonality?: PhysicalSeasonality; physicalOceanInfluence?: PhysicalOceanInfluence }> = [
   { id: "CONTINENTS", label: "Convoluted Continents", description: "Broad, asymmetric continents with hooked peninsulas and broken inland coasts.", water: 58, mountains: 12, engine: "EXCOGITARE" },
   { id: "PANGAEA", label: "Broken Pangaea", description: "One dominant landmass cleaved by gulfs, rifts, and difficult interiors.", water: 46, mountains: 14, engine: "EXCOGITARE" },
   { id: "ARCHIPELAGO", label: "Shattered Isles", description: "Dense island chains, coastal empires, and narrow naval routes.", water: 72, mountains: 9, engine: "EXCOGITARE" },
@@ -149,7 +156,11 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "SHATTERED_ARCHIPELAGO", label: "Shattered Archipelago", description: "Uneven island chains, tiny islets, drowned shelves, and regional climate enclaves fill the world.", water: 71, mountains: 13, engine: "ECCENTRIC", climateRealism: false },
   { id: "DYNAMIC_EARTH", label: "Dynamic Earth", description: "Moving plates, mixed continental crust, convergent ranges, rifts, erosion, and coupled climate.", water: 62, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL" },
   { id: "COLLIDING_PLATES", label: "Colliding Plates", description: "Young, active continents dominated by collision belts, high ranges, rain shadows, and difficult interiors.", water: 54, mountains: 23, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "LIGHT", worldAge: "YOUNG" },
-  { id: "ANCIENT_CRATONS", label: "Ancient Cratons", description: "Older eroded landmasses, broad river country, subdued uplands, and mature coastlines.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD" },
+  { id: "ANCIENT_CRATONS", label: "Ancient Cratons", description: "Older eroded landmasses, broad river country, subdued uplands, and mature coastlines.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", rainfall: "WET" },
+  { id: "ISLAND_ARC_EARTH", label: "Island Arc Earth", description: "A maritime world of oceanic boundaries, wet volcanic arcs, compact watersheds, and moderated island climates.", water: 74, mountains: 18, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "MODERATE", worldAge: "YOUNG", rainfall: "WET", physicalOceanInfluence: "STRONG" },
+  { id: "SUPERCONTINENT_INTERIOR", label: "Supercontinent Interior", description: "A land-heavy plate regime with long outlet paths, severe continentality, dry interiors, and coastal climate margins.", water: 36, mountains: 14, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", rainfall: "ARID", physicalOceanInfluence: "WEAK" },
+  { id: "MONSOON_CONTINENTS", label: "Monsoon Continents", description: "Seasonal thermal contrast draws ocean moisture across warm coasts and into rain-shadowed continental interiors.", water: 57, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", climate: "HOT", rainfall: "WET", physicalSeasonality: "EXTREME", physicalOceanInfluence: "STRONG" },
+  { id: "ICEHOUSE_EARTH", label: "Icehouse Earth", description: "A cool, strongly seasonal planet with expanded glacial regions, tundra margins, cold interiors, and subdued old relief.", water: 58, mountains: 12, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", climate: "COOL", physicalSeasonality: "EXTREME" },
   { id: "IMPERIAL_RING", label: "Imperial Ring", description: "Civilizations surround a contested interior with neighboring fronts, radial approaches, and deliberately shared objectives.", water: 34, mountains: 16, engine: "POLIS", climateRealism: false },
   { id: "OPPOSING_FRONTS", label: "Opposing Fronts", description: "Players or teams occupy defended sides of the world, separated by several readable invasion corridors.", water: 28, mountains: 20, engine: "POLIS", climateRealism: false },
   { id: "CONTESTED_HEARTLAND", label: "Contested Heartland", description: "Safe starting territories open toward a valuable central crossroads with multiple flanking routes.", water: 22, mountains: 18, engine: "POLIS", climateRealism: false },
@@ -229,6 +240,9 @@ export type MapGenerationOptions = {
   riverDensity: RiverDensity;
   plateActivity: PlateActivity;
   erosionStrength: ErosionStrength;
+  physicalRotation: PhysicalRotation;
+  physicalSeasonality: PhysicalSeasonality;
+  physicalOceanInfluence: PhysicalOceanInfluence;
   polisConflictPattern: PolisConflictPattern;
   polisSymmetry: PolisSymmetry;
   polisExpansionPressure: PolisExpansionPressure;
@@ -291,6 +305,9 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   riverDensity: "NORMAL",
   plateActivity: "NORMAL",
   erosionStrength: "MODERATE",
+  physicalRotation: "PROGRADE",
+  physicalSeasonality: "EARTHLIKE",
+  physicalOceanInfluence: "NORMAL",
   polisConflictPattern: "RADIAL",
   polisSymmetry: "EQUIVALENT",
   polisExpansionPressure: "STANDARD",
@@ -336,9 +353,9 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     teamSize: randomItem([2, 3, 4] as const, random),
     teamLayout: randomItem(["CLUSTERED", "FRONTLINES", "DISTRIBUTED"] as const, random),
     startQuality: randomItem(["STANDARD", "BALANCED", "LEGENDARY"] as const, random),
-    climate: randomItem(["COOL", "TEMPERATE", "HOT"] as const, random),
-    rainfall: randomItem(["ARID", "NORMAL", "WET"] as const, random),
-    worldAge: randomItem(["YOUNG", "NORMAL", "OLD"] as const, random),
+    climate: presetConfig.climate ?? randomItem(["COOL", "TEMPERATE", "HOT"] as const, random),
+    rainfall: presetConfig.rainfall ?? randomItem(["ARID", "NORMAL", "WET"] as const, random),
+    worldAge: presetConfig.worldAge ?? randomItem(["YOUNG", "NORMAL", "OLD"] as const, random),
     bonusAbundance: randomItem(["SCARCE", "STANDARD", "ABUNDANT"] as const, random),
     luxuryAbundance: randomItem(["SCARCE", "STANDARD", "ABUNDANT"] as const, random),
     luxuryRegional: random() > 0.5,
@@ -367,8 +384,11 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     eccentricExtreme: presetConfig.engine === "ECCENTRIC" && random() < 0.28 ? randomItem(["SNOWBALL", "JURASSIC", "ARRAKIS", "ARBOREA"] as const, random) : "NONE",
     coastalRangePercent: Math.round(random() * 100),
     riverDensity: randomItem(["SPARSE", "NORMAL", "DENSE"] as const, random),
-    plateActivity: randomItem(["QUIET", "NORMAL", "VIOLENT"] as const, random),
-    erosionStrength: randomItem(["LIGHT", "MODERATE", "STRONG"] as const, random),
+    plateActivity: presetConfig.plateActivity ?? randomItem(["QUIET", "NORMAL", "VIOLENT"] as const, random),
+    erosionStrength: presetConfig.erosionStrength ?? randomItem(["LIGHT", "MODERATE", "STRONG"] as const, random),
+    physicalRotation: presetConfig.physicalRotation ?? randomItem(["PROGRADE", "RETROGRADE"] as const, random),
+    physicalSeasonality: presetConfig.physicalSeasonality ?? randomItem(["MILD", "EARTHLIKE", "EXTREME"] as const, random),
+    physicalOceanInfluence: presetConfig.physicalOceanInfluence ?? randomItem(["WEAK", "NORMAL", "STRONG"] as const, random),
     polisConflictPattern: presetConfig.engine === "POLIS" ? polisPatternForPreset(preset) : randomItem(["RADIAL", "OPPOSING_FRONTS", "CROSSROADS", "RIVAL_CONTINENTS"] as const, random),
     polisSymmetry: randomItem(["EQUIVALENT", "MIRRORED", "ROTATIONAL", "ASYMMETRIC"] as const, random),
     polisExpansionPressure: randomItem(["RELAXED", "STANDARD", "IMMEDIATE"] as const, random),
@@ -1657,9 +1677,9 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     return finishStructuredGeography(geography, `A seeded ${resolved.fantasticality.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "eccentric"} map compiled by the Eccentric engine in ${geography.diagnostics.passes} geographic passes from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.climatePalettes} biome palettes, ${geography.diagnostics.astronomyBasins} astronomy basins, and ${geography.diagnostics.continents} continents`);
   }
   if (resolved.engine === "PHYSICAL") {
-    onProgress?.("Simulating tectonic plates and erosion");
+    onProgress?.("Simulating plates, circulation, climate, and watersheds");
     const geography = generatePhysicalGeography(resolved, width, height, wraps, seed, random);
-    return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} physical world formed from ${geography.structure.diagnostics.plates} moving plates, ${geography.structure.diagnostics.continents} continents, erosion, coupled climate, and west-to-east atmospheric moisture`);
+    return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} Physical world compiled in ${geography.structure.diagnostics.passes} passes from ${geography.structure.diagnostics.plates} moving plates, ${geography.structure.diagnostics.continents} continents, ${geography.structure.diagnostics.atmosphericCells} atmospheric cells, ${geography.structure.diagnostics.rainShadows} rain shadows, and ${geography.structure.diagnostics.watersheds} outlet-directed watersheds`);
   }
   if (resolved.engine === "POLIS") {
     onProgress?.("Compiling strategic graph and protected routes");
@@ -1689,6 +1709,10 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     DYNAMIC_EARTH: [5, [0.17, 0.3]],
     COLLIDING_PLATES: [3, [0.24, 0.4]],
     ANCIENT_CRATONS: [4, [0.2, 0.35]],
+    ISLAND_ARC_EARTH: [18, [0.05, 0.13]],
+    SUPERCONTINENT_INTERIOR: [2, [0.34, 0.48]],
+    MONSOON_CONTINENTS: [5, [0.16, 0.3]],
+    ICEHOUSE_EARTH: [4, [0.18, 0.32]],
     IMPERIAL_RING: [8, [0.08, 0.2]],
     OPPOSING_FRONTS: [6, [0.1, 0.22]],
     CONTESTED_HEARTLAND: [7, [0.09, 0.2]],
