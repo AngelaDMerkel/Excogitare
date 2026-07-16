@@ -1,5 +1,6 @@
 import type { Civ5Map, Civ5StartLocation } from "./civ5-map.ts";
 import { RIVER_DATA_MASK, RIVER_EDGE_MASK } from "./rivers.ts";
+import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 
 export type ValidationIssue = {
   severity: "ERROR" | "WARNING" | "INFO";
@@ -79,6 +80,7 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
   const occupied = new Set<string>();
   const playerIds = new Set<number>();
   const majorStarts = map.startLocations.filter((start) => !start.cityState);
+  if (!majorStarts.length) issues.push({ severity: "ERROR", category: "STARTS", message: "The map has no major-civilization start locations." });
   for (const start of map.startLocations) {
     if (start.x < 0 || start.y < 0 || start.x >= map.width || start.y >= map.height) {
       issues.push({ severity: "ERROR", category: "STARTS", message: `Player ${start.player + 1} starts outside the map.` });
@@ -92,6 +94,17 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
     const tile = map.tiles[start.y * map.width + start.x];
     if (tile && (tile.terrain < 2 || tile.elevation === 2)) issues.push({ severity: "ERROR", category: "STARTS", message: `Player ${start.player + 1} has an impassable start.`, x: start.x, y: start.y });
     if (start.cityState && start.playable) issues.push({ severity: "WARNING", category: "SCENARIO", message: `City state ${start.player + 1} is marked playable.`, x: start.x, y: start.y });
+  }
+  const closePairs: Array<{ one: Civ5StartLocation; two: Civ5StartLocation; distance: number }> = [];
+  for (let one = 0; one < map.startLocations.length; one += 1) {
+    for (let two = one + 1; two < map.startLocations.length; two += 1) {
+      const distance = hexDistance([map.startLocations[one].x, map.startLocations[one].y], [map.startLocations[two].x, map.startLocations[two].y], map.width, map.wraps);
+      if (distance < MINIMUM_START_DISTANCE) closePairs.push({ one: map.startLocations[one], two: map.startLocations[two], distance });
+    }
+  }
+  if (closePairs.length) {
+    const closest = closePairs.reduce((best, pair) => pair.distance < best.distance ? pair : best);
+    issues.push({ severity: "ERROR", category: "STARTS", message: `${closePairs.length} start-location pair${closePairs.length === 1 ? " is" : "s are"} closer than the required ${MINIMUM_START_DISTANCE} hexes; the closest pair is ${closest.distance} hexes apart.`, x: closest.two.x, y: closest.two.y });
   }
   if (majorStarts.length !== map.players) issues.push({ severity: "WARNING", category: "SCENARIO", message: `The header declares ${map.players} players but stores ${majorStarts.length} major starts.` });
 

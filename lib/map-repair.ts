@@ -1,7 +1,8 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 import { cloneGenerationStructure } from "./generation-structure.ts";
-import { generateRiverNetwork } from "./map-generator.ts";
+import { balanceMapStarts, DEFAULT_GENERATION_OPTIONS, generateRiverNetwork, MAP_SIZES } from "./map-generator.ts";
 import { RIVER_DATA_MASK, riverEdgeDefinitions } from "./rivers.ts";
+import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 import {
   adjacentCoordinates,
   featurePlacementVerdict,
@@ -21,6 +22,7 @@ export type RepairMutation =
   | { kind: "MOVE_WONDER"; from: number; to: number }
   | { kind: "MOVE_START"; startIndex: number; x: number; y: number }
   | { kind: "SET_START"; startIndex: number; changes: Partial<Civ5StartLocation> }
+  | { kind: "REPLACE_STARTS"; starts: Civ5StartLocation[]; players: number }
   | { kind: "MOVE_CITY"; id: number; fromX: number; fromY: number; x: number; y: number }
   | { kind: "REMOVE_CITY_LINK"; id: number; x: number; y: number }
   | { kind: "SET_RIVER_NETWORK"; rivers: number[] }
@@ -62,6 +64,38 @@ function hexDistance(a: [number, number], b: [number, number], width: number, wr
   };
   if (!wraps) return direct(a, b);
   return Math.min(direct(a, b), direct([a[0] - width, a[1]], b), direct([a[0] + width, a[1]], b));
+}
+
+function closestMapSize(map: Civ5Map) {
+  const area = map.width * map.height;
+  return [...MAP_SIZES].sort((one, two) => Math.abs(one.width * one.height - area) - Math.abs(two.width * two.height - area))[0];
+}
+
+function balancedReplacementStarts(map: Civ5Map, majorCount: number, cityStateCount: number) {
+  const size = closestMapSize(map);
+  const balanced = balanceMapStarts(map, {
+    ...DEFAULT_GENERATION_OPTIONS,
+    size: size.id,
+    seed: `repair-starts:${map.name}:${map.width}x${map.height}`,
+    players: Math.max(2, majorCount),
+    cityStates: Math.max(0, cityStateCount),
+    balance: "TOURNAMENT",
+    startQuality: "STANDARD",
+    strategicBalance: false,
+    cityStateMinSpacing: MINIMUM_START_DISTANCE,
+  });
+  const existingMajors = map.startLocations.filter((start) => !start.cityState);
+  const existingCityStates = map.startLocations.filter((start) => start.cityState);
+  const merge = (proposed: Civ5StartLocation[], existing: Civ5StartLocation[], cityState: boolean) => proposed.map((position, index) => existing[index]
+    ? { ...existing[index], x: position.x, y: position.y, playable: !cityState, cityState }
+    : { ...position, playable: !cityState, cityState });
+  const starts = [
+    ...merge(balanced.startLocations.filter((start) => !start.cityState), existingMajors, false),
+    ...merge(balanced.startLocations.filter((start) => start.cityState), existingCityStates, true),
+  ];
+  const players = starts.filter((start) => !start.cityState).length;
+  const cityStates = starts.filter((start) => start.cityState).length;
+  return { starts, players, cityStates, complete: players === Math.max(2, majorCount) && cityStates === Math.max(0, cityStateCount) };
 }
 
 type RepairRiverEdge = { a: string; b: string; tiles: [number, number] };
@@ -268,6 +302,31 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
     }
   }
 
+  const storedMajors = map.startLocations.filter((start) => !start.cityState);
+  const storedCityStates = map.startLocations.filter((start) => start.cityState);
+  const missingMajorStarts = storedMajors.length === 0;
+  if (missingMajorStarts) {
+    const size = closestMapSize(map);
+    const writablePlayerSlots = map.source === "file" ? map.scenarioPlayerSlots ?? 0 : Math.max(0, map.players);
+    const targetPlayers = writablePlayerSlots > 0 ? writablePlayerSlots : map.players >= 2 ? map.players : size.recommendedPlayers;
+    const candidateReplacement = writablePlayerSlots >= 2 || map.source !== "file"
+      ? balancedReplacementStarts(map, targetPlayers, Math.min(map.scenarioCityStateSlots ?? storedCityStates.length, size.recommendedCityStates))
+      : undefined;
+    const replacement = candidateReplacement?.complete ? candidateReplacement : undefined;
+    add({
+      id: "missing-start-locations",
+      category: "STARTS",
+      severity: "ERROR",
+      confidence: "CERTAIN",
+      title: "Map has no start locations",
+      detail: replacement
+        ? `Create ${replacement.players} legal major-civilization starts at least ${MINIMUM_START_DISTANCE} hexes apart using the map's writable scenario player slots.`
+        : "A playable map requires major-civilization starts. This file exposes no writable scenario player slots, so Excogitare cannot safely invent records that would survive export. Add scenario players in Civ V WorldBuilder, then run Repair again.",
+      mutation: replacement ? { kind: "REPLACE_STARTS", starts: replacement.starts, players: replacement.players } : undefined,
+      minimumProfile: "SAFE",
+    });
+  }
+
   const occupiedStarts = new Set<number>();
   for (let startIndex = 0; startIndex < map.startLocations.length; startIndex += 1) {
     const start = map.startLocations[startIndex];
@@ -294,19 +353,47 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
     }
   }
 
-  const starts = map.startLocations.filter((start) => !start.cityState);
-  // Create's balance tools already explain deliberate close-start scenarios on
-  // extreme geometry maps. Repair reserves this imported-map advisory for
-  // foreign files while retaining all hard correctness checks for every map.
-  if (map.source !== "generated") {
-    for (let one = 0; one < starts.length; one += 1) {
-      for (let two = one + 1; two < starts.length; two += 1) {
-        const distance = hexDistance([starts[one].x, starts[one].y], [starts[two].x, starts[two].y], map.width, map.wraps);
-        if (distance < 4) add({ id: `start-spacing-${one}-${two}`, category: "STARTS", severity: "WARNING", confidence: "REVIEW", title: "Major starts are very close", detail: `Players ${starts[one].player + 1} and ${starts[two].player + 1} are only ${distance} hexes apart. Competitive repair recommends manual review.`, x: starts[two].x, y: starts[two].y, tileIndex: starts[two].y * map.width + starts[two].x, minimumProfile: "COMPETITIVE" });
-      }
+  const closePairs: Array<{ one: Civ5StartLocation; two: Civ5StartLocation; distance: number }> = [];
+  for (let one = 0; one < map.startLocations.length; one += 1) {
+    for (let two = one + 1; two < map.startLocations.length; two += 1) {
+      const distance = hexDistance([map.startLocations[one].x, map.startLocations[one].y], [map.startLocations[two].x, map.startLocations[two].y], map.width, map.wraps);
+      if (distance < MINIMUM_START_DISTANCE) closePairs.push({ one: map.startLocations[one], two: map.startLocations[two], distance });
     }
   }
-  if (starts.length !== map.players) add({ id: "player-count", category: "SCENARIO", severity: "WARNING", confidence: "CERTAIN", title: "Player count mismatch", detail: `Set the header player count from ${map.players} to ${starts.length}.`, mutation: { kind: "SET_PLAYERS", players: starts.length }, minimumProfile: "SAFE" });
+  const rebalanced = !missingMajorStarts && storedMajors.length
+    ? balancedReplacementStarts(map, storedMajors.length, storedCityStates.length)
+    : undefined;
+  if (closePairs.length && rebalanced) {
+    const closest = closePairs.reduce((best, pair) => pair.distance < best.distance ? pair : best);
+    add({
+      id: "start-spacing",
+      category: "STARTS",
+      severity: "ERROR",
+      confidence: "CERTAIN",
+      title: "Start locations are overcrowded",
+      detail: rebalanced.complete
+        ? `${closePairs.length} pair${closePairs.length === 1 ? " is" : "s are"} closer than the required ${MINIMUM_START_DISTANCE} hexes; the closest pair is ${closest.distance} hexes apart. Replace the complete layout with separated, comparable starting sites.`
+        : `${closePairs.length} pair${closePairs.length === 1 ? " is" : "s are"} closer than the required ${MINIMUM_START_DISTANCE} hexes; the closest pair is ${closest.distance} hexes apart. This terrain cannot fit every stored start at the required separation; reduce the scenario population or edit the geography.`,
+      x: closest.two.x,
+      y: closest.two.y,
+      tileIndex: closest.two.y * map.width + closest.two.x,
+      mutation: rebalanced.complete ? { kind: "REPLACE_STARTS", starts: rebalanced.starts, players: rebalanced.players } : undefined,
+      minimumProfile: "SAFE",
+    });
+  } else if (map.source === "file" && rebalanced?.complete) {
+    const changed = rebalanced.starts.some((start, index) => map.startLocations[index]?.x !== start.x || map.startLocations[index]?.y !== start.y);
+    if (changed) add({
+      id: "start-balance",
+      category: "STARTS",
+      severity: "INFO",
+      confidence: "REVIEW",
+      title: "Competitive start balancing",
+      detail: `Relocate the complete start layout to favor comparable workable terrain while retaining at least ${MINIMUM_START_DISTANCE} hexes between every major and city-state start.`,
+      mutation: { kind: "REPLACE_STARTS", starts: rebalanced.starts, players: rebalanced.players },
+      minimumProfile: "COMPETITIVE",
+    });
+  }
+  if (!missingMajorStarts && storedMajors.length !== map.players) add({ id: "player-count", category: "SCENARIO", severity: "WARNING", confidence: "CERTAIN", title: "Player count mismatch", detail: `Set the header player count from ${map.players} to ${storedMajors.length}.`, mutation: { kind: "SET_PLAYERS", players: storedMajors.length }, minimumProfile: "SAFE" });
 
   if (!issues.length) add({ id: "clean", category: "STRUCTURE", severity: "INFO", confidence: "CERTAIN", title: "No repairs required", detail: "The supported geography, placement, river, and start-location checks passed.", minimumProfile: "SAFE" });
   return issues;
@@ -333,6 +420,10 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
       result.tiles[mutation.from].wonder = 255;
     } else if (mutation.kind === "MOVE_START") Object.assign(result.startLocations[mutation.startIndex], { x: mutation.x, y: mutation.y });
     else if (mutation.kind === "SET_START") Object.assign(result.startLocations[mutation.startIndex], mutation.changes);
+    else if (mutation.kind === "REPLACE_STARTS") {
+      result.startLocations = mutation.starts.map((start) => ({ ...start }));
+      result.players = mutation.players;
+    }
     else if (mutation.kind === "MOVE_CITY") {
       const city = result.cities?.find((candidate) => candidate.id === mutation.id && candidate.x === mutation.fromX && candidate.y === mutation.fromY);
       if (city) Object.assign(city, { x: mutation.x, y: mutation.y });

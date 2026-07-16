@@ -50,6 +50,8 @@ export type Civ5Map = {
   resources: string[];
   tiles: Civ5Tile[];
   startLocations: Civ5StartLocation[];
+  scenarioPlayerSlots?: number;
+  scenarioCityStateSlots?: number;
   cities?: Civ5City[];
   source: "demo" | "file" | "generated" | "script";
   generation?: import("./map-generator.ts").MapGenerationOptions;
@@ -276,6 +278,25 @@ function parseStartLocations(
   return startLocations;
 }
 
+function parseScenarioSlotCounts(
+  view: DataView,
+  bytes: Uint8Array,
+  scenarioOffset: number,
+  width: number,
+  height: number,
+) {
+  if (scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE > bytes.byteLength) return undefined;
+  const players = view.getUint8(scenarioOffset + 80);
+  const cityStates = view.getUint8(scenarioOffset + 81);
+  const recordCount = players + cityStates;
+  if (!recordCount || recordCount > 128) return undefined;
+  const improvementDataSize = width * height * TILE_SIZE;
+  const playerDataSize = recordCount * PLAYER_RECORD_SIZE;
+  const playerDataOffset = bytes.byteLength - improvementDataSize - playerDataSize;
+  if (playerDataOffset < scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE || playerDataOffset + playerDataSize > bytes.byteLength) return undefined;
+  return { players, cityStates };
+}
+
 function parseScenarioTileMetadata(
   view: DataView,
   bytes: Uint8Array,
@@ -437,6 +458,7 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
   }
 
   parseScenarioTileMetadata(view, bytes, offset, width, height, tiles);
+  const scenarioSlots = parseScenarioSlotCounts(view, bytes, offset, width, height);
   const startLocations = parseStartLocations(view, bytes, offset, width, height);
   const cities = parseCities(view, bytes, offset, width, height, version);
 
@@ -455,6 +477,8 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     resources,
     tiles,
     startLocations,
+    scenarioPlayerSlots: scenarioSlots?.players,
+    scenarioCityStateSlots: scenarioSlots?.cityStates,
     cities,
     source: "file",
   };

@@ -6,17 +6,25 @@ import { generatePhysicalGeography } from "./physical-generator.ts";
 import { generatePolisGeography } from "./polis-generator.ts";
 import { generateRegionGraphGeography } from "./region-graph-generator.ts";
 import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
+import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 
 export const MAP_SIZES = [
-  { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 4 },
-  { id: "TINY", label: "Tiny", width: 56, height: 36, recommendedPlayers: 4, recommendedCityStates: 8 },
-  { id: "SMALL", label: "Small", width: 66, height: 42, recommendedPlayers: 6, recommendedCityStates: 12 },
-  { id: "STANDARD", label: "Standard", width: 80, height: 52, recommendedPlayers: 8, recommendedCityStates: 16 },
-  { id: "LARGE", label: "Large", width: 104, height: 64, recommendedPlayers: 10, recommendedCityStates: 20 },
-  { id: "HUGE", label: "Huge", width: 128, height: 80, recommendedPlayers: 12, recommendedCityStates: 24 },
+  { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 2, gameBreaking: false },
+  { id: "TINY", label: "Tiny", width: 56, height: 36, recommendedPlayers: 4, recommendedCityStates: 4, gameBreaking: false },
+  { id: "SMALL", label: "Small", width: 66, height: 42, recommendedPlayers: 6, recommendedCityStates: 6, gameBreaking: false },
+  { id: "STANDARD", label: "Standard", width: 80, height: 52, recommendedPlayers: 8, recommendedCityStates: 8, gameBreaking: false },
+  { id: "LARGE", label: "Large", width: 104, height: 64, recommendedPlayers: 10, recommendedCityStates: 10, gameBreaking: false },
+  { id: "HUGE", label: "Huge", width: 128, height: 80, recommendedPlayers: 12, recommendedCityStates: 12, gameBreaking: false },
+  { id: "EXTREME", label: "Extreme", width: 180, height: 94, recommendedPlayers: 20, recommendedCityStates: 20, gameBreaking: true },
+  { id: "COLOSSAL", label: "Colossal", width: 170, height: 110, recommendedPlayers: 22, recommendedCityStates: 22, gameBreaking: true },
 ] as const;
 
 export type MapSizeId = (typeof MAP_SIZES)[number]["id"];
+export const GAME_BREAKING_MAP_SIZES = ["EXTREME", "COLOSSAL"] as const satisfies ReadonlyArray<MapSizeId>;
+export const SAFE_MAP_SIZES = ["DUEL", "TINY", "SMALL", "STANDARD", "LARGE", "HUGE"] as const satisfies ReadonlyArray<MapSizeId>;
+export function isGameBreakingMapSize(size: MapSizeId) {
+  return (GAME_BREAKING_MAP_SIZES as ReadonlyArray<MapSizeId>).includes(size);
+}
 export type MapPresetId =
   | "CONTINENTS"
   | "PANGAEA"
@@ -235,7 +243,7 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   size: "STANDARD",
   seed: "excogitare",
   players: 8,
-  cityStates: 16,
+  cityStates: 8,
   balance: "STANDARD",
   teamSize: 2,
   teamLayout: "CLUSTERED",
@@ -262,7 +270,7 @@ export const DEFAULT_GENERATION_OPTIONS: MapGenerationOptions = {
   wonderCount: 5,
   wonderMinSpacing: 8,
   wonderStartBuffer: 5,
-  cityStateMinSpacing: 4,
+  cityStateMinSpacing: MINIMUM_START_DISTANCE,
   cityStateDistribution: "EVEN",
   cityStateCoastalPreference: "ANY",
   barbarianAbundance: "STANDARD",
@@ -293,15 +301,19 @@ function randomItem<T>(items: readonly T[], random: () => number) {
   return items[Math.min(items.length - 1, Math.floor(random() * items.length))];
 }
 
-export function randomGenerationOptions(random: () => number = Math.random, includeGameBreakingGeometry = false): MapGenerationOptions {
+export function randomGenerationOptions(random: () => number = Math.random, includeGameBreakingOptions = false): MapGenerationOptions {
   const style = randomItem(["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const, random);
   const presetConfig = randomItem(MAP_PRESETS, random);
   const preset = presetConfig.id;
-  const size = randomItem(MAP_SIZES, random).id;
+  const sizeConfig = randomItem(MAP_SIZES.filter((size) => includeGameBreakingOptions || !size.gameBreaking), random);
+  const size = sizeConfig.id;
   const modifier = randomItem(WORLD_MODIFIERS, random).id;
   const minimumMountains = modifier === "STRATEGIC_DEPTH" ? 22 : modifier === "DOOMSDAY" || style === "BRUTAL" ? 18 : 0;
   const dominantTerrains = DOMINANT_TERRAINS.filter(() => random() < 0.36).map((terrain) => terrain.id);
   const seedPart = () => Math.floor(random() * 0x100000000).toString(36).padStart(7, "0");
+  const playerMaximum = Math.min(22, sizeConfig.recommendedPlayers + 2);
+  const players = 2 + Math.floor(random() * Math.max(1, playerMaximum - 1));
+  const cityStates = Math.floor(random() * (sizeConfig.recommendedCityStates + 1));
   return {
     ...DEFAULT_GENERATION_OPTIONS,
     projectionType: randomItem(["NORTH_SOUTH", "POLAR_CENTERED", "EQUATORIAL_POLE"] as const, random),
@@ -311,12 +323,12 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     modifier,
     engine: presetConfig.engine,
     wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
-    geometry: randomItem(includeGameBreakingGeometry ? [...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES] : SAFE_MAP_GEOMETRIES, random),
+    geometry: randomItem(includeGameBreakingOptions ? [...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES] : SAFE_MAP_GEOMETRIES, random),
     waterPercent: Math.floor(random() * 91),
     mountainPercent: minimumMountains + Math.floor(random() * (39 - minimumMountains)),
     dominantTerrains,
-    players: 2 + Math.floor(random() * 21),
-    cityStates: Math.floor(random() * 42),
+    players,
+    cityStates,
     balance: randomItem(["STANDARD", "TOURNAMENT", "TEAMS"] as const, random),
     teamSize: randomItem([2, 3, 4] as const, random),
     teamLayout: randomItem(["CLUSTERED", "FRONTLINES", "DISTRIBUTED"] as const, random),
@@ -335,7 +347,7 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     wonderCount: Math.floor(random() * 11),
     wonderMinSpacing: 5 + Math.floor(random() * 8),
     wonderStartBuffer: 3 + Math.floor(random() * 7),
-    cityStateMinSpacing: 2 + Math.floor(random() * 6),
+    cityStateMinSpacing: MINIMUM_START_DISTANCE + Math.floor(random() * 4),
     cityStateDistribution: randomItem(["EVEN", "REGIONAL"] as const, random),
     cityStateCoastalPreference: randomItem(["ANY", "PREFER", "REQUIRE"] as const, random),
     barbarianAbundance: randomItem(["NONE", "SCARCE", "STANDARD", "RAGING"] as const, random),
@@ -1001,43 +1013,85 @@ function placeStartLocations(
   teamLayout: TeamLayout,
   random: () => number,
 ) {
-  const candidates: Array<[number, number]> = [];
+  type StartCandidate = { point: [number, number]; quality: number; workable: number; regionSize: number; rank: number };
+  const candidates: StartCandidate[] = [];
+  const rankSeed = Math.floor(random() * 0x7fffffff);
   const regionSizes = passableRegionSizes(tiles, width, height, wraps);
   const minimumRegionSize = Math.min(12, Math.max(...regionSizes));
-  for (let y = 2; y < height - 2; y += 1) {
+  for (let y = 1; y < height - 1; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
       const tile = tiles[index];
       if (tile.terrain < 2 || tile.elevation === 2) continue;
-      if (regionSizes[index] < minimumRegionSize) continue;
-      const workable = neighbors(x, y, width, height, wraps).filter(([nx, ny]) => {
+      const adjacent = neighbors(x, y, width, height, wraps);
+      const workable = adjacent.filter(([nx, ny]) => {
         const neighbor = tiles[ny * width + nx];
         return neighbor.terrain >= 2 && neighbor.elevation < 2;
       }).length;
-      if (workable >= 4) candidates.push([x, y]);
+      const terrainQuality = adjacent.reduce((score, [nx, ny]) => {
+        const neighbor = tiles[ny * width + nx];
+        if (neighbor.terrain < 2 || neighbor.elevation === 2) return score;
+        return score + (neighbor.terrain === 2 ? 2.1 : neighbor.terrain === 3 ? 1.7 : neighbor.terrain === 5 ? 1.15 : 0.8) + (neighbor.resource !== 255 ? 1.6 : 0);
+      }, 0);
+      candidates.push({ point: [x, y], quality: workable * 1.8 + terrainQuality, workable, regionSize: regionSizes[index], rank: hashNoise(x, y, rankSeed) });
     }
   }
   if (!candidates.length) return [];
-
-  const selected: Array<[number, number]> = [candidates[Math.floor(random() * candidates.length)]];
-  while (selected.length < count && selected.length < candidates.length) {
-    let best = candidates[0];
-    let bestScore = -1;
-    for (const candidate of candidates) {
-      if (selected.some((item) => item[0] === candidate[0] && item[1] === candidate[1])) continue;
-      const nearest = Math.min(...selected.map((item) => hexDistance(candidate, item, width, wraps)));
-      const localYield = neighbors(candidate[0], candidate[1], width, height, wraps).reduce((score, [x, y]) => {
-        const tile = tiles[y * width + x];
-        return score + (tile.terrain === 2 ? 2 : tile.terrain === 3 ? 1.4 : tile.terrain >= 4 ? 0.8 : 0.25) + (tile.resource !== 255 ? 1 : 0);
-      }, 0);
-      const target = balance === "TOURNAMENT" ? nearest * 2.5 + localYield : nearest * 3 + localYield * 0.35;
-      if (target > bestScore) {
-        bestScore = target;
-        best = candidate;
+  const preferredCandidates = candidates.filter((candidate) => candidate.workable >= 4 && candidate.regionSize >= minimumRegionSize);
+  let candidatePool = preferredCandidates.length >= count ? preferredCandidates : candidates;
+  let qualities = candidatePool.map((candidate) => candidate.quality).sort((one, two) => one - two);
+  let targetQuality = qualities[Math.floor(qualities.length / 2)];
+  const trialOriginsForPool = () => [...candidatePool]
+    .sort((one, two) => balance === "TOURNAMENT"
+      ? Math.abs(one.quality - targetQuality) - Math.abs(two.quality - targetQuality) || one.rank - two.rank
+      : one.rank - two.rank)
+    .slice(0, Math.min(candidatePool.length, balance === "TOURNAMENT" ? 16 : 8));
+  const buildLayout = (origin: StartCandidate) => {
+    const chosen = [origin];
+    const occupied = new Set([`${origin.point[0]},${origin.point[1]}`]);
+    while (chosen.length < count) {
+      let best: StartCandidate | undefined;
+      let bestScore = Number.NEGATIVE_INFINITY;
+      for (const candidate of candidatePool) {
+        if (occupied.has(`${candidate.point[0]},${candidate.point[1]}`)) continue;
+        const nearest = Math.min(...chosen.map((item) => hexDistance(candidate.point, item.point, width, wraps)));
+        if (nearest < MINIMUM_START_DISTANCE) continue;
+        const comparableSite = -Math.abs(candidate.quality - targetQuality);
+        const score = balance === "TOURNAMENT"
+          ? nearest * 3.1 + comparableSite * 2.7 + candidate.rank * 0.02
+          : nearest * 4 + candidate.quality * 0.16 + candidate.rank * 0.02;
+        if (score > bestScore) {
+          bestScore = score;
+          best = candidate;
+        }
       }
+      if (!best) break;
+      chosen.push(best);
+      occupied.add(`${best.point[0]},${best.point[1]}`);
     }
-    selected.push(best);
+    return chosen;
+  };
+  const layouts = trialOriginsForPool().map(buildLayout);
+  const sortLayouts = () => layouts.sort((one, two) => {
+    if (two.length !== one.length) return two.length - one.length;
+    const qualitySpread = (layout: StartCandidate[]) => Math.max(...layout.map((item) => item.quality)) - Math.min(...layout.map((item) => item.quality));
+    const minimumDistance = (layout: StartCandidate[]) => {
+      let result = Number.POSITIVE_INFINITY;
+      for (let a = 0; a < layout.length; a += 1) for (let b = a + 1; b < layout.length; b += 1) result = Math.min(result, hexDistance(layout[a].point, layout[b].point, width, wraps));
+      return Number.isFinite(result) ? result : width + height;
+    };
+    if (balance === "TOURNAMENT") return qualitySpread(one) - qualitySpread(two) || minimumDistance(two) - minimumDistance(one);
+    return minimumDistance(two) - minimumDistance(one) || qualitySpread(one) - qualitySpread(two);
+  });
+  sortLayouts();
+  if ((layouts[0]?.length ?? 0) < count && candidatePool !== candidates) {
+    candidatePool = candidates;
+    qualities = candidatePool.map((candidate) => candidate.quality).sort((one, two) => one - two);
+    targetQuality = qualities[Math.floor(qualities.length / 2)];
+    layouts.push(...trialOriginsForPool().map(buildLayout));
+    sortLayouts();
   }
+  const selected = (layouts[0] ?? []).map((candidate) => candidate.point);
 
   if (balance === "TEAMS" && selected.length > 3) {
     let ordered: Array<[number, number]> = [];
@@ -1132,7 +1186,7 @@ function placeCityStateLocations(
         const tile = tiles[y * width + x];
         return score + (tile.terrain >= 2 && tile.elevation < 2 ? 1 : 0) + (tile.resource !== 255 ? 0.5 : 0);
       }, 0);
-      if (nearest < minimumSpacing) continue;
+      if (nearest < Math.max(MINIMUM_START_DISTANCE, Math.round(minimumSpacing))) continue;
       const coastal = neighbors(candidate[0], candidate[1], width, height, wraps).some(([x, y]) => tiles[y * width + x].terrain < 2);
       const region = Math.min(3, Math.floor(candidate[0] / Math.max(1, width) * 4));
       const regionCount = selected.filter(([x]) => Math.min(3, Math.floor(x / Math.max(1, width) * 4)) === region).length;
@@ -1460,9 +1514,9 @@ export function balanceMapStarts(map: Civ5Map, options: MapGenerationOptions) {
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
     normalizeStarts(tiles, majorStarts, map.width, map.height, map.wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
-  const cityStates = placeCityStateLocations(tiles, map.width, map.height, cityStateCount, playerCount, map.wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+  const cityStates = placeCityStateLocations(tiles, map.width, map.height, cityStateCount, majorStarts.length, map.wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
   const startLocations = [...majorStarts, ...cityStates];
-  return { ...map, tiles, players: playerCount, startLocations };
+  return { ...map, tiles, players: majorStarts.length, startLocations };
 }
 
 export function regenerateMapRivers(map: Civ5Map, options: MapGenerationOptions, variation = 1) {
@@ -1534,12 +1588,13 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     const majorStarts = geography.startLocations
       ? geography.startLocations.filter((start) => !start.cityState).map((start) => ({ ...start }))
       : placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
+    const actualPlayerCount = majorStarts.length;
     if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
       normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
     }
     const cityStates = geography.startLocations
       ? geography.startLocations.filter((start) => start.cityState).map((start) => ({ ...start }))
-      : placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+      : placeCityStateLocations(tiles, width, height, cityStateCount, actualPlayerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
     const startLocations = [...majorStarts, ...cityStates];
     onProgress?.("Placing resources and wonders");
     const contestedTiles = geography.structure.objects
@@ -1568,7 +1623,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       version: 12,
       width,
       height,
-      players: playerCount,
+      players: actualPlayerCount,
       wraps,
       terrains: [...TERRAINS],
       features: [...FEATURES],
@@ -1577,7 +1632,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       tiles,
       startLocations,
       source: "generated",
-      generation: { ...resolved, waterPercent: clamp(resolved.waterPercent, 0, 90), mountainPercent: effectiveMountainPercent },
+      generation: { ...resolved, players: actualPlayerCount, cityStates: cityStates.length, waterPercent: clamp(resolved.waterPercent, 0, 90), mountainPercent: effectiveMountainPercent },
       structure,
     });
     return { ...legal, structure: attachRiverSystems(legal, structure) };
@@ -1789,10 +1844,11 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
   const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
   onProgress?.("Placing players and city states");
   const majorStarts = placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
+  const actualPlayerCount = majorStarts.length;
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
     normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
-  const cityStates = placeCityStateLocations(tiles, width, height, cityStateCount, playerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+  const cityStates = placeCityStateLocations(tiles, width, height, cityStateCount, actualPlayerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
   const startLocations = [...majorStarts, ...cityStates];
   onProgress?.("Placing resources and wonders");
   applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random);
@@ -1821,7 +1877,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     version: 12,
     width,
     height,
-    players: playerCount,
+    players: actualPlayerCount,
     wraps,
     terrains: [...TERRAINS],
     features: [...FEATURES],
@@ -1830,7 +1886,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     tiles,
     startLocations,
     source: "generated",
-    generation: { ...resolved, waterPercent, mountainPercent: effectiveMountainPercent },
+    generation: { ...resolved, players: actualPlayerCount, cityStates: cityStates.length, waterPercent, mountainPercent: effectiveMountainPercent },
     structure,
   });
   return { ...legal, structure: attachRiverSystems(legal, structure) };

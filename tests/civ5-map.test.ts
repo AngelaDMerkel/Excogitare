@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata, type Civ5Map, type Civ5Tile } from "../lib/civ5-map.ts";
-import { DEFAULT_GENERATION_OPTIONS, GAME_BREAKING_GEOMETRIES, generateMap, MAP_PRESETS, randomGenerationOptions, resolveMapDimensions, SAFE_MAP_GEOMETRIES } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, GAME_BREAKING_GEOMETRIES, GAME_BREAKING_MAP_SIZES, generateMap, isGameBreakingMapSize, MAP_PRESETS, MAP_SIZES, randomGenerationOptions, resolveMapDimensions, SAFE_MAP_GEOMETRIES, SAFE_MAP_SIZES } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapExportBaseName, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "../lib/generation-history.ts";
@@ -11,6 +11,8 @@ import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "../
 import { fitViewport, minimumViewportZoom } from "../lib/map-viewport.ts";
 import { RIVER_DATA_MASK, riverEdgeDefinitions, riverFlowsFromAToB } from "../lib/rivers.ts";
 import { poleProximity } from "../lib/climate-projection.ts";
+import { MINIMUM_START_DISTANCE } from "../lib/start-locations.ts";
+import { generatePolisGeography } from "../lib/polis-generator.ts";
 
 const encoder = new TextEncoder();
 
@@ -64,6 +66,28 @@ function adjacentIndices(index: number, width: number, height: number, wraps: bo
     if (wraps) nextX = (nextX + width) % width;
     return nextX >= 0 && nextX < width && nextY >= 0 && nextY < height ? [nextY * width + nextX] : [];
   });
+}
+
+function startDistance(one: { x: number; y: number }, two: { x: number; y: number }, width: number, wraps: boolean) {
+  const cube = ({ x, y }: { x: number; y: number }) => {
+    const q = x - (y - (y & 1)) / 2;
+    return [q, -q - y, y];
+  };
+  const direct = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const ac = cube(a);
+    const bc = cube(b);
+    return Math.max(Math.abs(ac[0] - bc[0]), Math.abs(ac[1] - bc[1]), Math.abs(ac[2] - bc[2]));
+  };
+  if (!wraps) return direct(one, two);
+  return Math.min(direct(one, two), direct({ x: one.x - width, y: one.y }, two), direct({ x: one.x + width, y: one.y }, two));
+}
+
+function assertStartSpacing(map: Civ5Map, minimum = MINIMUM_START_DISTANCE) {
+  for (let one = 0; one < map.startLocations.length; one += 1) {
+    for (let two = one + 1; two < map.startLocations.length; two += 1) {
+      assert.ok(startDistance(map.startLocations[one], map.startLocations[two], map.width, map.wraps) >= minimum, `starts ${one} and ${two} were too close`);
+    }
+  }
 }
 
 function assertMountainPassability(map: ReturnType<typeof generateMap>) {
@@ -263,6 +287,69 @@ function createScenarioMap() {
   return buffer;
 }
 
+function createScenarioMapWithMissingStarts() {
+  const width = 40;
+  const height = 24;
+  const playerCount = 2;
+  const terrain = encoder.encode("TERRAIN_OCEAN\0TERRAIN_COAST\0TERRAIN_GRASS\0");
+  const name = encoder.encode("Missing starts");
+  const description = encoder.encode("Scenario records have invalid coordinates");
+  const worldSize = encoder.encode("WORLDSIZE_DUEL");
+  const tileDataSize = width * height * 8;
+  const tileOffset = 42 + terrain.length + name.length + description.length + 4 + worldSize.length;
+  const scenarioOffset = tileOffset + tileDataSize;
+  const playerOffset = scenarioOffset + 120;
+  const improvementOffset = playerOffset + playerCount * 436;
+  const buffer = new ArrayBuffer(improvementOffset + tileDataSize);
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  view.setUint8(0, 0x1c);
+  view.setUint32(1, width, true);
+  view.setUint32(5, height, true);
+  view.setUint8(9, playerCount);
+  view.setUint32(14, terrain.length, true);
+  view.setUint32(34, name.length, true);
+  view.setUint32(38, description.length, true);
+  let offset = 42;
+  bytes.set(terrain, offset);
+  offset += terrain.length;
+  bytes.set(name, offset);
+  offset += name.length;
+  bytes.set(description, offset);
+  offset += description.length;
+  view.setUint32(offset, worldSize.length, true);
+  offset += 4;
+  bytes.set(worldSize, offset);
+  offset += worldSize.length;
+  for (let index = 0; index < width * height; index += 1) {
+    const tile = offset + index * 8;
+    view.setUint8(tile, 2);
+    view.setUint8(tile + 1, 0xff);
+    view.setUint8(tile + 2, 0xff);
+    view.setUint8(tile + 5, 1);
+    view.setUint8(tile + 6, 0xff);
+  }
+  view.setUint8(scenarioOffset + 80, playerCount);
+  for (let player = 0; player < playerCount; player += 1) {
+    const record = playerOffset + player * 436;
+    bytes.set(encoder.encode(`CIVILIZATION_TEST_${player}`), record + 160);
+    view.setUint32(record + 424, width + player, true);
+    view.setUint32(record + 428, height + player, true);
+    view.setUint8(record + 432, player);
+    view.setUint8(record + 433, 1);
+  }
+  for (let index = 0; index < width * height; index += 1) {
+    const improvement = improvementOffset + index * 8;
+    view.setUint16(improvement, 0xffff, true);
+    view.setUint16(improvement + 2, 0xffff, true);
+    view.setUint8(improvement + 4, 0xff);
+    view.setUint8(improvement + 5, 0xff);
+    view.setUint8(improvement + 6, 0xff);
+    view.setUint8(improvement + 7, 0xff);
+  }
+  return buffer;
+}
+
 function createScenarioCityMap() {
   const width = 2;
   const height = 2;
@@ -352,6 +439,8 @@ test("rewrites map metadata without disturbing scenario data", () => {
 
 test("parses scenario political ownership, player colors, and routes", () => {
   const parsed = parseCiv5Map(createScenarioMap(), "political.Civ5Map");
+  assert.equal(parsed.scenarioPlayerSlots, 1);
+  assert.equal(parsed.scenarioCityStateSlots, 0);
   assert.deepEqual(parsed.tiles.map((tile) => tile.owner), [0, 0, undefined, undefined]);
   assert.equal(parsed.tiles[0].route, "ROUTE_ROAD");
   assert.equal(parsed.startLocations[0].teamColor, "PLAYERCOLOR_RED");
@@ -405,6 +494,20 @@ test("exports repaired start coordinates and scenario flags into player records"
   assert.equal(parsed.startLocations[0].team, 4);
   assert.equal(parsed.startLocations[0].playable, false);
   assert.equal(parsed.players, 1);
+});
+
+test("repaired missing starts survive export through existing scenario player slots", () => {
+  const original = createScenarioMapWithMissingStarts();
+  const imported = parseCiv5Map(original, "missing-starts.Civ5Map");
+  assert.equal(imported.startLocations.length, 0);
+  assert.equal(imported.scenarioPlayerSlots, 2);
+  const issues = buildRepairIssues(imported);
+  const missing = issues.find((issue) => issue.id === "missing-start-locations");
+  assert.equal(missing?.mutation?.kind, "REPLACE_STARTS");
+  const repaired = applyRepairIssues(imported, issues, new Set([missing!.id]));
+  const roundTripped = parseCiv5Map(updateCiv5Map(original, repaired), "missing-starts-repaired.Civ5Map");
+  assert.equal(roundTripped.startLocations.filter((start) => !start.cityState).length, 2);
+  assertStartSpacing(roundTripped);
 });
 
 test("repairs scenario cities placed on water and preserves the corrected tile link on export", () => {
@@ -587,6 +690,112 @@ test("start-location repair tests cover passability, duplicates, counts, city-st
   };
   for (const neighbor of adjacentIndices(7, pocket.width, pocket.height, false)) pocket.tiles[neighbor].elevation = 2;
   assert.ok(buildRepairIssues(pocket).some((issue) => issue.id === "start-access-0" && issue.mutation?.kind === "MOVE_START"));
+});
+
+test("Repair treats missing start locations as an error and rebuilds writable scenario slots", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 4, cityStates: 0, seed: "missing-start-fixture" });
+  const writable: Civ5Map = { ...generated, source: "file", players: 4, scenarioPlayerSlots: 4, scenarioCityStateSlots: 0, startLocations: [] };
+  const issues = buildRepairIssues(writable);
+  const missing = issues.find((issue) => issue.id === "missing-start-locations");
+  assert.equal(missing?.severity, "ERROR");
+  assert.equal(missing?.mutation?.kind, "REPLACE_STARTS");
+  const repaired = applyRepairIssues(writable, issues, new Set([missing!.id]));
+  assert.equal(repaired.startLocations.filter((start) => !start.cityState).length, 4);
+  assert.equal(repaired.players, 4);
+  assertStartSpacing(repaired);
+  assert.equal(validateCiv5Map(repaired).some((issue) => issue.category === "STARTS" && issue.severity === "ERROR"), false);
+
+  const noSlots: Civ5Map = { ...writable, players: 0, scenarioPlayerSlots: 0 };
+  const blocked = buildRepairIssues(noSlots).find((issue) => issue.id === "missing-start-locations");
+  assert.equal(blocked?.severity, "ERROR");
+  assert.equal(blocked?.mutation, undefined);
+  assert.match(blocked?.detail ?? "", /no writable scenario player slots/i);
+  assert.ok(validateCiv5Map(noSlots).some((issue) => issue.category === "STARTS" && issue.severity === "ERROR"));
+});
+
+test("Repair replaces overcrowded starts and Competitive balancing changes the whole layout", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 4, cityStates: 3, balance: "STANDARD", startQuality: "STANDARD", seed: "start-rebalance-fixture" });
+  const imported: Civ5Map = { ...generated, source: "file", scenarioPlayerSlots: 4, scenarioCityStateSlots: 3, startLocations: generated.startLocations.map((start) => ({ ...start })) };
+  const first = imported.startLocations[0];
+  const nearbyIndex = imported.tiles.findIndex((tile, index) => tile.terrain >= 2 && tile.elevation < 2 && startDistance(first, { x: index % imported.width, y: Math.floor(index / imported.width) }, imported.width, imported.wraps) === 2);
+  assert.ok(nearbyIndex >= 0);
+  imported.startLocations[1].x = nearbyIndex % imported.width;
+  imported.startLocations[1].y = Math.floor(nearbyIndex / imported.width);
+  const crowdedIssues = buildRepairIssues(imported);
+  const spacing = crowdedIssues.find((issue) => issue.id === "start-spacing");
+  assert.equal(spacing?.severity, "ERROR");
+  assert.equal(spacing?.mutation?.kind, "REPLACE_STARTS");
+  const separated = applyRepairIssues(imported, crowdedIssues, new Set([spacing!.id]));
+  assertStartSpacing(separated);
+
+  const validImported: Civ5Map = { ...generated, source: "file", scenarioPlayerSlots: 4, scenarioCityStateSlots: 3, startLocations: generated.startLocations.map((start) => ({ ...start })) };
+  const balanceIssue = buildRepairIssues(validImported).find((issue) => issue.id === "start-balance");
+  assert.equal(balanceIssue?.mutation?.kind, "REPLACE_STARTS");
+  const balanced = applyRepairIssues(validImported, [balanceIssue!], new Set([balanceIssue!.id]));
+  assert.notDeepEqual(balanced.startLocations.map((start) => [start.x, start.y]), validImported.startLocations.map((start) => [start.x, start.y]));
+  assertStartSpacing(balanced);
+});
+
+test("all generation engines enforce five-hex start spacing", () => {
+  const configurations = [
+    { engine: "EXCOGITARE", preset: "CONTINENTS" },
+    { engine: "REGION_GRAPH", preset: "LIVING_WORLD" },
+    { engine: "PHYSICAL", preset: "DYNAMIC_EARTH" },
+    { engine: "POLIS", preset: "IMPERIAL_RING" },
+  ] as const;
+  for (const configuration of configurations) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, ...configuration, size: "DUEL", players: 6, cityStates: 6, waterPercent: 48, seed: `spacing-${configuration.engine}` });
+    assert.equal(map.startLocations.filter((start) => !start.cityState).length, 6);
+    assertStartSpacing(map);
+    assert.equal(validateCiv5Map(map).some((issue) => issue.category === "STARTS" && issue.severity === "ERROR"), false);
+  }
+  for (const configuration of configurations.slice(0, 3)) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, ...configuration, size: "DUEL", players: 2, cityStates: 2, waterPercent: 90, seed: `sparse-spacing-${configuration.engine}` });
+    assert.equal(map.startLocations.filter((start) => !start.cityState).length, 2);
+    assertStartSpacing(map);
+  }
+});
+
+test("Polis reduces impossible major and city-state populations and records actual counts", () => {
+  let state = 1;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  const geography = generatePolisGeography({ ...DEFAULT_GENERATION_OPTIONS, engine: "POLIS", preset: "IMPERIAL_RING", players: 22, cityStates: 41, waterPercent: 90 }, 12, 8, false, 1234, random);
+  const majors = geography.startLocations.filter((start) => !start.cityState);
+  const cityStates = geography.startLocations.filter((start) => start.cityState);
+  assert.ok(majors.length > 0 && majors.length < 22);
+  assert.ok(cityStates.length < 41);
+  assert.equal(geography.diagnostics.majorStarts, majors.length);
+  assert.equal(geography.diagnostics.cityStates, cityStates.length);
+  assertStartSpacing({ width: 12, height: 8, wraps: false, startLocations: geography.startLocations } as Civ5Map);
+  assert.ok(geography.structure.strategicGraph?.relaxations.some((message) => /requested major starts/.test(message)));
+  assert.ok(geography.structure.strategicGraph?.relaxations.some((message) => /requested city states/.test(message)));
+
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "POLIS", preset: "IMPERIAL_RING", size: "DUEL", players: 22, cityStates: 41, waterPercent: 90, seed: "polis-capacity" });
+  const actualCityStates = generated.startLocations.filter((start) => start.cityState).length;
+  assert.ok(actualCityStates < 41);
+  assert.equal(generated.generation?.cityStates, actualCityStates);
+  assert.equal(generated.players, generated.startLocations.filter((start) => !start.cityState).length);
+});
+
+test("city-state defaults and Randomise avoid opening-map overpopulation", () => {
+  assert.equal(DEFAULT_GENERATION_OPTIONS.cityStates, 8);
+  assert.equal(DEFAULT_GENERATION_OPTIONS.cityStateMinSpacing, MINIMUM_START_DISTANCE);
+  for (const size of MAP_SIZES) assert.equal(size.recommendedCityStates, size.recommendedPlayers);
+  let state = 0x91827364;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  for (let index = 0; index < 100; index += 1) {
+    const options = randomGenerationOptions(random);
+    const size = MAP_SIZES.find((candidate) => candidate.id === options.size)!;
+    assert.ok(options.cityStates <= size.recommendedCityStates);
+    assert.ok(options.players <= size.recommendedPlayers + 2);
+    assert.ok(options.cityStateMinSpacing >= MINIMUM_START_DISTANCE);
+  }
 });
 
 test("seeded generation is deterministic and uses standard map sizes", () => {
@@ -957,6 +1166,41 @@ test("geometry choices preserve the size budget while changing the aspect ratio"
   assert.equal(extreme.tiles.length, extreme.width * extreme.height);
 });
 
+test("source-backed extended tile budgets retain exact dimensions and round-trip", () => {
+  const extreme = MAP_SIZES.find((size) => size.id === "EXTREME")!;
+  const colossal = MAP_SIZES.find((size) => size.id === "COLOSSAL")!;
+  assert.deepEqual({ width: extreme.width, height: extreme.height, tiles: extreme.width * extreme.height }, { width: 180, height: 94, tiles: 16_920 });
+  assert.deepEqual({ width: colossal.width, height: colossal.height, tiles: colossal.width * colossal.height }, { width: 170, height: 110, tiles: 18_700 });
+  assert.equal(isGameBreakingMapSize("HUGE"), false);
+  assert.equal(isGameBreakingMapSize("EXTREME"), true);
+  assert.equal(isGameBreakingMapSize("COLOSSAL"), true);
+
+  const startedAt = performance.now();
+  for (const size of ["EXTREME", "COLOSSAL"] as const) {
+    const options = { ...DEFAULT_GENERATION_OPTIONS, engine: "EXCOGITARE" as const, preset: "CONTINENTS" as const, size, players: 2, cityStates: 0, seed: `round-trip-${size.toLowerCase()}` };
+    const generated = generateMap(options);
+    const dimensions = resolveMapDimensions(size, "STANDARD");
+    assert.equal(generated.width, dimensions.width);
+    assert.equal(generated.height, dimensions.height);
+    assert.equal(generated.tiles.length, dimensions.width * dimensions.height);
+    const parsed = parseCiv5Map(serializeCiv5Map(generated), `${size}.Civ5Map`);
+    assert.equal(parsed.width, dimensions.width);
+    assert.equal(parsed.height, dimensions.height);
+    assert.equal(parsed.tiles.length, generated.tiles.length);
+    assert.equal(parsed.worldSize, size);
+    assert.deepEqual(parsed.tiles, generated.tiles.map((tile) => {
+      const geography = { ...tile };
+      delete geography.improvement;
+      delete geography.route;
+      return geography;
+    }));
+  }
+  assert.ok(performance.now() - startedAt < 30_000, "both extended maps should generate and round-trip within 30 seconds");
+
+  const deterministicOptions = { ...DEFAULT_GENERATION_OPTIONS, size: "EXTREME" as const, players: 2, cityStates: 0, seed: "extended-determinism" };
+  assert.deepEqual(generateMap(deterministicOptions).tiles, generateMap(deterministicOptions).tiles);
+});
+
 test("Randomise produces complete valid settings and wrap choices control export geography", () => {
   let state = 0x12345678;
   const random = () => {
@@ -966,11 +1210,14 @@ test("Randomise produces complete valid settings and wrap choices control export
   const wrapTypes = new Set<string>();
   const geometries = new Set<string>();
   const gameBreakingGeometries = new Set<string>();
+  const sizes = new Set<string>();
+  const gameBreakingSizes = new Set<string>();
   const engines = new Set<string>();
   for (let index = 0; index < 60; index += 1) {
     const options = randomGenerationOptions(random);
     wrapTypes.add(options.wrapType);
     geometries.add(options.geometry);
+    sizes.add(options.size);
     engines.add(options.engine);
     assert.ok(options.waterPercent >= 0 && options.waterPercent <= 90);
     assert.ok(options.mountainPercent >= 0 && options.mountainPercent <= 38);
@@ -980,10 +1227,16 @@ test("Randomise produces complete valid settings and wrap choices control export
     if (options.modifier === "STRATEGIC_DEPTH") assert.ok(options.mountainPercent >= 22);
     if (options.modifier === "DOOMSDAY" || options.style === "BRUTAL") assert.ok(options.mountainPercent >= 18);
   }
-  for (let index = 0; index < 120; index += 1) gameBreakingGeometries.add(randomGenerationOptions(random, true).geometry);
+  for (let index = 0; index < 240; index += 1) {
+    const options = randomGenerationOptions(random, true);
+    gameBreakingGeometries.add(options.geometry);
+    gameBreakingSizes.add(options.size);
+  }
   assert.deepEqual(wrapTypes, new Set(["PRESET", "EAST_WEST", "NONE"]));
   assert.deepEqual(geometries, new Set(SAFE_MAP_GEOMETRIES));
+  assert.deepEqual(sizes, new Set(SAFE_MAP_SIZES));
   assert.deepEqual(gameBreakingGeometries, new Set([...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES]));
+  assert.deepEqual(gameBreakingSizes, new Set([...SAFE_MAP_SIZES, ...GAME_BREAKING_MAP_SIZES]));
   assert.deepEqual(engines, new Set(["EXCOGITARE", "REGION_GRAPH", "PHYSICAL", "POLIS"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });

@@ -1,0 +1,1 @@
+export const MINIMUM_START_DISTANCE = 5;

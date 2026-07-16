@@ -337,22 +337,27 @@ test("export confirmation is a modal rather than a sidebar prompt", async () => 
   assert.match(css, /\.export-confirmation-backdrop \{\s*position: fixed;\s*inset: 0;\s*z-index: 100;/);
 });
 
-test("game-breaking geometry requires a checkbox and second modal confirmation", async () => {
+test("game-breaking geometry and tile budgets require one checkbox and second modal confirmation", async () => {
   const [source, generator, css] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/map-generator.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(source, /Show game-breaking geometry/);
+  assert.match(source, /Show game-breaking options/);
   assert.match(source, /GEOMETRY_OPTIONS\.filter\(\(option\) => allowGameBreakingGeometry \|\| !option\.gameBreaking\)/);
+  assert.match(source, /MAP_SIZES\.filter\(\(item\) => allowGameBreakingGeometry \|\| !item\.gameBreaking\)/);
   assert.match(source, /showGameBreakingGeometryConfirmation/);
   assert.match(source, /className="export-confirmation-modal game-breaking-geometry-modal" role="dialog" aria-modal="true"/);
   assert.match(source, /Second confirmation/);
-  assert.match(source, /Enable game-breaking geometry\?/);
+  assert.match(source, /Enable game-breaking generation\?/);
+  assert.match(source, /Extreme \(180×94 \/ 16,920 tiles\)/);
+  assert.match(source, /Colossal \(170×110 \/ 18,700 tiles\)/);
   assert.match(source, /I accept the crash risk/);
   assert.match(source, /gameBreakingGeometryCancelRef\.current\?\.focus\(\)/);
   assert.match(source, /randomGenerationOptions\(Math\.random, allowGameBreakingGeometry\)/);
-  assert.match(generator, /includeGameBreakingGeometry \? \[\.\.\.SAFE_MAP_GEOMETRIES, \.\.\.GAME_BREAKING_GEOMETRIES\] : SAFE_MAP_GEOMETRIES/);
+  assert.match(generator, /includeGameBreakingOptions \? \[\.\.\.SAFE_MAP_GEOMETRIES, \.\.\.GAME_BREAKING_GEOMETRIES\] : SAFE_MAP_GEOMETRIES/);
+  assert.match(generator, /MAP_SIZES\.filter\(\(size\) => includeGameBreakingOptions \|\| !size\.gameBreaking\)/);
+  assert.match(source, /size: isGameBreakingMapSize\(normalized\.size\) \? "HUGE" : normalized\.size/);
   assert.match(css, /\.game-breaking-geometry-toggle/);
   assert.match(css, /\.game-breaking-geometry-modal/);
 });

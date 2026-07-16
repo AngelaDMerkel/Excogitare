@@ -2,6 +2,7 @@ import type { Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 import { poleProximity } from "./climate-projection.ts";
 import { connectedTileObjects, type GenerationStructure, type GeographicObject, type StrategicEdge, type StrategicNode } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
+import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 
 export type PolisGeography = {
   landMask: boolean[];
@@ -113,15 +114,16 @@ function routeBetween(start: Point, target: Point, width: number, height: number
 
 function uniqueAnchors(points: Point[], width: number, height: number, wraps: boolean) {
   const occupied: Point[] = [];
-  return points.map((point) => {
-    let candidate = { x: Math.max(1, Math.min(width - 2, Math.round(point.x))), y: Math.max(2, Math.min(height - 3, Math.round(point.y))) };
-    if (occupied.some((other) => other.x === candidate.x && other.y === candidate.y)) {
-      const replacement = pointsWithin(candidate, 4, width, height, wraps).find((next) => !occupied.some((other) => other.x === next.x && other.y === next.y));
-      if (replacement) candidate = replacement;
-    }
+  const legal = Array.from({ length: Math.max(0, height - 4) }, (_row, row) => row + 2)
+    .flatMap((y) => Array.from({ length: Math.max(0, width - 2) }, (_column, column) => ({ x: column + 1, y })));
+  for (const point of points) {
+    const target = { x: Math.max(1, Math.min(width - 2, Math.round(point.x))), y: Math.max(2, Math.min(height - 3, Math.round(point.y))) };
+    const candidate = [...legal].sort((one, two) => hexDistance(one, target, width, wraps) - hexDistance(two, target, width, wraps) || one.y - two.y || one.x - two.x)
+      .find((next) => occupied.every((other) => hexDistance(next, other, width, wraps) >= MINIMUM_START_DISTANCE));
+    if (!candidate) break;
     occupied.push(candidate);
-    return candidate;
-  });
+  }
+  return occupied;
 }
 
 function buildMajorAnchors(options: MapGenerationOptions, width: number, height: number, wraps: boolean, count: number, random: () => number) {
@@ -246,7 +248,7 @@ function assignCityStates(
       if (selected.some((point) => point.x === candidate.point.x && point.y === candidate.point.y)) continue;
       const references = [...majorStarts.map((start) => ({ x: start.x, y: start.y })), ...selected];
       const nearest = Math.min(...references.map((point) => hexDistance(candidate.point, point, width, wraps)));
-      if (nearest < options.cityStateMinSpacing) continue;
+      if (nearest < Math.max(MINIMUM_START_DISTANCE, Math.round(options.cityStateMinSpacing))) continue;
       const value = nearest * 4 + (candidate.coastal && options.cityStateCoastalPreference === "PREFER" ? 8 : 0) + hashNoise(candidate.point.x, candidate.point.y, seed) * 0.2;
       if (value > score) {
         score = value;
@@ -280,9 +282,10 @@ export function generatePolisGeography(
   seed: number,
   random: () => number,
 ): PolisGeography {
-  const playerCount = Math.max(2, Math.min(22, Math.round(options.players)));
+  const requestedPlayerCount = Math.max(2, Math.min(22, Math.round(options.players)));
   const cityStateCount = Math.max(0, Math.min(41, Math.round(options.cityStates)));
-  const anchors = buildMajorAnchors(options, width, height, wraps, playerCount, random);
+  const anchors = buildMajorAnchors(options, width, height, wraps, requestedPlayerCount, random);
+  const playerCount = anchors.length;
   const teamFor = (player: number) => options.balance === "TEAMS" ? Math.floor(player / options.teamSize) : player;
   const majorStarts = anchors.map<Civ5StartLocation>((anchor, player) => ({
     ...anchor,
@@ -297,6 +300,7 @@ export function generatePolisGeography(
   const maximumDistinctSafeRadius = Math.max(2, Math.floor((minimumStartDistance(anchors, width, wraps) - 1) / 2));
   const safeRadius = Math.min(requestedSafeRadius, maximumDistinctSafeRadius);
   const relaxations: string[] = [];
+  if (playerCount < requestedPlayerCount) relaxations.push(`Placed ${playerCount} of ${requestedPlayerCount} requested major starts after exhausting legal five-hex spacing.`);
   if (safeRadius < requestedSafeRadius) relaxations.push(`Safe territory radius reduced from ${requestedSafeRadius} to ${safeRadius} to prevent overlapping starts.`);
   const edgePairs = buildEdgePairs(options, playerCount);
   const strategicNodes: StrategicNode[] = anchors.map((anchor, owner) => ({

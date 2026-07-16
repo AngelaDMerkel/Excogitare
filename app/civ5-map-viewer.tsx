@@ -42,6 +42,7 @@ import {
   DOMINANT_TERRAINS,
   fantasticalityForPreset,
   isGameBreakingGeometry,
+  isGameBreakingMapSize,
   MAP_PRESETS,
   MAP_SIZES,
   polisPatternForPreset,
@@ -84,10 +85,15 @@ type UiTooltip = { text: string; x: number; y: number; above: boolean };
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 type GenerationWorkerMessage = { id: number; type: "PROGRESS"; stage: string } | { id: number; type: "COMPLETE"; map: Civ5Map } | { id: number; type: "ERROR"; message: string };
 
-function normalizeGenerationOptions(options: Partial<MapGenerationOptions>, allowGameBreakingGeometry = false): MapGenerationOptions {
+function normalizeGenerationOptions(options: Partial<MapGenerationOptions>, allowGameBreakingOptions = false): MapGenerationOptions {
   const legacyEngine = String(options.engine ?? "");
-  const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: legacyEngine === "FIELD" ? "EXCOGITARE" : options.engine ?? DEFAULT_GENERATION_OPTIONS.engine, dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
-  return !allowGameBreakingGeometry && isGameBreakingGeometry(normalized.geometry) ? { ...normalized, geometry: "STANDARD" } : normalized;
+  const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: legacyEngine === "FIELD" ? "EXCOGITARE" : options.engine ?? DEFAULT_GENERATION_OPTIONS.engine, cityStateMinSpacing: Math.max(5, options.cityStateMinSpacing ?? DEFAULT_GENERATION_OPTIONS.cityStateMinSpacing), dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
+  if (allowGameBreakingOptions) return normalized;
+  return {
+    ...normalized,
+    geometry: isGameBreakingGeometry(normalized.geometry) ? "STANDARD" : normalized.geometry,
+    size: isGameBreakingMapSize(normalized.size) ? "HUGE" : normalized.size,
+  };
 }
 
 const GEOMETRY_OPTIONS = [
@@ -1682,7 +1688,17 @@ export function Civ5MapViewer() {
   const disableGameBreakingGeometry = () => {
     setAllowGameBreakingGeometry(false);
     setShowGameBreakingGeometryConfirmation(false);
-    setGenerationOptions((current) => isGameBreakingGeometry(current.geometry) ? { ...current, geometry: "STANDARD" } : current);
+    setGenerationOptions((current) => {
+      const unsafeSize = isGameBreakingMapSize(current.size);
+      const huge = MAP_SIZES.find((size) => size.id === "HUGE")!;
+      return {
+        ...current,
+        geometry: isGameBreakingGeometry(current.geometry) ? "STANDARD" : current.geometry,
+        size: unsafeSize ? "HUGE" : current.size,
+        players: unsafeSize ? huge.recommendedPlayers : current.players,
+        cityStates: unsafeSize ? huge.recommendedCityStates : current.cityStates,
+      };
+    });
   };
 
   const requestGameBreakingGeometry = () => setShowGameBreakingGeometryConfirmation(true);
@@ -1690,7 +1706,7 @@ export function Civ5MapViewer() {
   const confirmGameBreakingGeometry = () => {
     setShowGameBreakingGeometryConfirmation(false);
     setAllowGameBreakingGeometry(true);
-    setMessage("Game-breaking geometry enabled · Civ V may crash when loading these maps");
+    setMessage("Game-breaking generation enabled · oversized or extreme maps may crash Civ V");
   };
 
   const selectGenerationEngine = (engine: MapGenerationOptions["engine"]) => {
@@ -2243,15 +2259,16 @@ export function Civ5MapViewer() {
                     </select>
                     <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
                   </label>
-                  <label className="control-field" data-tooltip="Choose Civ V's tile dimensions. Recommended player and city-state counts update with the selected size.">
+                  <label className="control-field" data-tooltip="Choose a tile budget. Non-stock community dimensions remain hidden until Game Breaking generation is enabled; recommended player and city-state counts update with the selection.">
                     <span>Map size</span>
                     <select value={generationOptions.size} onChange={(event) => {
                       const nextSize = event.target.value as MapGenerationOptions["size"];
                       const next = MAP_SIZES.find((item) => item.id === nextSize);
                       setGenerationOptions((current) => ({ ...current, size: nextSize, players: next?.recommendedPlayers ?? current.players, cityStates: next?.recommendedCityStates ?? current.cityStates }));
                     }}>
-                      {MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}
+                      {MAP_SIZES.filter((item) => allowGameBreakingGeometry || !item.gameBreaking).map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height} · {(item.width * item.height).toLocaleString()} tiles{item.gameBreaking ? " · experimental" : ""}</option>)}
                     </select>
+                    <small>{isGameBreakingMapSize(generationOptions.size) ? "Non-stock community dimensions; Civ V and WorldBuilder stability is not guaranteed." : "Stock Civ V dimensions."}</small>
                   </label>
                   </div>
                   <div className="seed-row">
@@ -2301,7 +2318,7 @@ export function Civ5MapViewer() {
                           checked={allowGameBreakingGeometry}
                           onChange={(event) => event.target.checked ? requestGameBreakingGeometry() : disableGameBreakingGeometry()}
                         />
-                        <span><strong>Show game-breaking geometry</strong><small>Unlock aspect ratios known to crash Civ V. Randomise will use them only while this is enabled.</small></span>
+                        <span><strong>Show game-breaking options</strong><small>Unlock oversized budgets and aspect ratios known to crash Civ V. Randomise will use them only while this is enabled.</small></span>
                       </label>
                       <div className="percentage-controls">
                         <label className="control-field percentage-field" data-tooltip="Set the target share of water tiles. Zero creates a wholly terrestrial world."><span>Water percent <output>{generationOptions.waterPercent}%</output></span><input type="range" min="0" max="90" step="1" value={generationOptions.waterPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, waterPercent: Number(event.target.value) }))} /></label>
@@ -2427,7 +2444,7 @@ export function Civ5MapViewer() {
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => { const sizePreset = MAP_SIZES.find((item) => item.id === current.size); return { ...current, players: sizePreset?.recommendedPlayers ?? DEFAULT_GENERATION_OPTIONS.players, cityStates: sizePreset?.recommendedCityStates ?? DEFAULT_GENERATION_OPTIONS.cityStates, balance: DEFAULT_GENERATION_OPTIONS.balance, teamSize: DEFAULT_GENERATION_OPTIONS.teamSize, teamLayout: DEFAULT_GENERATION_OPTIONS.teamLayout, startQuality: DEFAULT_GENERATION_OPTIONS.startQuality, strategicBalance: false }; })}>Reset players</button>
                       <div className="control-grid three-controls">
                         <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
-                        <label className="control-field"><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
+                        <label className="control-field" data-tooltip="Minor powers are optional. Size defaults use roughly one city state per major civilization so the opening world is not overcrowded."><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Layout</span><select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}><option value="STANDARD">Equal separation</option><option value="TOURNAMENT">Tournament</option><option value="TEAMS">Paired teams</option></select></label>
                       </div>
                       {generationOptions.balance === "TEAMS" && (
@@ -2440,7 +2457,7 @@ export function Civ5MapViewer() {
                       <details className="advanced-controls">
                         <summary data-tooltip="Reveal minimum city-state spacing, regional distribution, and coastal preference."><span>More start controls</span><small>city-state placement</small></summary>
                         <div className="control-grid three-controls">
-                        <label className="control-field"><span>City-state spacing</span><input type="number" min="1" max="12" value={generationOptions.cityStateMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateMinSpacing: Number(event.target.value) }))} /></label>
+                        <label className="control-field" data-tooltip="Five hexes is the hard minimum between every major and city-state start; larger values reserve still more opening room."><span>City-state spacing</span><input type="number" min="5" max="12" value={generationOptions.cityStateMinSpacing} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateMinSpacing: Math.max(5, Number(event.target.value)) }))} /></label>
                         <label className="control-field"><span>Distribution</span><select value={generationOptions.cityStateDistribution} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateDistribution: event.target.value as MapGenerationOptions["cityStateDistribution"] }))}><option value="EVEN">Even</option><option value="REGIONAL">Regional</option></select></label>
                         <label className="control-field"><span>Coastal preference</span><select value={generationOptions.cityStateCoastalPreference} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStateCoastalPreference: event.target.value as MapGenerationOptions["cityStateCoastalPreference"] }))}><option value="ANY">Any</option><option value="PREFER">Prefer coast</option><option value="REQUIRE">Require coast</option></select></label>
                         </div>
@@ -2605,11 +2622,11 @@ export function Civ5MapViewer() {
                     <summary><span>Runtime</span><small>Fallback allocation, seed, and starts</small></summary>
                     <div className="lua-workspace-body">
                       <div className="control-grid">
-                        <label className="control-field"><span>Fallback size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}</option>)}</select></label>
+                        <label className="control-field"><span>Fallback size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.filter((item) => allowGameBreakingGeometry || !item.gameBreaking).map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}{item.gameBreaking ? " · experimental" : ""}</option>)}</select></label>
                         <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
                       </div>
                       <div className="control-grid">
-                        <label className="control-field"><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
+                        <label className="control-field" data-tooltip="Minor powers are spaced from all other settler starts by at least five hexes."><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Runtime seed</span><input value={generationOptions.seed} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
                       </div>
                       <p className="lua-empty-note">GetMapInitData() overrides the fallback dimensions and wrap type. Excogitare fills any player starts the script leaves unassigned.</p>
@@ -2963,17 +2980,17 @@ export function Civ5MapViewer() {
           className="export-confirmation-backdrop game-breaking-geometry-backdrop"
           onPointerDown={(event) => { if (event.currentTarget === event.target) setShowGameBreakingGeometryConfirmation(false); }}
         >
-          <section className="export-confirmation-modal game-breaking-geometry-modal" role="dialog" aria-modal="true" aria-labelledby="game-breaking-geometry-title" aria-describedby="game-breaking-geometry-summary">
+          <section className="export-confirmation-modal game-breaking-geometry-modal" role="dialog" aria-modal="true" aria-labelledby="game-breaking-options-title" aria-describedby="game-breaking-options-summary">
             <header>
               <span>Second confirmation</span>
-              <h2 id="game-breaking-geometry-title">Enable game-breaking geometry?</h2>
+              <h2 id="game-breaking-options-title">Enable game-breaking generation?</h2>
             </header>
-            <p id="game-breaking-geometry-summary">
-              Needle, Ribbon, Pin, and String use aspect ratios that Civ V does not reliably load. A generated Civ5Map may crash the game before the map opens.
+            <p id="game-breaking-options-summary">
+              Needle, Ribbon, Pin, and String use unreliable aspect ratios. Extreme (180×94 / 16,920 tiles) and Colossal (170×110 / 18,700 tiles) exceed Civ V&apos;s stock Huge dimensions. Any of them may crash the game before the map opens.
             </p>
-            <p>Enable these options only for renderer experiments or intentionally invalid map research. Randomise will also be permitted to select them.</p>
+            <p>WorldBuilder may also reject these files. Enable them only for experiments, and test exports in your own Civ V installation. Randomise will also be permitted to select them.</p>
             <div className="export-confirmation-actions">
-              <button ref={gameBreakingGeometryCancelRef} type="button" onClick={() => setShowGameBreakingGeometryConfirmation(false)}>Keep safe geometry</button>
+              <button ref={gameBreakingGeometryCancelRef} type="button" onClick={() => setShowGameBreakingGeometryConfirmation(false)}>Keep stock limits</button>
               <button className="confirm-export confirm-game-breaking" type="button" onClick={confirmGameBreakingGeometry}>I accept the crash risk</button>
             </div>
           </section>
