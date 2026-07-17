@@ -7,6 +7,7 @@ import { generatePolisGeography } from "./polis-generator.ts";
 import { generateEccentricGeography } from "./eccentric-generator.ts";
 import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
+import { worldCharacterProfile } from "./world-character.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 2, gameBreaking: false },
@@ -328,7 +329,7 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
   const sizeConfig = randomItem(MAP_SIZES.filter((size) => includeGameBreakingOptions || !size.gameBreaking), random);
   const size = sizeConfig.id;
   const modifier = randomItem(WORLD_MODIFIERS, random).id;
-  const minimumMountains = modifier === "STRATEGIC_DEPTH" ? 22 : modifier === "DOOMSDAY" || style === "BRUTAL" ? 18 : 0;
+  const minimumMountains = modifier === "STRATEGIC_DEPTH" ? 22 : modifier === "DOOMSDAY" ? 18 : worldCharacterProfile(style).mountainFloor;
   const dominantTerrains = DOMINANT_TERRAINS.filter(() => random() < 0.36).map((terrain) => terrain.id);
   const seedPart = () => Math.floor(random() * 0x100000000).toString(36).padStart(7, "0");
   const playerMaximum = Math.min(22, sizeConfig.recommendedPlayers + 2);
@@ -939,7 +940,7 @@ export function generateRiverNetwork(
 
   const landCount = tiles.reduce((count, _tile, index) => count + (isWaterTile(index) ? 0 : 1), 0);
   const rainfallFactor = rainfall === "WET" ? 1.5 : rainfall === "ARID" ? 0.58 : 1;
-  const styleFactor = style === "REALISTIC" ? 1.22 : style === "FANTASTICAL" ? 1.08 : style === "BRUTAL" ? 0.72 : 0.9;
+  const styleFactor = worldCharacterProfile(style).riverSourceFactor;
   const densityFactor = density === "DENSE" ? 1.55 : density === "SPARSE" ? 0.62 : 1;
   const desiredSources = Math.max(1, Math.min(48, Math.round(landCount * 0.0024 * rainfallFactor * styleFactor * densityFactor)));
   const selectedMountains: Array<[number, number]> = [];
@@ -1589,6 +1590,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
   const requestedEngine = String(options.engine);
   const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : requestedEngine === "REGION_GRAPH" ? "ECCENTRIC" : options.engine };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
+  const character = worldCharacterProfile(resolved.style);
   const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
   const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
   const geometrySeed = resolved.geometry === "STANDARD" ? "" : `:${resolved.geometry}`;
@@ -1641,7 +1643,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
     const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
       ? Math.max(22, resolved.mountainPercent)
-      : resolved.modifier === "DOOMSDAY" || resolved.style === "BRUTAL" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
+      : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : Math.max(character.mountainFloor, clamp(resolved.mountainPercent, 0, 38));
     const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
     const riverTiles = tiles.flatMap((tile, index) => tile.river > 0 ? [index] : []);
     const majorRiverTiles = riverTiles.filter((index) => (geography.riverGuidance?.[index] ?? 0) >= 0.85).length;
@@ -1725,7 +1727,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
   if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
   const landMask = new Array<boolean>(width * height);
   let fieldValues = new Array<number>(width * height);
-  const warpStrength = (resolved.style === "FANTASTICAL" ? 0.24 : resolved.style === "REALISTIC" ? 0.1 : resolved.style === "BRUTAL" ? 0.15 : 0.035)
+  const warpStrength = character.excogitare.warpStrength
     + (resolved.modifier === "FRACTURED" ? 0.07 : resolved.modifier === "STRATEGIC_DEPTH" ? 0.035 : 0);
 
   for (let y = 0; y < height; y += 1) {
@@ -1734,11 +1736,11 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       const nx = wraps ? ((warped.x % 1) + 1) % 1 : clamp(warped.x, -0.1, 1.1);
       const ny = clamp(warped.y, -0.08, 1.08);
       const noise = fractalNoise(x, y, seed);
-      const fineDetail = valueNoise(x + 701, y + 311, resolved.style === "FANTASTICAL" ? 2.2 : 3.8, seed + 9001) - 0.5;
+      const fineDetail = valueNoise(x + 701, y + 311, character.excogitare.fineDetailScale, seed + 9001) - 0.5;
       let field = presetField(resolved.preset, nx, ny, noise, centers, wraps);
-      field += fineDetail * (resolved.style === "FANTASTICAL" ? 0.2 : resolved.style === "REALISTIC" ? 0.08 : resolved.style === "BRUTAL" ? 0.13 : 0.035);
+      field += fineDetail * character.excogitare.fineDetailAmplitude;
       if (resolved.modifier === "FRACTURED") field += (valueNoise(x, y, 2.1, seed + 1171) - 0.5) * 0.28;
-      const polarPenalty = wraps ? Math.max(0, poleProximity(x, y, width, height, resolved.projectionType) - 0.86) * (resolved.style === "FANTASTICAL" ? 0.325 : 0.725) : 0;
+      const polarPenalty = wraps ? Math.max(0, poleProximity(x, y, width, height, resolved.projectionType) - 0.86) * character.excogitare.polarPenalty : 0;
       if (!wraps) {
         const edge = Math.min(x / width, 1 - x / width, y / height, 1 - y / height);
         if (edge < 0.055) field -= (0.055 - edge) * 3.5;
@@ -1751,9 +1753,9 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
   // Terrain Diffusion uses a coarse conditioning map followed by learned refinement.
   // The browser-native realistic style mirrors that two-stage structure with a
   // deterministic denoising/refinement schedule and Earth-like quantile targets.
-  if (resolved.style === "REALISTIC") {
+  if (character.excogitare.landRefinementPasses > 0) {
     onProgress?.("Refining terrain fields");
-    fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, 4, 0.2, 0.07);
+    fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, character.excogitare.landRefinementPasses, 0.2, 0.07);
   }
   const waterPercent = clamp(resolved.waterPercent, 0, 90);
   const landThreshold = waterPercent === 0 ? Number.NEGATIVE_INFINITY : quantile(fieldValues, waterPercent / 100);
@@ -1770,11 +1772,11 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       const detail = fractalNoise(x + 211, y + 307, seed + 1301);
       const plateBoundary = 1 - voronoiBoundary(nx, ny, plateCenters, wraps);
       let relief = detail * 0.62 + Math.max(0, fieldValues[index] - reliefBaseline) * 0.16;
-      if (resolved.style === "REALISTIC") relief += Math.pow(plateBoundary, 3) * 0.52;
-      if (resolved.style === "FANTASTICAL") relief += Math.pow(1 - voronoiBoundary(nx, ny, centers, wraps), 2) * 0.22;
-      if (resolved.style === "BRUTAL") {
+      relief += Math.pow(plateBoundary, 3) * character.excogitare.plateRelief;
+      relief += Math.pow(1 - voronoiBoundary(nx, ny, centers, wraps), 2) * character.excogitare.polygonRelief;
+      if (character.excogitare.contestedRidge > 0) {
         const contestedRidge = 1 - Math.abs(Math.sin((nx * 4.8 + detail * 0.56 + Math.sin(ny * 8.2) * 0.18) * Math.PI));
-        relief += Math.pow(plateBoundary, 2.4) * 0.26 + Math.pow(contestedRidge, 3.2) * 0.35;
+        relief += Math.pow(plateBoundary, 2.4) * character.excogitare.plateRelief + Math.pow(contestedRidge, 3.2) * character.excogitare.contestedRidge;
       }
       if (resolved.modifier === "STRATEGIC_DEPTH") {
         const ridgeA = 1 - Math.abs(Math.sin((nx * 5.6 + detail * 0.75 + Math.sin(ny * 9) * 0.17) * Math.PI));
@@ -1785,13 +1787,13 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       reliefValues[index] = relief;
     }
   }
-  if (resolved.style === "REALISTIC") {
-    reliefValues = diffuseRefine(reliefValues, width, height, seed + 6007, wraps, 2, 0.12, 0.045);
+  if (character.excogitare.reliefRefinementPasses > 0) {
+    reliefValues = diffuseRefine(reliefValues, width, height, seed + 6007, wraps, character.excogitare.reliefRefinementPasses, 0.12, 0.045);
   }
   const landRelief = reliefValues.filter((_, index) => landMask[index]);
   const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
     ? Math.max(22, resolved.mountainPercent)
-    : resolved.modifier === "DOOMSDAY" || resolved.style === "BRUTAL" ? Math.max(18, resolved.mountainPercent) : clamp(resolved.mountainPercent, 0, 38);
+    : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : Math.max(character.mountainFloor, clamp(resolved.mountainPercent, 0, 38));
   const hillPercent = resolved.worldAge === "YOUNG" ? 27 : resolved.worldAge === "OLD" ? 12 : 19;
   // Generate a small surplus because the accessibility pass intentionally
   // demotes mountains wherever a complete range would seal off land.
@@ -1818,15 +1820,15 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       const index = y * width + x;
       const latitude = poleProximity(x, y, width, height, resolved.projectionType);
       const regionalTemperature = (valueNoise(x + 311, y + 907, 11, seed + 2711) - 0.5)
-        * (resolved.style === "FANTASTICAL" ? 0.62 : resolved.style === "REALISTIC" ? 0.34 : resolved.style === "BRUTAL" ? 0.3 : 0.25);
+        * character.excogitare.regionalTemperature;
       const localTemperature = (fractalNoise(x + 389, y + 127, seed + 2203) - 0.5)
-        * (resolved.style === "FANTASTICAL" ? 0.36 : resolved.style === "REALISTIC" ? 0.18 : 0.14);
-      const altitudeCooling = resolved.style === "REALISTIC" ? Math.max(0, reliefValues[index] - 0.48) * 0.26 : 0;
+        * character.excogitare.localTemperature;
+      const altitudeCooling = Math.max(0, reliefValues[index] - 0.48) * character.excogitare.altitudeCooling;
       const latitudeTemperature = 0.1 + Math.cos(latitude * Math.PI / 2) * 0.82;
       temperatures[index] = clamp(latitudeTemperature + tempShift + regionalTemperature + localTemperature - altitudeCooling);
 
-      const backgroundMoisture = clamp(fractalNoise(x + 101, y + 53, seed + 701) - rainShift - (resolved.style === "BRUTAL" ? 0.09 : 0));
-      if (resolved.style === "REALISTIC") {
+      const backgroundMoisture = clamp(fractalNoise(x + 101, y + 53, seed + 701) - rainShift + character.excogitare.moistureBias);
+      if (character.excogitare.moistureTransport) {
         if (!landMask[index]) airborneMoisture += (0.84 - airborneMoisture) * 0.34;
         else airborneMoisture += (backgroundMoisture - airborneMoisture) * 0.12;
         const rise = Math.max(0, reliefValues[index] - upwindRelief);
@@ -1852,7 +1854,7 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
       const moisture = moistures[index];
       const biomeVariation = valueNoise(x + 733, y + 419, 6.5, seed + 3511) - 0.5;
       let terrain = land ? 2 : adjacentLand ? 1 : 0;
-      if (land) terrain = chooseTerrain(climateValue, moisture, biomeVariation, dominantTerrains, resolved.style === "BRUTAL");
+      if (land) terrain = chooseTerrain(climateValue, moisture, biomeVariation, dominantTerrains, character.id === "BRUTAL");
 
       const elevation = elevations[index];
       let feature = 255;

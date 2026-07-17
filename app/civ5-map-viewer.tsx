@@ -63,6 +63,7 @@ import { runLuaMapScript } from "@/lib/lua-runtime";
 import { mergeLuaDependencies, type LuaProjectDependency, type LuaRuntimeMetadata, type LuaScriptOption } from "@/lib/lua-project";
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "@/lib/political-map";
 import { fitViewport, minimumViewportZoom } from "@/lib/map-viewport";
+import { describeWorldCharacter, worldCharacterProfile } from "@/lib/world-character";
 
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
@@ -2396,6 +2397,10 @@ export function Civ5MapViewer() {
                       </button>
                     ))}
                   </fieldset>
+                  <p className="world-character-explanation" aria-live="polite">
+                    <strong>{GENERATION_ENGINES.find((engine) => engine.id === generationOptions.engine)?.label} × {worldCharacterProfile(generationOptions.style).label}</strong>
+                    <span>{describeWorldCharacter(generationOptions.engine, generationOptions.style)}</span>
+                  </p>
                   <div className="recipe-fields">
                   <label className="control-field" data-tooltip="Choose a geographic archetype. Selecting one also chooses its required engine and recommended physical defaults.">
                     <span>Map type</span>

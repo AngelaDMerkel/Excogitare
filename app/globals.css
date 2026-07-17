@@ -392,6 +392,9 @@ button { color: inherit; }
 .style-picker button.is-active { border-color: rgba(239, 209, 138, .38); background: rgba(217, 185, 111, .09); }
 .style-picker button.is-active strong { color: var(--gold-bright); }
 .style-picker button.is-active small { color: #9cae9f; }
+.world-character-explanation { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid rgba(217, 185, 111, .32); color: #8fa39d; font-size: 10px; line-height: 1.45; }
+.world-character-explanation strong { display: block; margin-bottom: 1px; color: #c8b278; font-family: var(--font-geist-mono), monospace; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+.world-character-explanation span { display: block; }
 .control-field { min-width: 0; display: grid; gap: 5px; }
 .control-field > span {
   color: #718984;

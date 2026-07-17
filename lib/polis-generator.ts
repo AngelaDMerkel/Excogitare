@@ -3,6 +3,7 @@ import { poleProximity } from "./climate-projection.ts";
 import { connectedTileObjects, type GenerationStructure, type GeographicObject, type StrategicEdge, type StrategicNode } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
+import { worldCharacterProfile } from "./world-character.ts";
 
 export type PolisGeography = {
   landMask: boolean[];
@@ -85,7 +86,7 @@ function pointsWithin(point: Point, radius: number, width: number, height: numbe
   return result;
 }
 
-function routeBetween(start: Point, target: Point, width: number, height: number, wraps: boolean, seed: number) {
+function routeBetween(start: Point, target: Point, width: number, height: number, wraps: boolean, seed: number, wander: number) {
   const startIndex = indexOf(start, width);
   const targetIndex = indexOf(target, width);
   const parents = new Int32Array(width * height);
@@ -97,7 +98,8 @@ function routeBetween(start: Point, target: Point, width: number, height: number
     const point = { x: index % width, y: Math.floor(index / width) };
     const ordered = neighbors(point, width, height, wraps).sort((one, two) => {
       const distance = hexDistance(one, target, width, wraps) - hexDistance(two, target, width, wraps);
-      return distance || hashNoise(one.x, one.y, seed + cursor) - hashNoise(two.x, two.y, seed + cursor);
+      const variation = (hashNoise(one.x, one.y, seed + cursor) - hashNoise(two.x, two.y, seed + cursor)) * wander;
+      return distance + variation;
     });
     for (const next of ordered) {
       const nextIndex = indexOf(next, width);
@@ -129,7 +131,8 @@ function uniqueAnchors(points: Point[], width: number, height: number, wraps: bo
 function buildMajorAnchors(options: MapGenerationOptions, width: number, height: number, wraps: boolean, count: number, random: () => number) {
   const marginX = Math.max(4, Math.round(width * 0.12));
   const marginY = Math.max(3, Math.round(height * 0.13));
-  const jitter = options.polisSymmetry === "ASYMMETRIC" ? 0.09 : options.polisSymmetry === "EQUIVALENT" ? 0.035 : 0;
+  const character = worldCharacterProfile(options.style).polis;
+  const jitter = (options.polisSymmetry === "ASYMMETRIC" ? 0.09 : options.polisSymmetry === "EQUIVALENT" ? 0.035 : 0) * character.anchorJitter;
   const point = (x: number, y: number) => ({
     x: x + (random() - 0.5) * width * jitter,
     y: y + (random() - 0.5) * height * jitter,
@@ -282,6 +285,7 @@ export function generatePolisGeography(
   seed: number,
   random: () => number,
 ): PolisGeography {
+  const character = worldCharacterProfile(options.style);
   const requestedPlayerCount = Math.max(2, Math.min(22, Math.round(options.players)));
   const cityStateCount = Math.max(0, Math.min(41, Math.round(options.cityStates)));
   const anchors = buildMajorAnchors(options, width, height, wraps, requestedPlayerCount, random);
@@ -322,9 +326,10 @@ export function generatePolisGeography(
     }
   }
 
-  const corridorRadius = options.polisChokepointDensity >= 72 ? 0 : options.polisChokepointDensity >= 38 ? 1 : 2;
+  const effectiveChokepointDensity = clamp(options.polisChokepointDensity + character.polis.chokepointShift, 0, 100);
+  const corridorRadius = effectiveChokepointDensity >= 72 ? 0 : effectiveChokepointDensity >= 38 ? 1 : 2;
   for (const [edgeIndex, [from, to, kind]] of edgePairs.entries()) {
-    const route = routeBetween(anchors[from], anchors[to], width, height, wraps, seed + edgeIndex * 97);
+    const route = routeBetween(anchors[from], anchors[to], width, height, wraps, seed + edgeIndex * 97, character.polis.routeWander);
     const routeIndices = route.map((point) => indexOf(point, width));
     if (kind !== "NAVAL") {
       for (const point of route) {
@@ -371,10 +376,10 @@ export function generatePolisGeography(
     for (let x = 0; x < width; x += 1) {
       const point = { x, y };
       const startInfluence = Math.max(...anchors.map((anchor) => 1 - hexDistance(point, anchor, width, wraps) / influenceRadius));
-      const contestedInfluence = contestedPoints.length ? Math.max(...contestedPoints.map((target) => 0.72 - hexDistance(point, target, width, wraps) / Math.max(4, influenceRadius * 0.9))) : 0;
+      const contestedInfluence = contestedPoints.length ? Math.max(...contestedPoints.map((target) => character.polis.contestedInfluence - hexDistance(point, target, width, wraps) / Math.max(4, influenceRadius * 0.9))) : 0;
       const broadNoise = smoothNoise(x, y, seed + 1201, Math.max(4, Math.min(width, height) / 5));
       const detail = smoothNoise(x, y, seed + 1213, 2.4);
-      let score = Math.max(startInfluence, contestedInfluence) + broadNoise * 0.5 + detail * 0.16;
+      let score = Math.max(startInfluence, contestedInfluence) + broadNoise * character.polis.broadLandNoise + detail * character.polis.detailLandNoise;
       if (options.polisConflictPattern === "RIVAL_CONTINENTS") {
         const side = Math.min(Math.abs(x / Math.max(1, width - 1) - 0.25), Math.abs(x / Math.max(1, width - 1) - 0.75));
         score += 0.46 - side * 1.65;
@@ -404,21 +409,22 @@ export function generatePolisGeography(
     const x = index % width;
     const y = Math.floor(index / width);
     const nearCorridor = neighbors({ x, y }, width, height, wraps).some((point) => corridorTiles.has(indexOf(point, width)));
-    return smoothNoise(x, y, seed + 3011, 3.6) * 0.55 + smoothNoise(x, y, seed + 3023, 9) * 0.25 + (nearCorridor ? options.polisChokepointDensity / 250 : 0) + score * 0.08;
+    return smoothNoise(x, y, seed + 3011, 3.6) * 0.55 * character.polis.reliefNoise + smoothNoise(x, y, seed + 3023, 9) * 0.25 * character.polis.reliefNoise + (nearCorridor ? effectiveChokepointDensity / 250 * character.polis.corridorBarrier : 0) + score * 0.08;
   });
   const mountainCandidates = reliefValues.flatMap((value, index) => landMask[index] && !protectedTiles.has(index) && !safeTiles.has(index) ? [{ index, value }] : []);
   mountainCandidates.sort((one, two) => two.value - one.value || one.index - two.index);
-  const mountainTarget = Math.min(mountainCandidates.length, Math.round(landCount * clamp(options.mountainPercent / 100, 0, 0.38)));
+  const effectiveMountainPercent = options.modifier === "STRATEGIC_DEPTH" ? Math.max(22, options.mountainPercent) : options.modifier === "DOOMSDAY" ? Math.max(18, options.mountainPercent) : Math.max(character.mountainFloor, options.mountainPercent);
+  const mountainTarget = Math.min(mountainCandidates.length, Math.round(landCount * clamp(effectiveMountainPercent / 100, 0, 0.38)));
   const mountains = new Set(mountainCandidates.slice(0, mountainTarget).map((item) => item.index));
   const hillTarget = Math.round(landCount * (options.worldAge === "YOUNG" ? 0.3 : options.worldAge === "OLD" ? 0.14 : 0.21));
   const hills = new Set(mountainCandidates.slice(mountainTarget, mountainTarget + hillTarget).map((item) => item.index));
   const elevations = landMask.map((land, index) => land ? mountains.has(index) ? 2 : hills.has(index) ? 1 : 0 : 0);
   for (const index of corridorTiles) if (landMask[index]) elevations[index] = hashNoise(index % width, Math.floor(index / width), seed + 4013) > 0.78 ? 1 : 0;
-  for (const index of safeTiles) if (landMask[index]) elevations[index] = hashNoise(index % width, Math.floor(index / width), seed + 4021) > 0.86 ? 1 : 0;
+  for (const index of safeTiles) if (landMask[index]) elevations[index] = hashNoise(index % width, Math.floor(index / width), seed + 4021) > character.polis.safeHillThreshold ? 1 : 0;
 
   const moistures = new Array<number>(landMask.length);
   const temperatures = new Array<number>(landMask.length);
-  const rainShift = options.rainfall === "WET" ? 0.14 : options.rainfall === "ARID" ? -0.16 : 0;
+  const rainShift = (options.rainfall === "WET" ? 0.14 : options.rainfall === "ARID" ? -0.16 : 0) + character.polis.moistureBias;
   const temperatureShift = options.climate === "HOT" ? 0.15 : options.climate === "COOL" ? -0.15 : 0;
   for (let y = 0; y < height; y += 1) {
     let airborne = 0.55 + rainShift;
@@ -426,9 +432,9 @@ export function generatePolisGeography(
       const index = y * width + x;
       if (!landMask[index]) airborne += (0.88 - airborne) * 0.3;
       const lift = elevations[index] === 2 ? 0.2 : elevations[index] === 1 ? 0.06 : 0;
-      moistures[index] = clamp(airborne + smoothNoise(x, y, seed + 5011, 7) * 0.28 - 0.12 + lift);
+      moistures[index] = clamp(airborne + smoothNoise(x, y, seed + 5011, 7) * 0.28 * character.polis.climateVariance - 0.12 + lift);
       airborne = clamp(airborne - lift * 0.58 + (landMask[index] ? -0.006 : 0.02));
-      temperatures[index] = clamp(0.14 + Math.cos(poleProximity(x, y, width, height, options.projectionType) * Math.PI / 2) * 0.76 + temperatureShift - elevations[index] * 0.07 + (smoothNoise(x, y, seed + 5021, 10) - 0.5) * 0.16);
+      temperatures[index] = clamp(0.14 + Math.cos(poleProximity(x, y, width, height, options.projectionType) * Math.PI / 2) * 0.76 + temperatureShift - elevations[index] * 0.07 + (smoothNoise(x, y, seed + 5021, 10) - 0.5) * 0.16 * character.polis.climateVariance);
     }
   }
 
@@ -482,6 +488,9 @@ export function generatePolisGeography(
     contestedRegions: contestedPoints.length,
     majorStarts: majorStarts.length,
     cityStates: cityStates.length,
+    characterChokepointDensity: Math.round(effectiveChokepointDensity),
+    characterRouteWander: Math.round(character.polis.routeWander * 100),
+    characterBarrierPressure: Math.round(character.polis.corridorBarrier * 100),
     ...metrics,
   };
   const structure: GenerationStructure = {

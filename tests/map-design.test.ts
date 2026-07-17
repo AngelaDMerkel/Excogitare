@@ -34,6 +34,34 @@ test("selective generation passes preserve unrelated map structure", () => {
   assert.equal(starts.startLocations.filter((start) => !start.cityState).length, options.players);
 });
 
+test("selective regeneration applies World Character only to the requested layer", () => {
+  const physicalOptions = {
+    ...options,
+    engine: "PHYSICAL" as const,
+    preset: "DYNAMIC_EARTH" as const,
+    style: "MUNDANE" as const,
+    seed: "world-character-selective-pass",
+    size: "STANDARD" as const,
+    riverDensity: "DENSE" as const,
+    mountainPercent: 30,
+  };
+  const map = generateMap(physicalOptions);
+  const brutalClimate = regenerateMapStage(map, { ...physicalOptions, style: "BRUTAL" }, "CLIMATE", 5);
+
+  assert.equal(brutalClimate.generation?.style, "BRUTAL");
+  assert.deepEqual(brutalClimate.tiles.map((tile) => [tile.elevation, tile.terrain < 2]), map.tiles.map((tile) => [tile.elevation, tile.terrain < 2]));
+  assert.notDeepEqual(brutalClimate.tiles.map((tile) => [tile.terrain, tile.feature]), map.tiles.map((tile) => [tile.terrain, tile.feature]));
+
+  const realisticRivers = regenerateMapStage(map, { ...physicalOptions, style: "REALISTIC" }, "RIVERS", 6);
+  const brutalRivers = regenerateMapStage(map, { ...physicalOptions, style: "BRUTAL" }, "RIVERS", 6);
+  const retainedTileState = (tile: typeof map.tiles[number]) => [tile.terrain, tile.elevation, tile.feature, tile.resource, tile.wonder];
+
+  assert.deepEqual(realisticRivers.tiles.map(retainedTileState), map.tiles.map(retainedTileState));
+  assert.deepEqual(brutalRivers.tiles.map(retainedTileState), map.tiles.map(retainedTileState));
+  assert.notDeepEqual(realisticRivers.tiles.map((tile) => tile.river), brutalRivers.tiles.map((tile) => tile.river));
+  assert.ok(realisticRivers.tiles.filter((tile) => tile.river !== 0).length >= brutalRivers.tiles.filter((tile) => tile.river !== 0).length);
+});
+
 test("team layouts honor 2v2, 3-player, and 4-player grouping", () => {
   for (const teamSize of [2, 3, 4] as const) {
     const playerCount = teamSize * 2;

@@ -2,6 +2,7 @@ import type { Civ5Tile } from "./civ5-map.ts";
 import { poleProximity } from "./climate-projection.ts";
 import { connectedLinearFeatures, connectedTileObjects, objectsFromAssignments, type GenerationStructure, type GeographicObject } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
+import { worldCharacterProfile } from "./world-character.ts";
 
 type Point = { x: number; y: number };
 type Plate = Point & { vx: number; vy: number; continental: boolean };
@@ -237,8 +238,9 @@ function simulateMoisture(
   wraps: boolean,
   seed: number,
 ) {
-  const oceanInfluence = options.physicalOceanInfluence === "STRONG" ? 1.28 : options.physicalOceanInfluence === "WEAK" ? 0.68 : 1;
-  const rainfallShift = options.rainfall === "WET" ? 0.13 : options.rainfall === "ARID" ? -0.12 : 0;
+  const character = worldCharacterProfile(options.style).physical;
+  const oceanInfluence = (options.physicalOceanInfluence === "STRONG" ? 1.28 : options.physicalOceanInfluence === "WEAK" ? 0.68 : 1) * character.oceanModeration;
+  const rainfallShift = (options.rainfall === "WET" ? 0.13 : options.rainfall === "ARID" ? -0.12 : 0) + character.moistureBias;
   const effectiveWindX = [...windX];
   const effectiveWindY = [...windY];
   const seasonality = options.physicalSeasonality === "EXTREME" ? 1 : options.physicalSeasonality === "MILD" ? 0.2 : 0.58;
@@ -268,8 +270,8 @@ function simulateMoisture(
       const adjacent = neighbors(index, width, height, wraps);
       const neighborMean = adjacent.reduce((sum, neighbor) => sum + vapor[neighbor], 0) / Math.max(1, adjacent.length);
       const localEvaporation = landMask[index]
-        ? groundWater[index] * (0.025 + temperatures[index] * 0.055) * oceanInfluence
-        : (0.12 + temperatures[index] * 0.11) * oceanInfluence;
+        ? groundWater[index] * (0.025 + temperatures[index] * 0.055) * oceanInfluence * character.moistureEfficiency
+        : (0.12 + temperatures[index] * 0.11) * oceanInfluence * character.moistureEfficiency;
       let airborne = vapor[source] * 0.72 + vapor[index] * 0.12 + neighborMean * 0.1 + localEvaporation;
       const rise = landMask[index] ? Math.max(0, normalizedRelief[index] - normalizedRelief[source]) : 0;
       const descent = landMask[index] ? Math.max(0, normalizedRelief[source] - normalizedRelief[index]) : 0;
@@ -293,7 +295,7 @@ function simulateMoisture(
     const evaporationDemand = clamp(temperatures[index] * 0.72 + (options.physicalSeasonality === "EXTREME" ? 0.08 : 0) + continentality[index] * 0.12);
     const coldRetention = Math.max(0, 0.38 - temperatures[index]) * 0.52;
     const maritime = (1 - continentality[index]) * 0.14 * oceanInfluence;
-    return clamp(0.06 + normalizedRain * 0.94 + groundWater[index] * 0.28 + maritime + coldRetention + rainfallShift - evaporationDemand * 0.22 + (valueNoise(index % width + 137, Math.floor(index / width) + 811, 9, seed + 617) - 0.5) * 0.045);
+    return clamp(0.06 + normalizedRain * 0.94 + groundWater[index] * 0.28 + maritime + coldRetention + rainfallShift - evaporationDemand * 0.22 + (valueNoise(index % width + 137, Math.floor(index / width) + 811, 9, seed + 617) - 0.5) * 0.045 * character.climateVariance);
   });
   return { precipitation, moistures: blurField(moistures, width, height, wraps, 0.2, 3), rainShadow, windX: effectiveWindX, windY: effectiveWindY, upwind };
 }
@@ -395,10 +397,11 @@ function contiguousClimateObjects(assignments: Int32Array, labels: string[], wid
 export function generatePhysicalGeography(options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number, random: () => number): PhysicalGeography {
   const area = width * height;
   const profile = physicalProfile(options);
+  const character = worldCharacterProfile(options.style);
   const plateCount = Math.max(6, Math.min(28, Math.round(Math.sqrt(area) / 4.4) + profile.plateShift));
   const plates = createPlates(plateCount, profile.continentalShare, width, height, wraps, random);
   const { owners, second, boundary } = assignPlates(plates, width, height, wraps);
-  const activity = (options.plateActivity === "VIOLENT" ? 1.18 : options.plateActivity === "QUIET" ? 0.55 : 0.82) * profile.activity;
+  const activity = (options.plateActivity === "VIOLENT" ? 1.18 : options.plateActivity === "QUIET" ? 0.55 : 0.82) * profile.activity * character.physical.activity;
   const hypsometry = new Array<number>(area);
   const convergence = new Array<number>(area).fill(0);
   const divergence = new Array<number>(area).fill(0);
@@ -416,17 +419,17 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     convergence[index] = boundary[index] * Math.max(0, relative) * activity;
     divergence[index] = boundary[index] * Math.max(0, -relative) * activity;
     const crust = one.continental ? 0.63 : 0.3;
-    const continentalNoise = valueNoise(x + 101, y + 211, 18, seed + 101) * 0.22;
-    const regionalNoise = valueNoise(x + 307, y + 83, 7, seed + 211) * 0.12;
-    hypsometry[index] = crust + continentalNoise + regionalNoise + convergence[index] * 0.42 - divergence[index] * 0.31;
+    const continentalNoise = valueNoise(x + 101, y + 211, 18, seed + 101) * 0.22 * character.physical.continentalNoise;
+    const regionalNoise = valueNoise(x + 307, y + 83, 7, seed + 211) * 0.12 * character.physical.continentalNoise;
+    hypsometry[index] = crust + continentalNoise + regionalNoise + convergence[index] * 0.42 * character.physical.convergenceRelief - divergence[index] * 0.31 * character.physical.divergenceRelief;
   }
 
   const landCount = area - Math.round(area * clamp(options.waterPercent / 100, 0, 0.9));
   const landMask = exactTopMask(hypsometry.map((value, index) => value + hashNoise(index % width, Math.floor(index / width), seed + 313) * 0.00001), landCount);
-  let reliefValues = hypsometry.map((value, index) => value + convergence[index] * 0.58 - divergence[index] * 0.16);
+  let reliefValues = hypsometry.map((value, index) => value + convergence[index] * 0.58 * character.physical.convergenceRelief - divergence[index] * 0.16 * character.physical.divergenceRelief);
   const baseErosionPasses = options.erosionStrength === "STRONG" ? 4 : options.erosionStrength === "LIGHT" ? 1 : 2;
-  const erosionPasses = Math.max(1, baseErosionPasses + profile.erosionShift);
-  const erosionStrength = options.erosionStrength === "STRONG" ? 0.24 : options.erosionStrength === "LIGHT" ? 0.09 : 0.16;
+  const erosionPasses = Math.max(1, baseErosionPasses + profile.erosionShift + character.physical.erosionPassDelta);
+  const erosionStrength = (options.erosionStrength === "STRONG" ? 0.24 : options.erosionStrength === "LIGHT" ? 0.09 : 0.16) * character.physical.erosionStrength;
   for (let pass = 0; pass < erosionPasses; pass += 1) {
     const next = [...reliefValues];
     for (let index = 0; index < area; index += 1) {
@@ -441,7 +444,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   const minimumLand = landRelief.length ? Math.min(...landRelief) : 0;
   const maximumLand = landRelief.length ? Math.max(...landRelief) : 1;
   const normalizedRelief = reliefValues.map((value, index) => landMask[index] ? clamp((value - minimumLand) / Math.max(0.001, maximumLand - minimumLand)) : 0);
-  const effectiveMountains = options.modifier === "STRATEGIC_DEPTH" ? Math.max(22, options.mountainPercent) : options.modifier === "DOOMSDAY" || options.style === "BRUTAL" ? Math.max(18, options.mountainPercent) : options.mountainPercent;
+  const effectiveMountains = options.modifier === "STRATEGIC_DEPTH" ? Math.max(22, options.mountainPercent) : options.modifier === "DOOMSDAY" ? Math.max(18, options.mountainPercent) : Math.max(character.mountainFloor, options.mountainPercent);
   const landIndices = landMask.flatMap((land, index) => land ? [index] : []);
   const mountainCount = Math.round(landIndices.length * clamp(effectiveMountains / 100, 0, 0.42));
   const hillShare = options.worldAge === "YOUNG" ? 0.27 : options.worldAge === "OLD" ? 0.12 : 0.19;
@@ -451,9 +454,9 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   const elevations = landMask.map((_land, index) => mountains.has(index) ? 2 : hills.has(index) ? 1 : 0);
 
   const waterDistance = distanceFromWater(landMask, width, height, wraps);
-  const continentalityScale = Math.max(6, Math.min(width, height) * 0.24);
+  const continentalityScale = Math.max(6, Math.min(width, height) * 0.24 * character.physical.oceanModeration);
   const continentality = waterDistance.distances.map((value, index) => landMask[index] ? clamp(value / continentalityScale) : 0);
-  const oceanModeration = options.physicalOceanInfluence === "STRONG" ? 1.25 : options.physicalOceanInfluence === "WEAK" ? 0.62 : 1;
+  const oceanModeration = (options.physicalOceanInfluence === "STRONG" ? 1.25 : options.physicalOceanInfluence === "WEAK" ? 0.62 : 1) * character.physical.oceanModeration;
   const seasonality = options.physicalSeasonality === "EXTREME" ? 1 : options.physicalSeasonality === "MILD" ? 0.3 : 0.62;
   const climateShift = options.climate === "HOT" ? 0.13 : options.climate === "COOL" ? -0.14 : 0;
   const temperatures = new Array<number>(area);
@@ -474,7 +477,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     const radiative = 0.08 + insolation * 0.84 + climateShift;
     const maritimeTarget = 0.28 + insolation * 0.46 + climateShift * 0.72;
     const altitudeCooling = landMask[index] ? normalizedRelief[index] * 0.23 : 0;
-    temperatures[index] = clamp(mix(radiative, maritimeTarget, maritimeWeight * 0.48) - altitudeCooling + (valueNoise(x + 701, y + 503, 12, seed + 521) - 0.5) * 0.105 - localRange * 0.08);
+    temperatures[index] = clamp(mix(radiative, maritimeTarget, maritimeWeight * 0.48) - altitudeCooling + (valueNoise(x + 701, y + 503, 12, seed + 521) - 0.5) * 0.105 * character.physical.climateVariance - localRange * 0.08);
     const wind = prevailingWind(frame, options.physicalRotation);
     windX[index] = wind.x;
     windY[index] = wind.y;
@@ -575,6 +578,9 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
       easterlyTiles: area - westerlyTiles,
       drainageCorridorTiles: drainage.guidance.filter((value) => value >= 0.45).length,
       majorDrainageTiles: drainage.guidance.filter((value) => value >= 0.85).length,
+      characterActivity: Math.round(character.physical.activity * 100),
+      characterClimateVariance: Math.round(character.physical.climateVariance * 100),
+      characterMoistureEfficiency: Math.round(character.physical.moistureEfficiency * 100),
     },
   };
   return { landMask, reliefValues, temperatures: smoothedTemperatures, moistures, elevations, riverGuidance: drainage.guidance, tiles, structure };

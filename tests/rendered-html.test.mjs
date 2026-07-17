@@ -352,6 +352,20 @@ test("dense controls expose unclipped contextual help on hover and focus", async
   assert.match(readme, /contextual help on hover and keyboard focus/);
 });
 
+test("World Character explains its selected engine-specific consequences", async () => {
+  const [source, profiles, css] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/world-character.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /<legend>World character<\/legend>/);
+  assert.match(source, /className="world-character-explanation" aria-live="polite"/);
+  assert.match(source, /describeWorldCharacter\(generationOptions\.engine, generationOptions\.style\)/);
+  for (const engine of ["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"]) assert.match(profiles, new RegExp(`${engine}: \\{`));
+  for (const style of ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"]) assert.match(profiles, new RegExp(`${style}:`));
+  assert.match(css, /\.world-character-explanation \{/);
+});
+
 test("the map legend cannot capture Create controls", async () => {
   const [source, css] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),

@@ -2,6 +2,7 @@ import type { Civ5Tile } from "./civ5-map.ts";
 import { poleProximity } from "./climate-projection.ts";
 import { connectedLinearFeatures, connectedTileObjects, objectsFromAssignments, type GenerationStructure, type GeographicObject } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
+import { worldCharacterProfile } from "./world-character.ts";
 
 type Point = { x: number; y: number };
 type PolygonEdge = { one: number; two: number; coastal: boolean; contrast: number };
@@ -112,10 +113,10 @@ function pointDistanceSquared(one: Point, two: Point, width: number, wraps: bool
   return dx * dx + dy * dy;
 }
 
-function scatteredPoints(count: number, width: number, height: number, random: () => number, fantasticality: MapGenerationOptions["fantasticality"]) {
+function scatteredPoints(count: number, width: number, height: number, random: () => number, fantasticality: MapGenerationOptions["fantasticality"], characterJitter: number) {
   const columns = Math.max(1, Math.round(Math.sqrt(count * width / Math.max(1, height))));
   const rows = Math.max(1, Math.ceil(count / columns));
-  const jitter = fantasticality === "UNBOUND" ? 1.35 : fantasticality === "MYTHIC" ? 1.05 : 0.72;
+  const jitter = (fantasticality === "UNBOUND" ? 1.35 : fantasticality === "MYTHIC" ? 1.05 : 0.72) * characterJitter;
   const points: Point[] = [];
   for (let row = 0; row < rows && points.length < count; row += 1) {
     for (let column = 0; column < columns && points.length < count; column += 1) {
@@ -597,11 +598,12 @@ function applyEccentricExtreme(temperature: number, moisture: number, extreme: M
 }
 
 function createClimatePalette(region: number, center: Point, options: MapGenerationOptions, width: number, height: number, random: () => number, climateCells: ClimateCell[]) {
+  const character = worldCharacterProfile(options.style).eccentric;
   const latitude = poleProximity(center.x, center.y, width, height, options.projectionType);
   const orderedTemperature = 0.12 + Math.cos(latitude * Math.PI / 2) * 0.78;
   const orderedMoisture = 0.48 + Math.sin((latitude + 0.08) * Math.PI * 2) * 0.16;
   const logic = options.regionClimateLogic;
-  const influence = logic === "ORDERED" ? 0.88 : logic === "INFLUENCED" ? 0.52 : 0.08;
+  const influence = clamp((logic === "ORDERED" ? 0.88 : logic === "INFLUENCED" ? 0.52 : 0.08) + character.climateInfluenceDelta);
   const climateShift = options.climate === "HOT" ? 0.14 : options.climate === "COOL" ? -0.14 : 0;
   const rainShift = options.rainfall === "WET" ? 0.17 : options.rainfall === "ARID" ? -0.17 : 0;
   const desiredTemperature = clamp(orderedTemperature + climateShift);
@@ -613,10 +615,10 @@ function createClimatePalette(region: number, center: Point, options: MapGenerat
     return score < best.score ? { index, score } : best;
   }, { index: 0, score: Number.POSITIVE_INFINITY }).index;
   const cell = climateCells[climateCell];
-  const base = applyEccentricExtreme(clamp(cell.temperature + climateShift), clamp(cell.moisture + rainShift), options.eccentricExtreme);
+  const base = applyEccentricExtreme(clamp(cell.temperature + climateShift), clamp(cell.moisture + rainShift + character.moistureBias), options.eccentricExtreme);
   const temperature = base.temperature;
   const moisture = base.moisture;
-  const anchorCount = options.fantasticality === "UNBOUND" ? 4 : options.fantasticality === "MYTHIC" ? 3 : 2;
+  const anchorCount = Math.max(2, Math.min(4, (options.fantasticality === "UNBOUND" ? 4 : options.fantasticality === "MYTHIC" ? 3 : 2) + character.paletteDelta));
   const selectedSamples = [cell.samples.reduce((best, sample) => {
     const distance = (sample.temperature - cell.temperature) ** 2 + (sample.moisture - cell.moisture) ** 2;
     return distance < best.distance ? { sample, distance } : best;
@@ -629,7 +631,7 @@ function createClimatePalette(region: number, center: Point, options: MapGenerat
     selectedSamples.push(candidate.sample);
   }
   const anchors: ClimateAnchor[] = selectedSamples.map((sample, index) => {
-    const shifted = applyEccentricExtreme(clamp(sample.temperature + climateShift), clamp(sample.moisture + rainShift), options.eccentricExtreme);
+    const shifted = applyEccentricExtreme(clamp(sample.temperature + climateShift), clamp(sample.moisture + rainShift + character.moistureBias), options.eccentricExtreme);
     return {
       ...shifted,
       forest: options.eccentricExtreme === "ARBOREA" || shifted.moisture > 0.48 && hashNoise(region, index, 1811) > 0.18,
@@ -639,7 +641,7 @@ function createClimatePalette(region: number, center: Point, options: MapGenerat
   });
   // Unbound realms deliberately include one climate contradiction, but it is
   // still assigned as a contiguous collection rather than tile confetti.
-  if (options.fantasticality === "UNBOUND" && anchors.length > 1 && options.regionClimateLogic !== "ORDERED") {
+  if (character.allowContradiction && options.fantasticality === "UNBOUND" && anchors.length > 1 && options.regionClimateLogic !== "ORDERED") {
     const last = anchors.length - 1;
     const inverted = applyEccentricExtreme(clamp(1 - anchors[0].temperature), clamp(1 - anchors[0].moisture), options.eccentricExtreme);
     anchors[last] = { ...anchors[last], ...inverted, forest: inverted.moisture > 0.48, jungle: inverted.temperature > 0.66 && inverted.moisture > 0.62, marsh: inverted.moisture > 0.76 };
@@ -664,14 +666,14 @@ function edgeKey(one: number, two: number) {
   return one < two ? `${one}:${two}` : `${two}:${one}`;
 }
 
-function selectMountainEdges(edges: PolygonEdge[], desired: number, coastalPercent: number, fantasticality: MapGenerationOptions["fantasticality"], random: () => number, seed: number) {
+function selectMountainEdges(edges: PolygonEdge[], desired: number, coastalPercent: number, fantasticality: MapGenerationOptions["fantasticality"], rangeLength: number, random: () => number, seed: number) {
   const selected = new Set<string>();
   const selectedSide = new Map<string, number>();
   const unused = [...edges];
   let ranges = 0;
   let boundaryRangeEdges = 0;
   const vertexRange = new Map<number, number>();
-  const maxLength = fantasticality === "UNBOUND" ? 7 : fantasticality === "MYTHIC" ? 6 : 4;
+  const maxLength = Math.max(2, Math.round((fantasticality === "UNBOUND" ? 7 : fantasticality === "MYTHIC" ? 6 : 4) * rangeLength));
   while (selected.size < desired && unused.length) {
     unused.sort((one, two) => {
       const preference = (edge: PolygonEdge) => (edge.coastal ? coastalPercent / 100 : 1 - coastalPercent / 100) + edge.contrast * (fantasticality === "UNBOUND" ? 1.8 : 1.25) + hashNoise(edge.one, edge.two, seed) * 0.55;
@@ -716,17 +718,25 @@ export function generateEccentricGeography(
   random: () => number,
 ): EccentricGeography {
   const area = width * height;
-  const profile = topologyForPreset(options);
-  const organicity = options.fantasticality === "UNBOUND" ? 1 : options.fantasticality === "MYTHIC" ? 0.72 : 0.38;
+  const character = worldCharacterProfile(options.style);
+  const baseTopology = topologyForPreset(options);
+  const profile: TopologyProfile = {
+    ...baseTopology,
+    islands: Math.max(0, Math.round(baseTopology.islands * character.eccentric.fragmentation)),
+    tinyIslands: Math.max(0, Math.round(baseTopology.tinyIslands * character.eccentric.fragmentation)),
+    lakes: Math.max(0, Math.round(baseTopology.lakes * (0.8 + character.eccentric.fragmentation * 0.2))),
+  };
+  const organicity = clamp((options.fantasticality === "UNBOUND" ? 1 : options.fantasticality === "MYTHIC" ? 0.72 : 0.38) * character.eccentric.organicity, 0.18, 1.35);
   const polygonTargets = { LOW: 100, FAIR: 200, HIGH: 250, VERY_HIGH: 300 } as const;
   const polygonCount = Math.max(18, Math.min(Math.floor(area / 3), polygonTargets[options.granularity]));
   const hexesPerSubregion = Math.max(1, 1.05292 * Math.log(area) - 5.74245);
   const subregionCount = Math.max(polygonCount * 2, Math.min(area, Math.ceil(area / hexesPerSubregion)));
 
   // Pass 1: render a dense, deliberately uneven subpolygon world.
-  let subregionCenters = scatteredPoints(subregionCount, width, height, random, options.fantasticality);
+  let subregionCenters = scatteredPoints(subregionCount, width, height, random, options.fantasticality, character.eccentric.pointJitter);
   let subregions = assignHexes(subregionCenters, width, height, wraps);
-  if (options.fantasticality === "RESTRAINED") {
+  const relaxationPasses = options.fantasticality === "RESTRAINED" || character.eccentric.pointJitter < 0.95 ? 1 : 0;
+  for (let pass = 0; pass < relaxationPasses; pass += 1) {
     subregionCenters = relaxPoints(subregionCenters, subregions, width, wraps);
     subregions = assignHexes(subregionCenters, width, height, wraps);
   }
@@ -818,9 +828,9 @@ export function generateEccentricGeography(
     const collection = Math.max(0, collectionAssignments[subregion]);
     const anchor = palette.anchors[Math.min(palette.anchors.length - 1, collection)];
     tileClimateAnchors[index] = anchor;
-    const detailScale = options.fantasticality === "UNBOUND" ? 3.2 : 5.4;
-    temperatures[index] = clamp(anchor.temperature + (valueNoise(x + 101, y + 211, detailScale, seed + 601) - 0.5) * 0.16);
-    moistures[index] = clamp(anchor.moisture + (valueNoise(x + 419, y + 73, detailScale + 1.3, seed + 701) - 0.5) * 0.2);
+    const detailScale = (options.fantasticality === "UNBOUND" ? 3.2 : 5.4) / Math.max(0.65, character.eccentric.reliefNoise);
+    temperatures[index] = clamp(anchor.temperature + (valueNoise(x + 101, y + 211, detailScale, seed + 601) - 0.5) * 0.16 * character.eccentric.reliefNoise);
+    moistures[index] = clamp(anchor.moisture + (valueNoise(x + 419, y + 73, detailScale + 1.3, seed + 701) - 0.5) * 0.2 * character.eccentric.reliefNoise + character.eccentric.moistureBias * 0.35);
   }
 
   const paletteDistance = (one: number, two: number) => {
@@ -843,8 +853,8 @@ export function generateEccentricGeography(
 
   // Pass 6: non-self-intersecting ranges follow one side of coastal arcs and
   // the borders between dissonant regional palettes.
-  const desiredRangeEdges = Math.max(1, Math.round(edges.length * clamp(options.mountainPercent / 100, 0, 0.38) * (options.fantasticality === "UNBOUND" ? 2.15 : 1.72)));
-  const mountainSelection = selectMountainEdges(edges, desiredRangeEdges, options.coastalRangePercent, options.fantasticality, random, seed + 809);
+  const desiredRangeEdges = Math.max(1, Math.round(edges.length * clamp(options.mountainPercent / 100, 0, 0.38) * (options.fantasticality === "UNBOUND" ? 2.15 : 1.72) * character.eccentric.rangeLength));
+  const mountainSelection = selectMountainEdges(edges, desiredRangeEdges, options.coastalRangePercent, options.fantasticality, character.eccentric.rangeLength, random, seed + 809);
   const mountainCore = new Uint8Array(area);
   const boundaryDistance = new Uint8Array(area);
   for (let index = 0; index < area; index += 1) {
@@ -868,11 +878,12 @@ export function generateEccentricGeography(
   for (let index = 0; index < area; index += 1) {
     const x = index % width;
     const y = Math.floor(index / width);
-    const regionalUplift = hashNoise(polygonRegions[hexPolygons[index]], hexPolygons[index], seed + 907) > (options.fantasticality === "UNBOUND" ? 0.79 : 0.9) ? 0.24 : 0;
-    reliefValues[index] = valueNoise(x + 811, y + 307, options.fantasticality === "UNBOUND" ? 5.2 : 8.2, seed + 1009) * 0.42 + mountainCore[index] * 0.9 + boundaryDistance[index] * 0.3 + regionalUplift;
+    const regionalUpliftThreshold = clamp((options.fantasticality === "UNBOUND" ? 0.79 : 0.9) + character.eccentric.regionalUpliftDelta, 0.55, 0.98);
+    const regionalUplift = hashNoise(polygonRegions[hexPolygons[index]], hexPolygons[index], seed + 907) > regionalUpliftThreshold ? 0.24 * character.eccentric.reliefNoise : 0;
+    reliefValues[index] = valueNoise(x + 811, y + 307, (options.fantasticality === "UNBOUND" ? 5.2 : 8.2) / Math.max(0.7, character.eccentric.reliefNoise), seed + 1009) * 0.42 * character.eccentric.reliefNoise + mountainCore[index] * 0.9 + boundaryDistance[index] * 0.3 * character.eccentric.rangeLength + regionalUplift;
   }
   const landRelief = reliefValues.filter((_value, index) => landMask[index]);
-  const effectiveMountainPercent = options.modifier === "STRATEGIC_DEPTH" ? Math.max(22, options.mountainPercent) : options.modifier === "DOOMSDAY" || options.style === "BRUTAL" ? Math.max(18, options.mountainPercent) : options.mountainPercent;
+  const effectiveMountainPercent = options.modifier === "STRATEGIC_DEPTH" ? Math.max(22, options.mountainPercent) : options.modifier === "DOOMSDAY" ? Math.max(18, options.mountainPercent) : Math.max(character.mountainFloor, options.mountainPercent);
   const hillPercent = options.worldAge === "YOUNG" ? 29 : options.worldAge === "OLD" ? 12 : 20;
   const mountainThreshold = effectiveMountainPercent <= 0 ? Number.POSITIVE_INFINITY : quantile(landRelief, 1 - clamp(effectiveMountainPercent / 100, 0, 0.42));
   const hillThreshold = quantile(landRelief, 1 - clamp((effectiveMountainPercent + hillPercent) / 100, 0, 0.74));

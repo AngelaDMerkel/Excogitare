@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCiv5Map, parseCiv5MapForRepair, serializeCiv5Map, updateCiv5Map, updateCiv5MapMetadata, type Civ5Map, type Civ5Tile } from "../lib/civ5-map.ts";
-import { DEFAULT_GENERATION_OPTIONS, GAME_BREAKING_GEOMETRIES, GAME_BREAKING_MAP_SIZES, generateMap, isGameBreakingMapSize, MAP_PRESETS, MAP_SIZES, randomGenerationOptions, resolveMapDimensions, SAFE_MAP_GEOMETRIES, SAFE_MAP_SIZES } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, GAME_BREAKING_GEOMETRIES, GAME_BREAKING_MAP_SIZES, generateMap, isGameBreakingMapSize, MAP_PRESETS, MAP_SIZES, randomGenerationOptions, resolveMapDimensions, SAFE_MAP_GEOMETRIES, SAFE_MAP_SIZES, type GenerationEngine, type GenerationStyle, type MapGenerationOptions } from "../lib/map-generator.ts";
 import { createLuaMapScript, mapExportBaseName, mapFromLuaScript } from "../lib/map-script.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map } from "../lib/map-analysis.ts";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "../lib/generation-history.ts";
@@ -13,8 +13,27 @@ import { RIVER_DATA_MASK, riverEdgeDefinitions, riverFlowsFromAToB } from "../li
 import { poleProximity } from "../lib/climate-projection.ts";
 import { MINIMUM_START_DISTANCE } from "../lib/start-locations.ts";
 import { generatePolisGeography } from "../lib/polis-generator.ts";
+import { generateEccentricGeography } from "../lib/eccentric-generator.ts";
+import { generatePhysicalGeography } from "../lib/physical-generator.ts";
+import { describeWorldCharacter, WORLD_CHARACTER_PROFILES, worldCharacterProfile } from "../lib/world-character.ts";
 
 const encoder = new TextEncoder();
+
+function seededRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function variance(values: number[]) {
+  const mean = values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+  return values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, values.length);
+}
 
 function metadataSections(buffer: ArrayBuffer) {
   const view = new DataView(buffer);
@@ -925,6 +944,74 @@ test("seeded generation is deterministic and uses standard map sizes", () => {
   assert.equal(new Set(first.startLocations.map((start) => `${start.x},${start.y}`)).size, 10);
 });
 
+test("World Character profiles exhaustively define directional behavior for every engine", () => {
+  const styles: GenerationStyle[] = ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"];
+  const engines: GenerationEngine[] = ["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"];
+  assert.deepEqual(Object.keys(WORLD_CHARACTER_PROFILES).sort(), [...styles].sort());
+  for (const style of styles) {
+    assert.equal(worldCharacterProfile(style).id, style);
+    for (const engine of engines) assert.ok(describeWorldCharacter(engine, style).length >= 80, `${engine} ${style} lacks a useful explanation`);
+  }
+  assert.ok(worldCharacterProfile("REALISTIC").riverSourceFactor > worldCharacterProfile("FANTASTICAL").riverSourceFactor);
+  assert.ok(worldCharacterProfile("FANTASTICAL").riverSourceFactor > worldCharacterProfile("MUNDANE").riverSourceFactor);
+  assert.ok(worldCharacterProfile("MUNDANE").riverSourceFactor > worldCharacterProfile("BRUTAL").riverSourceFactor);
+  assert.equal(worldCharacterProfile("BRUTAL").mountainFloor, 18);
+  assert.ok(worldCharacterProfile("FANTASTICAL").eccentric.paletteDelta > worldCharacterProfile("MUNDANE").eccentric.paletteDelta);
+  assert.ok(worldCharacterProfile("BRUTAL").physical.activity > worldCharacterProfile("MUNDANE").physical.activity);
+  assert.ok(worldCharacterProfile("BRUTAL").polis.corridorBarrier > worldCharacterProfile("MUNDANE").polis.corridorBarrier);
+});
+
+test("World Character produces deterministic, legal, materially distinct output in every engine", () => {
+  const styles: GenerationStyle[] = ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"];
+  const configurations: ReadonlyArray<{ engine: GenerationEngine; preset: MapGenerationOptions["preset"] }> = [
+    { engine: "EXCOGITARE", preset: "CONTINENTS" },
+    { engine: "ECCENTRIC", preset: "MYTHIC_REGIONS" },
+    { engine: "PHYSICAL", preset: "DYNAMIC_EARTH" },
+    { engine: "POLIS", preset: "IMPERIAL_RING" },
+  ];
+  for (const configuration of configurations) {
+    const signatures = new Set<string>();
+    for (const style of styles) {
+      const options = { ...DEFAULT_GENERATION_OPTIONS, ...configuration, style, size: "DUEL" as const, players: 4, cityStates: 4, waterPercent: 52, mountainPercent: 14, seed: "world-character-matrix" };
+      const first = generateMap(options);
+      const second = generateMap(options);
+      assert.deepEqual(first, second, `${configuration.engine} ${style} was not deterministic`);
+      assert.equal(first.structure?.engine, configuration.engine);
+      assert.equal(first.generation?.style, style);
+      assert.equal(first.tiles.filter((tile) => tile.terrain < 2).length, Math.round(first.tiles.length * 0.52));
+      assertStartSpacing(first);
+      assertMountainPassability(first);
+      assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), [], `${configuration.engine} ${style} unexpectedly required Repair`);
+      if (style === "BRUTAL") assert.ok((first.generation?.mountainPercent ?? 0) >= 18);
+      const exported = parseCiv5Map(serializeCiv5Map(first), `${configuration.engine}-${style}.Civ5Map`);
+      assert.deepEqual(exported.tiles, first.tiles, `${configuration.engine} ${style} tile consequences did not survive Civ5Map export`);
+      signatures.add(first.tiles.map((tile) => `${tile.terrain}${tile.elevation}${tile.feature}:${tile.river}`).join("|"));
+    }
+    assert.equal(signatures.size, styles.length, `${configuration.engine} characters did not produce four distinct worlds`);
+  }
+});
+
+test("structured engines apply character direction to retained geography rather than metadata alone", () => {
+  const styles: GenerationStyle[] = ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"];
+  const options = { ...DEFAULT_GENERATION_OPTIONS, size: "DUEL" as const, players: 4, cityStates: 4, waterPercent: 52, mountainPercent: 14, seed: "character-direction" };
+  const eccentric = Object.fromEntries(styles.map((style) => [style, generateEccentricGeography({ ...options, engine: "ECCENTRIC", preset: "MYTHIC_REGIONS", style }, 40, 24, true, 4901, seededRandom(771))])) as Record<GenerationStyle, ReturnType<typeof generateEccentricGeography>>;
+  assert.ok(eccentric.FANTASTICAL.diagnostics.climatePalettes > eccentric.MUNDANE.diagnostics.climatePalettes);
+  assert.ok(eccentric.FANTASTICAL.diagnostics.climatePalettes > eccentric.REALISTIC.diagnostics.climatePalettes);
+  assert.ok(eccentric.BRUTAL.moistures.reduce((sum, value) => sum + value, 0) < eccentric.REALISTIC.moistures.reduce((sum, value) => sum + value, 0));
+  assert.ok(variance(eccentric.BRUTAL.reliefValues) > variance(eccentric.MUNDANE.reliefValues));
+
+  const physical = Object.fromEntries(styles.map((style) => [style, generatePhysicalGeography({ ...options, engine: "PHYSICAL", preset: "DYNAMIC_EARTH", style }, 40, 24, true, 4901, seededRandom(771))])) as Record<GenerationStyle, ReturnType<typeof generatePhysicalGeography>>;
+  assert.ok((physical.BRUTAL.structure.diagnostics.convergentTiles ?? 0) > (physical.MUNDANE.structure.diagnostics.convergentTiles ?? 0));
+  assert.ok((physical.BRUTAL.structure.diagnostics.meanMoisture ?? 0) < (physical.REALISTIC.structure.diagnostics.meanMoisture ?? 0));
+  assert.ok(variance(physical.BRUTAL.reliefValues) > variance(physical.MUNDANE.reliefValues));
+
+  const polis = Object.fromEntries(styles.map((style) => [style, generatePolisGeography({ ...options, engine: "POLIS", preset: "IMPERIAL_RING", style }, 40, 24, true, 4901, seededRandom(771))])) as Record<GenerationStyle, ReturnType<typeof generatePolisGeography>>;
+  assert.ok((polis.BRUTAL.structure.diagnostics.characterChokepointDensity ?? 0) > (polis.MUNDANE.structure.diagnostics.characterChokepointDensity ?? 0));
+  const averageWidth = (style: GenerationStyle) => polis[style].structure.strategicGraph!.edges.reduce((sum, edge) => sum + edge.width, 0) / Math.max(1, polis[style].structure.strategicGraph!.edges.length);
+  assert.ok(averageWidth("BRUTAL") < averageWidth("MUNDANE"));
+  assert.ok(variance(polis.BRUTAL.reliefValues) > variance(polis.MUNDANE.reliefValues));
+});
+
 test("Eccentric generation is deterministic, exact, legal, and geographically structured", () => {
   const options = {
     ...DEFAULT_GENERATION_OPTIONS,
@@ -1488,7 +1575,7 @@ test("Eccentric presets remain valid through extreme Pin and String geometries",
 });
 
 test("generation history retains the newest 30 exact map snapshots", () => {
-  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "history-source" });
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, style: "FANTASTICAL", seed: "history-source" });
   let history: GenerationHistoryEntry[] = [];
   for (let id = 1; id <= 35; id += 1) history = addGenerationToHistory(history, generated, id);
 
@@ -1502,6 +1589,7 @@ test("generation history retains the newest 30 exact map snapshots", () => {
   assert.notEqual(history[0].map.tiles[0].terrain, 99);
   assert.notDeepEqual(history[0].map.generation?.dominantTerrains, restored.generation?.dominantTerrains);
   assert.notEqual(history[0].map.structure?.objects[0].tileIndices[0], 999_999);
+  assert.equal(history[0].map.generation?.style, "FANTASTICAL");
 });
 
 test("geometry choices preserve the size budget while changing the aspect ratio", () => {
@@ -1576,12 +1664,14 @@ test("Randomise produces complete valid settings and wrap choices control export
   const sizes = new Set<string>();
   const gameBreakingSizes = new Set<string>();
   const engines = new Set<string>();
+  const styles = new Set<string>();
   for (let index = 0; index < 60; index += 1) {
     const options = randomGenerationOptions(random);
     wrapTypes.add(options.wrapType);
     geometries.add(options.geometry);
     sizes.add(options.size);
     engines.add(options.engine);
+    styles.add(options.style);
     assert.ok(options.waterPercent >= 0 && options.waterPercent <= 90);
     assert.ok(options.mountainPercent >= 0 && options.mountainPercent <= 38);
     assert.ok(options.players >= 2 && options.players <= 22);
@@ -1601,6 +1691,7 @@ test("Randomise produces complete valid settings and wrap choices control export
   assert.deepEqual(gameBreakingGeometries, new Set([...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES]));
   assert.deepEqual(gameBreakingSizes, new Set([...SAFE_MAP_SIZES, ...GAME_BREAKING_MAP_SIZES]));
   assert.deepEqual(engines, new Set(["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"]));
+  assert.deepEqual(styles, new Set(["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"]));
 
   const eastWest = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "INLAND_SEAS", size: "DUEL", wrapType: "EAST_WEST" });
   const flat = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", size: "DUEL", wrapType: "NONE" });

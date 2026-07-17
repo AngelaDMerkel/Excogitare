@@ -100,12 +100,23 @@ Projection affects temperature, biome placement, ice, polar-land rules and deter
 - **Physical** is a separate Earth-system approximation rather than Realistic wearing a false moustache. It assigns moving continental and oceanic plates, resolves convergent and divergent boundaries, uplifts and erodes their margins, and derives exact sea level from the requested water share. Climate then emerges from projected insolation, altitude, continentality, axial seasonality, maritime moderation, smoothly blended circulation cells, iterative vapor transport, evaporation demand, rain shadows and runoff. It is substantially more complicated than “wet west, dry east,” because the tropical, temperate and polar winds do not all travel in the same direction.
 - **Polis** works in the opposite direction. It compiles a strategic graph of safe territories, contested objectives, land and naval fronts, protected routes and city-state space before terrain exists. Geography is then fitted around that skeleton. Its balance is inspectable rather than implied: the retained graph records nodes, routes, protected tiles, measurements and any constraint that had to be relaxed.
 
-**World character** is independent of engine:
+**World character** is an independent modifier, not a fifth engine and not a renamed climate setting. The engine still decides how a world is constructed; Map type still chooses that engine's geographic grammar; World character decides how restrained, coherent, strange or hostile the chosen architecture should be. The sentence beneath the control changes with both selections so that this consequence is visible before generation. It does not silently replace rainfall, climate, advanced-engine or multiplayer settings. Brutal's disclosed Tournament, Balanced-start and minimum-mountain defaults are the deliberate exception.
 
-- **Realistic** favours coupled elevation, temperature, precipitation, softened biome transitions and west-to-east rain shadows.
-- **Fantastical** permits stronger warping, stranger regions and less obedient climate.
-- **Mundane** keeps shapes and variation closer to an ordinary Civ-like map.
-- **Brutal** raises the competitive difficulty with scarce opportunities, hostile relief, narrow routes and tournament-oriented starts. It enforces at least 18% mountains.
+- **Realistic** favours connected systems, credible causality, moderated extremes and comparatively abundant drainage.
+- **Fantastical** favours fragmentation, dramatic relief, strong regional contrast and surprising—but composed—transitions.
+- **Mundane** favours broad readable geography, familiar biomes and restrained local drama.
+- **Brutal** favours dry interiors, hostile relief, difficult movement and deliberate passes without making land inaccessible. It enforces at least 18% mountains.
+
+The same character therefore has different work to do in each engine:
+
+| Character | Excogitare | Eccentric | Physical | Polis |
+| --- | --- | --- | --- | --- |
+| Realistic | Refines land and relief fields, follows plate boundaries, cools high ground and transports moisture into west-to-east rain shadows. | Regularises the polygon mesh, strengthens latitude, suppresses contradictory biome collections and favours credible regional boundaries. | Strengthens plate causality, erosion, maritime moderation and atmospheric moisture transport while restraining local climate noise. | Wraps the strategic graph in organic terrain, broad approaches, climate-led biomes and restrained corridor barriers. |
+| Fantastical | Maximises coordinate warp, detailed coastlines, regional climate variance and polygon-shaped uplands. | Makes cells more irregular, expands biome collections, permits deliberate contradictions and fragments realms without discarding their selected landmass grammar. | Amplifies crustal heterogeneity, active relief and climate variance while retaining the engine's causal simulation passes. | Crooks fronts, narrows approaches, roughens contested regions and raises dramatic barriers around protected routes. |
+| Mundane | Minimises warp, relief and local climate noise to produce broad Civ-like forms. | Regularises regions, blends climates, shortens ranges and restrains local relief. | Favours quiet plates, stronger erosion, subdued relief, low climate variance and conventional broad biomes. | Uses broad readable routes, low terrain noise, generous safe margins and conventional regional climate. |
+| Brutal | Builds contested ridges, dries the terrain mix, reduces easy drainage and applies the mountain floor. | Builds dry rugged boundary systems and narrow deliberate passes while preserving accessibility. | Uses violent convergence, weak moisture retention, harsh continentality, rugged relief and the mountain floor. | Compresses fronts, exposes objectives, raises hostile corridor barriers and preserves only deliberate protected passes. |
+
+Character remains part of the deterministic recipe: an identical seed and identical complete settings reproduce the same result. It also follows selective regeneration. Rerunning Climate applies the new character to climate and biome composition while retaining the existing land and elevation; rerunning Rivers changes drainage propensity while retaining terrain, features, resources and wonders.
 
 **Map type** supplies the initial geography and sensible defaults. Selecting one also selects its owning engine.
 
