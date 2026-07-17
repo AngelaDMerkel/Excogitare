@@ -2551,7 +2551,7 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Ancient ruins</span><select value={generationOptions.ruinAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinAbundance: event.target.value as MapGenerationOptions["ruinAbundance"] }))}><option value="NONE">None</option><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="RAGING">Abundant</option></select></label>
                         <label className="control-field"><span>Ruin start distance</span><input type="number" min="1" max="12" value={generationOptions.ruinStartDistance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinStartDistance: Number(event.target.value) }))} /></label>
                       </div>
-                      <small className="content-note">Camps, ruins, ruined cities, and roads are scenario content. Excogitare previews and analyzes them; geography-only export reports that they cannot yet be embedded.</small>
+                      <small className="content-note">Camps, ruins, ruined cities, roads, and generated start locations are written into the exported scenario section. Units, developed cities, and broader scenario scripting remain outside Create.</small>
                         </div>
                       </details>
                     </div>

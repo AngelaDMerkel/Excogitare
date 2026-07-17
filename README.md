@@ -30,7 +30,7 @@ The controls in the top bar remain available in every workspace:
 
 - **Undo / Redo** move through edits made during the current session. View position is independent of map state, so an edit should not throw away the current pan or zoom.
 - **Export PNG** captures the rendered map with a transparent background. It exports the map, not the surrounding interface.
-- **Export Civ5Map** writes the current map using its edited name as the filename. Imported scenario records are preserved where the parser understands them. A confirmation modal appears if validation finds material problems.
+- **Export Civ5Map** writes the current map using its edited name as the filename. The map name and description remain separately terminated metadata fields, so Civ V's map list displays the name rather than running directly into the description. Generated maps include their major and city-state start slots, supported site improvements, and roads; imported scenario records are preserved where the parser understands them. A confirmation modal appears if validation finds material problems.
 - **Open map** loads another `.Civ5Map`. Unsaved in-memory history is not a substitute for keeping the original file.
 - Clicking the **map name** or **description** offers Edit Mode. Saving changes updates the metadata used by subsequent Civ5Map and PNG exports.
 
@@ -212,7 +212,7 @@ The **Strategy graph** layer renders that retained model over the map: teal safe
 - **Ancient ruins** selects none, scarce, standard or abundant ruins; **Ruin start distance** provides the equivalent buffer.
 - **Reset content** restores all resource, wonder, camp and ruin settings.
 
-Camps, ruins, ruined cities and roads are scenario content. Excogitare can preview and analyze them, but a newly generated geography-first Civ5Map does not yet embed every one of those records in a fresh scenario section. Imported maps fare better because their existing scenario structure can be amended rather than invented.
+Camps, ruins, ruined cities, roads, and generated start positions are scenario content. Excogitare now writes those supported records into a fresh scenario section when exporting a generated map. Units, developed cities, diplomacy, technologies, policies, and other full-scenario records remain outside Create; imported maps fare better where their existing scenario structure can be amended rather than invented.
 
 ### Design: Players and starts
 
@@ -280,7 +280,7 @@ Profiles control which findings are selected, not which tests run. Individual fi
 
 Repair checks dimensions, tile counts and malformed terrain values; illegal terrain, elevation, feature, resource and wonder combinations; fish on land and land resources in impossible terrain; rivers drawn in water, disconnected edge fragments, inland dead ends and drainage that fails to reach an ocean or lake; scenario cities with broken tile links, duplicate identifiers, missing records or impossible placement; and start locations outside the map, on blocked terrain, duplicated, fewer than five hexes apart, misflagged as major or city-state starts, isolated by mountains, absent entirely, or inconsistent with the stored player count.
 
-Illegal resources are relocated to a compatible nearby tile when a defensible destination exists and deleted when it does not. Illegal features and wonders are removed or corrected according to their rule. River repair may discard broken fragments and rebuild a continuous mountain-to-water network because preserving a nonsensical river more faithfully would still leave it nonsensical. Start repair may replace a complete overcrowded layout, correct city-state flags and synchronize the logical player count. A zero-start imported map can be rebuilt only when its binary scenario section already contains writable player slots; otherwise Repair reports a blocking error and asks for those records to be created in Civ V WorldBuilder instead of offering an edit that export would discard.
+Illegal resources are relocated to a compatible nearby tile when a defensible destination exists and deleted when it does not. Illegal features and wonders are removed or corrected according to their rule. River repair may discard broken fragments and rebuild a continuous mountain-to-water network because preserving a nonsensical river more faithfully would still leave it nonsensical. Start repair may replace a complete overcrowded layout, correct city-state flags and synchronize the logical player count. A zero-start geography-only map can now receive a fresh scenario section containing spaced major and city-state starts. A file that already contains unrelated scenario data but exposes no writable player slots remains blocked, because replacing that scenario wholesale would be a more destructive intervention than Repair pretends to be.
 
 Repair is useful, but it is not an oracle. Its legality tables know the ordinary content bundled into Excogitare, not every rule introduced by every mod. A strange but intentional river may be replaced by a more conventional one; damaged scenario data may be beyond salvage; and passing every check means only that the map is internally coherent to Excogitare. It does not amount to a blood oath that Civ V will load every possible file. Review Difference and retain the original.
 

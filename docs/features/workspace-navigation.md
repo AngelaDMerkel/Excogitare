@@ -32,7 +32,7 @@ The workspace switcher and stage navigation must also be visually unmistakable. 
 ## Failure behavior and exclusions
 
 - A blocked Lua entry leaves the current workspace untouched until the user accepts the Experimental warning.
-- Repair cannot invent writable binary scenario records; the workspace reorganization does not expand the repair engine's domain rules.
+- Repair may create a scenario section for a geography-only map, but it will not replace an existing scenario section merely to invent player records; the workspace reorganization does not weaken that safeguard.
 - Lua Script, Generate and Diagnostics reorganize the existing compatibility workspace. They do not constitute complete Civ V Lua-host compatibility.
 - This feature does not change map generation, repair algorithms, file formats, rendering or export behavior.
 

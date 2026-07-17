@@ -16,6 +16,18 @@ import { generatePolisGeography } from "../lib/polis-generator.ts";
 
 const encoder = new TextEncoder();
 
+function metadataSections(buffer: ArrayBuffer) {
+  const view = new DataView(buffer);
+  const sizes = [14, 18, 22, 26, 30, 34, 38].map((offset) => view.getUint32(offset, true));
+  const nameOffset = 42 + sizes.slice(0, 5).reduce((total, size) => total + size, 0);
+  const descriptionOffset = nameOffset + sizes[5];
+  const bytes = new Uint8Array(buffer);
+  return {
+    name: bytes.subarray(nameOffset, descriptionOffset),
+    description: bytes.subarray(descriptionOffset, descriptionOffset + sizes[6]),
+  };
+}
+
 test("climate projections relocate the poles without changing map geometry", () => {
   const width = 101;
   const height = 61;
@@ -239,7 +251,7 @@ function createScenarioMap() {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
 
-  view.setUint8(0, 0x1c);
+  view.setUint8(0, 0x8c);
   view.setUint32(1, width, true);
   view.setUint32(5, height, true);
   view.setUint8(9, 1);
@@ -303,7 +315,7 @@ function createScenarioMapWithMissingStarts() {
   const buffer = new ArrayBuffer(improvementOffset + tileDataSize);
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
-  view.setUint8(0, 0x1c);
+  view.setUint8(0, 0x8c);
   view.setUint32(1, width, true);
   view.setUint32(5, height, true);
   view.setUint8(9, playerCount);
@@ -368,7 +380,7 @@ function createScenarioCityMap() {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
 
-  view.setUint8(0, 0x1c);
+  view.setUint8(0, 0x8c);
   view.setUint32(1, width, true);
   view.setUint32(5, height, true);
   view.setUint8(9, 1);
@@ -435,6 +447,46 @@ test("rewrites map metadata without disturbing scenario data", () => {
     playable: true,
     cityState: false,
   }]);
+  const metadata = metadataSections(exported);
+  assert.equal(metadata.name.at(-1), 0);
+  assert.equal(metadata.description.at(-1), 0);
+});
+
+test("generated map metadata keeps Civ V names and descriptions independently terminated", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "metadata-terminators" });
+  generated.name = "Ægir's Reach";
+  generated.description = "A cold description ✓";
+  const exported = serializeCiv5Map(generated);
+  assert.equal(new DataView(exported).getUint8(0), 0x8c);
+  const metadata = metadataSections(exported);
+  assert.equal(metadata.name.at(-1), 0);
+  assert.equal(metadata.description.at(-1), 0);
+  assert.equal(new TextDecoder().decode(metadata.name.subarray(0, -1)), generated.name);
+  assert.equal(new TextDecoder().decode(metadata.description.subarray(0, -1)), generated.description);
+  const parsed = parseCiv5Map(exported, "fallback.Civ5Map");
+  assert.equal(parsed.name, generated.name);
+  assert.equal(parsed.description, generated.description);
+  assert.equal(parsed.startLocations.filter((start) => !start.cityState).length, 2);
+});
+
+test("geography-only exports do not claim to contain scenario data", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "geography-marker" });
+  generated.startLocations = [];
+  const exported = serializeCiv5Map(generated);
+  assert.equal(new DataView(exported).getUint8(0), 0x0c);
+  assert.equal(parseCiv5Map(exported, "geography.Civ5Map").scenarioDataPresent, false);
+});
+
+test("Repair detects and normalizes the invalid synthetic scenario marker", () => {
+  const invalid = createScenarioMap();
+  new DataView(invalid).setUint8(0, 0x1c);
+  const parsed = parseCiv5Map(invalid, "invalid-marker.Civ5Map");
+  const issue = buildRepairIssues(parsed).find((candidate) => candidate.id === "structure-scenario-marker");
+  assert.equal(issue?.mutation?.kind, "NORMALIZE_SCENARIO_MARKER");
+  const repaired = applyRepairIssues(parsed, [issue!], new Set([issue!.id]));
+  const exported = updateCiv5Map(invalid, repaired);
+  assert.equal(new DataView(exported).getUint8(0), 0x8c);
+  assert.equal(parseCiv5Map(exported, "repaired-marker.Civ5Map").scenarioMarker, 8);
 });
 
 test("parses scenario political ownership, player colors, and routes", () => {
@@ -528,7 +580,11 @@ test("repairs scenario cities placed on water and preserves the corrected tile l
 test("repair parser recovers truncated geography into a complete renderable grid", () => {
   const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "repair-salvage" });
   const serialized = serializeCiv5Map(generated);
-  const truncated = serialized.slice(0, serialized.byteLength - 8);
+  const view = new DataView(serialized);
+  let geographyLength = 42;
+  for (const headerOffset of [14, 18, 22, 26, 30, 34, 38]) geographyLength += view.getUint32(headerOffset, true);
+  geographyLength += 4 + view.getUint32(geographyLength, true) + generated.tiles.length * 8;
+  const truncated = serialized.slice(0, geographyLength - 8);
   const recovered = parseCiv5MapForRepair(truncated, "damaged.Civ5Map");
 
   assert.equal(recovered.salvaged, true);
@@ -705,12 +761,54 @@ test("Repair treats missing start locations as an error and rebuilds writable sc
   assertStartSpacing(repaired);
   assert.equal(validateCiv5Map(repaired).some((issue) => issue.category === "STARTS" && issue.severity === "ERROR"), false);
 
-  const noSlots: Civ5Map = { ...writable, players: 0, scenarioPlayerSlots: 0 };
+  const noSlots: Civ5Map = { ...writable, players: 0, scenarioPlayerSlots: 0, scenarioDataPresent: true };
   const blocked = buildRepairIssues(noSlots).find((issue) => issue.id === "missing-start-locations");
   assert.equal(blocked?.severity, "ERROR");
   assert.equal(blocked?.mutation, undefined);
   assert.match(blocked?.detail ?? "", /no writable scenario player slots/i);
   assert.ok(validateCiv5Map(noSlots).some((issue) => issue.category === "STARTS" && issue.severity === "ERROR"));
+});
+
+test("Repair creates scenario starts for geography-only generated exports", () => {
+  const generated = generateMap({
+    ...DEFAULT_GENERATION_OPTIONS,
+    engine: "ECCENTRIC",
+    preset: "PENINSULA_REALM",
+    size: "COLOSSAL",
+    geometry: "SQUARE",
+    players: 6,
+    cityStates: 6,
+    seed: "1t4c9pc-18g28ve",
+  });
+  const completeExport = serializeCiv5Map(generated);
+  assert.equal(new DataView(completeExport).getUint8(0), 0x8c);
+  const view = new DataView(completeExport);
+  let geographyLength = 42;
+  for (const headerOffset of [14, 18, 22, 26, 30, 34, 38]) geographyLength += view.getUint32(headerOffset, true);
+  geographyLength += 4 + view.getUint32(geographyLength, true) + generated.tiles.length * 8;
+  const legacyExport = completeExport.slice(0, geographyLength);
+  new DataView(legacyExport).setUint8(0, 0x0c);
+  const imported = parseCiv5Map(legacyExport, "peninsula-realm-legacy.Civ5Map");
+  assert.equal(imported.startLocations.length, 0);
+  assert.equal(imported.scenarioDataPresent, false);
+
+  const issues = buildRepairIssues(imported);
+  const missing = issues.find((issue) => issue.id === "missing-start-locations");
+  assert.equal(missing?.mutation?.kind, "REPLACE_STARTS");
+  assert.match(missing?.detail ?? "", /new scenario section/i);
+  const repaired = applyRepairIssues(imported, issues, new Set([missing!.id]));
+  assert.equal(repaired.startLocations.filter((start) => !start.cityState).length, 6);
+  assert.equal(repaired.startLocations.filter((start) => start.cityState).length, 6);
+  assertStartSpacing(repaired);
+
+  const repairedExport = updateCiv5Map(legacyExport, repaired);
+  assert.equal(new DataView(repairedExport).getUint8(0), 0x8c);
+  const roundTripped = parseCiv5Map(repairedExport, "peninsula-realm-repaired.Civ5Map");
+  assert.equal(roundTripped.scenarioPlayerSlots, 6);
+  assert.equal(roundTripped.scenarioCityStateSlots, 6);
+  assert.equal(roundTripped.startLocations.filter((start) => !start.cityState).length, 6);
+  assert.equal(roundTripped.startLocations.filter((start) => start.cityState).length, 6);
+  assertStartSpacing(roundTripped);
 });
 
 test("Repair replaces overcrowded starts and Competitive balancing changes the whole layout", () => {
@@ -752,6 +850,21 @@ test("all generation engines enforce five-hex start spacing", () => {
   for (const configuration of configurations.slice(0, 3)) {
     const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, ...configuration, size: "DUEL", players: 2, cityStates: 2, waterPercent: 90, seed: `sparse-spacing-${configuration.engine}` });
     assert.equal(map.startLocations.filter((start) => !start.cityState).length, 2);
+    assertStartSpacing(map);
+  }
+});
+
+test("all generation engines retain legal starts on Colossal maps", () => {
+  const configurations = [
+    { engine: "EXCOGITARE", preset: "CONTINENTS" },
+    { engine: "ECCENTRIC", preset: "PENINSULA_REALM" },
+    { engine: "PHYSICAL", preset: "DYNAMIC_EARTH" },
+    { engine: "POLIS", preset: "IMPERIAL_RING" },
+  ] as const;
+  for (const configuration of configurations) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, ...configuration, size: "COLOSSAL", players: 6, cityStates: 6, seed: `colossal-starts-${configuration.engine}` });
+    assert.equal(map.startLocations.filter((start) => !start.cityState).length, 6);
+    assert.equal(map.startLocations.filter((start) => start.cityState).length, 6);
     assertStartSpacing(map);
   }
 });
@@ -1443,12 +1556,7 @@ test("source-backed extended tile budgets retain exact dimensions and round-trip
     assert.equal(parsed.height, dimensions.height);
     assert.equal(parsed.tiles.length, generated.tiles.length);
     assert.equal(parsed.worldSize, size);
-    assert.deepEqual(parsed.tiles, generated.tiles.map((tile) => {
-      const geography = { ...tile };
-      delete geography.improvement;
-      delete geography.route;
-      return geography;
-    }));
+    assert.deepEqual(parsed.tiles, generated.tiles);
   }
   assert.ok(performance.now() - startedAt < 30_000, "both extended maps should generate and round-trip within 30 seconds");
 
@@ -1767,12 +1875,12 @@ test("generated maps serialize to a readable Civ5Map geography file", () => {
   assert.equal(parsed.worldSize, "DUEL");
   assert.equal(parsed.width, generated.width);
   assert.equal(parsed.height, generated.height);
-  assert.deepEqual(parsed.tiles, generated.tiles.map((tile) => {
-    const geography = { ...tile };
-    delete geography.improvement;
-    delete geography.route;
-    return geography;
-  }));
+  assert.equal(parsed.scenarioPlayerSlots, generated.startLocations.filter((start) => !start.cityState).length);
+  assert.equal(parsed.scenarioCityStateSlots, generated.startLocations.filter((start) => start.cityState).length);
+  assert.equal(parsed.startLocations.length, generated.startLocations.length);
+  assert.deepEqual(parsed.startLocations.map((start) => [start.x, start.y, start.cityState]), generated.startLocations.map((start) => [start.x, start.y, start.cityState]));
+  assertStartSpacing(parsed);
+  assert.deepEqual(parsed.tiles, generated.tiles);
 });
 
 test("Doomsday adds restrained fallout, ruined cities, and surviving road fragments", () => {

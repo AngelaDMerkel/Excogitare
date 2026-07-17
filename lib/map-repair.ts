@@ -26,6 +26,7 @@ export type RepairMutation =
   | { kind: "MOVE_CITY"; id: number; fromX: number; fromY: number; x: number; y: number }
   | { kind: "REMOVE_CITY_LINK"; id: number; x: number; y: number }
   | { kind: "SET_RIVER_NETWORK"; rivers: number[] }
+  | { kind: "NORMALIZE_SCENARIO_MARKER"; marker: number }
   | { kind: "SET_PLAYERS"; players: number };
 
 export type RepairIssue = {
@@ -96,6 +97,14 @@ function balancedReplacementStarts(map: Civ5Map, majorCount: number, cityStateCo
   const players = starts.filter((start) => !start.cityState).length;
   const cityStates = starts.filter((start) => start.cityState).length;
   return { starts, players, cityStates, complete: players === Math.max(2, majorCount) && cityStates === Math.max(0, cityStateCount) };
+}
+
+function flexibleReplacementStarts(map: Civ5Map, majorCount: number, cityStateCount: number) {
+  for (let players = Math.max(2, majorCount); players >= 2; players -= 1) {
+    const replacement = balancedReplacementStarts(map, players, cityStateCount);
+    if (replacement.players === players) return replacement;
+  }
+  return undefined;
 }
 
 type RepairRiverEdge = { a: string; b: string; tiles: [number, number] };
@@ -205,6 +214,22 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
     add({ id: "structure-tile-count", category: "STRUCTURE", severity: "ERROR", confidence: "CERTAIN", title: "Incomplete tile grid", detail: `Expected ${map.width * map.height} tiles but found ${map.tiles.length}.`, minimumProfile: "SAFE" });
   }
 
+  const expectedScenarioMarker = map.scenarioDataPresent ? 8 : 0;
+  if (map.source === "file" && map.scenarioMarker !== undefined && map.scenarioMarker !== expectedScenarioMarker) {
+    add({
+      id: "structure-scenario-marker",
+      category: "STRUCTURE",
+      severity: "ERROR",
+      confidence: "CERTAIN",
+      title: "Invalid scenario header",
+      detail: map.scenarioDataPresent
+        ? `The file contains scenario data but declares marker 0x${map.scenarioMarker.toString(16).toUpperCase()}; Civ V WorldBuilder files use marker 0x8. Normalize the header without changing the scenario content.`
+        : `The file declares scenario marker 0x${map.scenarioMarker.toString(16).toUpperCase()} but contains geography only. Remove the false scenario marker.`,
+      mutation: { kind: "NORMALIZE_SCENARIO_MARKER", marker: expectedScenarioMarker },
+      minimumProfile: "SAFE",
+    });
+  }
+
   for (let index = 0; index < map.tiles.length; index += 1) {
     const tile = map.tiles[index];
     const location = tileLocation(map, index);
@@ -307,12 +332,25 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
   const missingMajorStarts = storedMajors.length === 0;
   if (missingMajorStarts) {
     const size = closestMapSize(map);
+    const geographyOnlyFile = map.source === "file" && !map.scenarioDataPresent;
+    const generatedMap = map.source !== "file";
+    const canCreateScenario = generatedMap || geographyOnlyFile;
     const writablePlayerSlots = map.source === "file" ? map.scenarioPlayerSlots ?? 0 : Math.max(0, map.players);
     const targetPlayers = writablePlayerSlots > 0 ? writablePlayerSlots : map.players >= 2 ? map.players : size.recommendedPlayers;
-    const candidateReplacement = writablePlayerSlots >= 2 || map.source !== "file"
-      ? balancedReplacementStarts(map, targetPlayers, Math.min(map.scenarioCityStateSlots ?? storedCityStates.length, size.recommendedCityStates))
+    const targetCityStates = map.source === "file" && (map.scenarioCityStateSlots ?? 0) > 0
+      ? Math.min(map.scenarioCityStateSlots!, size.recommendedCityStates)
+      : generatedMap && map.generation
+        ? Math.min(map.generation.cityStates, size.recommendedCityStates)
+        : canCreateScenario
+          ? Math.min(targetPlayers, size.recommendedCityStates)
+          : Math.min(storedCityStates.length, size.recommendedCityStates);
+    const candidateReplacement = writablePlayerSlots >= 2 || canCreateScenario
+      ? canCreateScenario
+        ? flexibleReplacementStarts(map, targetPlayers, targetCityStates)
+        : balancedReplacementStarts(map, targetPlayers, targetCityStates)
       : undefined;
-    const replacement = candidateReplacement?.complete ? candidateReplacement : undefined;
+    const replacement = candidateReplacement && (canCreateScenario || candidateReplacement.complete) ? candidateReplacement : undefined;
+    const blockedByScenario = map.source === "file" && map.scenarioDataPresent && writablePlayerSlots < 2;
     add({
       id: "missing-start-locations",
       category: "STARTS",
@@ -320,8 +358,10 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
       confidence: "CERTAIN",
       title: "Map has no start locations",
       detail: replacement
-        ? `Create ${replacement.players} legal major-civilization starts at least ${MINIMUM_START_DISTANCE} hexes apart using the map's writable scenario player slots.`
-        : "A playable map requires major-civilization starts. This file exposes no writable scenario player slots, so Excogitare cannot safely invent records that would survive export. Add scenario players in Civ V WorldBuilder, then run Repair again.",
+        ? `${geographyOnlyFile ? "Create a new scenario section with" : "Create"} ${replacement.players} legal major-civilization starts and ${replacement.cityStates} city-state starts, all at least ${MINIMUM_START_DISTANCE} hexes apart${replacement.players < targetPlayers || replacement.cityStates < targetCityStates ? "; the population was reduced to fit the available geography" : ""}.`
+        : blockedByScenario
+          ? "A playable map requires major-civilization starts. This file contains scenario data but exposes no writable scenario player slots, so Excogitare cannot safely invent records without replacing unrelated scenario content. Add scenario players in Civ V WorldBuilder, then run Repair again."
+          : `A playable map requires major-civilization starts, but no legal layout with at least ${MINIMUM_START_DISTANCE} hexes between starts could be constructed from this terrain.`,
       mutation: replacement ? { kind: "REPLACE_STARTS", starts: replacement.starts, players: replacement.players } : undefined,
       minimumProfile: "SAFE",
     });
@@ -431,6 +471,8 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
       result.cities = result.cities?.filter((city) => city.id !== mutation.id || city.x !== mutation.x || city.y !== mutation.y);
     } else if (mutation.kind === "SET_RIVER_NETWORK") {
       for (let index = 0; index < result.tiles.length; index += 1) result.tiles[index].river = mutation.rivers[index] ?? 0;
+    } else if (mutation.kind === "NORMALIZE_SCENARIO_MARKER") {
+      result.scenarioMarker = mutation.marker;
     } else if (mutation.kind === "SET_PLAYERS") result.players = mutation.players;
   }
   return result;

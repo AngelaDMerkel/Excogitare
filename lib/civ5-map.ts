@@ -52,6 +52,8 @@ export type Civ5Map = {
   startLocations: Civ5StartLocation[];
   scenarioPlayerSlots?: number;
   scenarioCityStateSlots?: number;
+  scenarioDataPresent?: boolean;
+  scenarioMarker?: number;
   cities?: Civ5City[];
   source: "demo" | "file" | "generated" | "script";
   generation?: import("./map-generator.ts").MapGenerationOptions;
@@ -62,10 +64,15 @@ const HEADER_SIZE = 42;
 const TILE_SIZE = 8;
 const GAME_DESCRIPTION_HEADER_SIZE = 120;
 const GAME_DESCRIPTION_V11_HEADER_SIZE = 128;
+const TEAM_RECORD_SIZE = 64;
 const PLAYER_RECORD_SIZE = 436;
 const MAX_DIMENSION = 512;
 const decoder = new TextDecoder("utf-8");
 const encoder = new TextEncoder();
+
+function encodeMetadataString(value: string) {
+  return encoder.encode(`${value.replaceAll("\0", "")}\0`);
+}
 
 function readStringList(bytes: Uint8Array) {
   const values = decoder.decode(bytes).split("\0");
@@ -98,8 +105,8 @@ export function updateCiv5MapMetadata(buffer: ArrayBuffer, name: string, descrip
     throw new Error("The map metadata sections extend past the end of the file.");
   }
 
-  const nameBytes = encoder.encode(name.replaceAll("\0", ""));
-  const descriptionBytes = encoder.encode(description.replaceAll("\0", ""));
+  const nameBytes = encodeMetadataString(name);
+  const descriptionBytes = encodeMetadataString(description);
   const output = new Uint8Array(source.byteLength - oldNameSize - oldDescriptionSize + nameBytes.byteLength + descriptionBytes.byteLength);
 
   output.set(source.subarray(0, nameOffset));
@@ -180,17 +187,88 @@ export function updateCiv5Map(buffer: ArrayBuffer, map: Civ5Map) {
     throw new Error("Imported maps cannot be resized during export.");
   }
   const output = updateCiv5MapMetadata(buffer, map.name, map.description);
-  new DataView(output).setUint8(9, Math.max(0, Math.min(255, map.players)));
+  const outputView = new DataView(output);
+  const scenarioMarker = map.scenarioMarker ?? (original.scenarioDataPresent ? 8 : 0);
+  outputView.setUint8(0, (outputView.getUint8(0) & 0x0f) | (Math.max(0, Math.min(15, scenarioMarker)) << 4));
+  outputView.setUint8(9, Math.max(0, Math.min(255, map.players)));
   const offset = tileDataOffset(output);
   if (offset + map.tiles.length * TILE_SIZE > output.byteLength) throw new Error("The map tile section is incomplete.");
   writeTiles(new DataView(output), offset, map);
   writeScenarioStarts(output, map);
   writeScenarioCities(output, map);
+  if (!original.scenarioDataPresent && map.startLocations.some((start) => !start.cityState)) {
+    return appendGeneratedScenario(output, map);
+  }
   return output;
 }
 
 function encodeStringList(values: string[]) {
   return encoder.encode(values.length ? `${values.join("\0")}\0` : "");
+}
+
+function writeFixedString(bytes: Uint8Array, offset: number, size: number, value: string) {
+  const encoded = encoder.encode(value.replaceAll("\0", ""));
+  bytes.set(encoded.subarray(0, size), offset);
+}
+
+function appendGeneratedScenario(geography: ArrayBuffer, map: Civ5Map) {
+  const majorStarts = map.startLocations.filter((start) => !start.cityState);
+  const cityStateStarts = map.startLocations.filter((start) => start.cityState);
+  if (!majorStarts.length) return geography;
+  const starts = [...majorStarts, ...cityStateStarts].slice(0, 128);
+  const playerCount = Math.min(majorStarts.length, starts.length);
+  const cityStateCount = starts.length - playerCount;
+  const improvementTypes = [...new Set(map.tiles.flatMap((tile) => tile.improvement ? [tile.improvement] : []))];
+  const improvementTypeBytes = encodeStringList(improvementTypes);
+  const scenarioSize = GAME_DESCRIPTION_V11_HEADER_SIZE
+    + improvementTypeBytes.length
+    + starts.length * TEAM_RECORD_SIZE
+    + starts.length * PLAYER_RECORD_SIZE
+    + map.tiles.length * TILE_SIZE;
+  const output = new Uint8Array(geography.byteLength + scenarioSize);
+  output.set(new Uint8Array(geography));
+  const view = new DataView(output.buffer);
+  view.setUint8(0, (view.getUint8(0) & 0x0f) | 0x80);
+  view.setUint8(9, playerCount);
+
+  const scenarioOffset = geography.byteLength;
+  view.setUint8(scenarioOffset + 80, playerCount);
+  view.setUint8(scenarioOffset + 81, cityStateCount);
+  view.setUint8(scenarioOffset + 82, starts.length);
+  view.setUint32(scenarioOffset + 84, improvementTypeBytes.length, true);
+  let offset = scenarioOffset + GAME_DESCRIPTION_V11_HEADER_SIZE;
+  output.set(improvementTypeBytes, offset);
+  offset += improvementTypeBytes.length;
+
+  for (let team = 0; team < starts.length; team += 1) {
+    writeFixedString(output, offset + team * TEAM_RECORD_SIZE, TEAM_RECORD_SIZE, `Team ${team + 1}`);
+  }
+  offset += starts.length * TEAM_RECORD_SIZE;
+
+  for (let player = 0; player < starts.length; player += 1) {
+    const start = starts[player];
+    const recordOffset = offset + player * PLAYER_RECORD_SIZE;
+    writeFixedString(output, recordOffset + 32, 64, start.leader);
+    writeFixedString(output, recordOffset + 160, 64, start.civilization);
+    writeFixedString(output, recordOffset + 224, 64, start.teamColor ?? "");
+    view.setUint32(recordOffset + 424, start.x, true);
+    view.setUint32(recordOffset + 428, start.y, true);
+    view.setUint8(recordOffset + 432, start.team === 255 ? player : Math.max(0, Math.min(255, start.team)));
+    view.setUint8(recordOffset + 433, start.cityState ? 0 : start.playable ? 1 : 0);
+  }
+  offset += starts.length * PLAYER_RECORD_SIZE;
+
+  for (let index = 0; index < map.tiles.length; index += 1) {
+    const tile = map.tiles[index];
+    const recordOffset = offset + index * TILE_SIZE;
+    view.setUint16(recordOffset, 0xffff, true);
+    view.setUint16(recordOffset + 2, 0xffff, true);
+    view.setUint8(recordOffset + 4, tile.owner ?? 0xff);
+    view.setUint8(recordOffset + 5, tile.improvement ? improvementTypes.indexOf(tile.improvement) : 0xff);
+    view.setUint8(recordOffset + 6, tile.route === "ROUTE_ROAD" ? 0 : tile.route === "ROUTE_RAILROAD" ? 1 : 0xff);
+    view.setUint8(recordOffset + 7, tile.route ? tile.owner ?? 0xff : 0xff);
+  }
+  return output.buffer;
 }
 
 export function serializeCiv5Map(map: Civ5Map) {
@@ -201,8 +279,8 @@ export function serializeCiv5Map(map: Civ5Map) {
   const featureBytes = encodeStringList(map.features);
   const wonderBytes = encodeStringList(map.wonders);
   const resourceBytes = encodeStringList(map.resources);
-  const nameBytes = encoder.encode(map.name.replaceAll("\0", ""));
-  const descriptionBytes = encoder.encode(map.description.replaceAll("\0", ""));
+  const nameBytes = encodeMetadataString(map.name);
+  const descriptionBytes = encodeMetadataString(map.description);
   const worldSizeBytes = encoder.encode(`WORLDSIZE_${map.worldSize.replace(/^WORLDSIZE_/i, "").replaceAll(" ", "_").toUpperCase()}`);
   const geographySize = terrainBytes.length + featureBytes.length + wonderBytes.length + resourceBytes.length + nameBytes.length + descriptionBytes.length;
   const tileBytes = map.tiles.length * TILE_SIZE;
@@ -231,7 +309,7 @@ export function serializeCiv5Map(map: Civ5Map) {
   bytes.set(worldSizeBytes, offset);
   offset += worldSizeBytes.length;
   writeTiles(view, offset, map);
-  return output;
+  return appendGeneratedScenario(output, map);
 }
 
 function parseStartLocations(
@@ -306,6 +384,12 @@ function parseScenarioTileMetadata(
   tiles: Civ5Tile[],
 ) {
   if (scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE > bytes.byteLength) return;
+  const version = view.getUint8(0) & 0x0f;
+  const headerSize = version >= 11 ? GAME_DESCRIPTION_V11_HEADER_SIZE : GAME_DESCRIPTION_HEADER_SIZE;
+  const improvementTypeDataSize = view.getUint32(scenarioOffset + 84, true);
+  const improvementTypes = scenarioOffset + headerSize + improvementTypeDataSize <= bytes.byteLength
+    ? readStringList(bytes.subarray(scenarioOffset + headerSize, scenarioOffset + headerSize + improvementTypeDataSize))
+    : [];
   const improvementDataSize = width * height * TILE_SIZE;
   const improvementOffset = bytes.byteLength - improvementDataSize;
   if (improvementOffset < scenarioOffset + GAME_DESCRIPTION_HEADER_SIZE) return;
@@ -313,8 +397,10 @@ function parseScenarioTileMetadata(
   for (let index = 0; index < tiles.length; index += 1) {
     const offset = improvementOffset + index * TILE_SIZE;
     const owner = view.getUint8(offset + 4);
+    const improvement = improvementTypes[view.getUint8(offset + 5)];
     const route = view.getUint8(offset + 6);
     if (owner !== 0xff) tiles[index].owner = owner;
+    if (improvement === "IMPROVEMENT_BARBARIAN_CAMP" || improvement === "IMPROVEMENT_GOODY_HUT" || improvement === "IMPROVEMENT_CITY_RUINS") tiles[index].improvement = improvement;
     if (route === 0) tiles[index].route = "ROUTE_ROAD";
     if (route === 1) tiles[index].route = "ROUTE_RAILROAD";
   }
@@ -479,6 +565,8 @@ export function parseCiv5Map(buffer: ArrayBuffer, fallbackName: string): Civ5Map
     startLocations,
     scenarioPlayerSlots: scenarioSlots?.players,
     scenarioCityStateSlots: scenarioSlots?.cityStates,
+    scenarioDataPresent: offset < bytes.byteLength,
+    scenarioMarker: scenarioVersion >> 4,
     cities,
     source: "file",
   };
