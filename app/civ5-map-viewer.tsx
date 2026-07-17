@@ -35,6 +35,25 @@ import {
   type StructureOperation,
 } from "@/lib/map-design";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "@/lib/generation-history";
+import {
+  createIdentityLabSession,
+  exportIdentityLabSession,
+  identityLabChoices,
+  identityLabFileName,
+  identityLabPrototype,
+  IDENTITY_LAB_CUES,
+  IDENTITY_LAB_PROTOTYPES,
+  IDENTITY_LAB_STORAGE_KEY,
+  importIdentityLabSession,
+  recordIdentityLabGeneration,
+  recordIdentityLabGenerationError,
+  selectIdentityLabCandidate,
+  setIdentityLabVerdict,
+  submitIdentityLabReview,
+  type IdentityCue,
+  type IdentityLabSession,
+  type IdentityVerdict,
+} from "@/lib/identity-lab";
 import { CLIMATE_PROJECTIONS } from "@/lib/climate-projection";
 import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile, type RepairIssue, type RepairProfile } from "@/lib/map-repair";
 import {
@@ -76,7 +95,7 @@ type Size = { width: number; height: number };
 type Layers = { political: boolean; strategy: boolean; grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer; salvaged?: boolean };
-type WorkspaceMode = "VIEW" | "CREATE" | "REPAIR" | "SCRIPT";
+type WorkspaceMode = "VIEW" | "CREATE" | "REPAIR" | "LAB" | "SCRIPT";
 type Brush = { terrain: number | null; elevation: number | null; feature: number | null; resource: number | null };
 type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
 type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
@@ -84,6 +103,7 @@ type Projection = "FLAT" | "ISOMETRIC";
 type RepairView = "ORIGINAL" | "CORRECTED" | "DIFFERENCE";
 type RepairStage = "INSPECT" | "CORRECT" | "VALIDATE";
 type LuaStage = "SCRIPT" | "GENERATE" | "DIAGNOSTICS";
+type LabStage = "REVIEW" | "RESULTS" | "GUIDE";
 type UiTooltip = { text: string; x: number; y: number; above: boolean };
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 type GenerationWorkerMessage = { id: number; type: "PROGRESS"; stage: string } | { id: number; type: "COMPLETE"; map: Civ5Map } | { id: number; type: "ERROR"; message: string };
@@ -960,6 +980,22 @@ export function Civ5MapViewer() {
   const [futureMaps, setFutureMaps] = useState<Civ5Map[]>([]);
   const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("VIEW");
+  const [labStage, setLabStage] = useState<LabStage>("REVIEW");
+  const [labSession, setLabSession] = useState<IdentityLabSession | null>(null);
+  const [labMap, setLabMap] = useState<Civ5Map | null>(null);
+  const [labActiveCandidateId, setLabActiveCandidateId] = useState<string | null>(null);
+  const [labLoading, setLabLoading] = useState(false);
+  const [labStatus, setLabStatus] = useState("Start or import a blind-recognition session.");
+  const [labStorageReady, setLabStorageReady] = useState(false);
+  const [labSamplesPerType, setLabSamplesPerType] = useState(2);
+  const [labStyle, setLabStyle] = useState<MapGenerationOptions["style"]>("MUNDANE");
+  const [labSize, setLabSize] = useState<MapGenerationOptions["size"]>("STANDARD");
+  const [labSessionSeed, setLabSessionSeed] = useState("baseline-1");
+  const [labGuessPrimary, setLabGuessPrimary] = useState<MapGenerationOptions["preset"] | "">("");
+  const [labGuessSecondary, setLabGuessSecondary] = useState<MapGenerationOptions["preset"] | "">("");
+  const [labConfidence, setLabConfidence] = useState<1 | 2 | 3 | 4 | 5>(3);
+  const [labCues, setLabCues] = useState<Set<IdentityCue>>(new Set());
+  const [labNotes, setLabNotes] = useState("");
   const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
   const [generationHistory, setGenerationHistory] = useState<GenerationHistoryEntry[]>([]);
   const [activeGenerationId, setActiveGenerationId] = useState<number | null>(null);
@@ -1031,6 +1067,7 @@ export function Civ5MapViewer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
   const luaDependencyInputRef = useRef<HTMLInputElement>(null);
+  const labInputRef = useRef<HTMLInputElement>(null);
   const generationIdRef = useRef(0);
   const generationRequestIdRef = useRef(0);
   const generationWorkerRef = useRef<Worker | null>(null);
@@ -1091,6 +1128,29 @@ export function Civ5MapViewer() {
       document.removeEventListener("focusout", onFocusOut);
     };
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const stored = window.localStorage.getItem(IDENTITY_LAB_STORAGE_KEY);
+        if (stored) {
+          const restored = importIdentityLabSession(stored);
+          setLabSession(restored);
+          setLabStatus(`${restored.summary.reviewed} of ${restored.summary.candidates} blind reviews restored from this device.`);
+        }
+      } catch (error) {
+        setLabStatus(error instanceof Error ? `Saved Lab session was not loaded: ${error.message}` : "Saved Lab session was not loaded.");
+      } finally {
+        setLabStorageReady(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!labStorageReady || !labSession) return;
+    window.localStorage.setItem(IDENTITY_LAB_STORAGE_KEY, exportIdentityLabSession(labSession));
+  }, [labSession, labStorageReady]);
 
   const replaceMap = useCallback((next: Civ5Map, source: ImportedMapSource | null = null) => {
     mapRef.current = next;
@@ -1206,7 +1266,9 @@ export function Civ5MapViewer() {
   const repairPreviewIssues = useMemo(() => buildRepairIssues(repairPreviewMap), [repairPreviewMap]);
   const comparisonCheckpoint = useMemo(() => checkpoints.find((checkpoint) => checkpoint.id === comparisonCheckpointId) ?? null, [checkpoints, comparisonCheckpointId]);
   const mapComparison = useMemo(() => comparisonCheckpoint ? compareMaps(map, comparisonCheckpoint.map) : null, [map, comparisonCheckpoint]);
-  const canvasMap = mode === "REPAIR" && repairBaseline
+  const canvasMap = mode === "LAB" && labMap
+    ? labMap
+    : mode === "REPAIR" && repairBaseline
     ? repairView === "ORIGINAL" ? repairBaseline : repairPreviewMap
     : mode === "CREATE" && comparisonCheckpoint && comparisonView === "CHECKPOINT" ? comparisonCheckpoint.map : map;
   const repairHighlights = useMemo(() => mode === "REPAIR" && repairView === "DIFFERENCE"
@@ -1347,12 +1409,12 @@ export function Civ5MapViewer() {
 
   const terrainBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const tile of map.tiles) {
-      const name = friendlyName(map.terrains[tile.terrain], "TERRAIN_");
+    for (const tile of canvasMap.tiles) {
+      const name = friendlyName(canvasMap.terrains[tile.terrain], "TERRAIN_");
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7);
-  }, [map]);
+  }, [canvasMap]);
 
   const generationMetrics = useMemo(() => {
     const water = map.tiles.filter((tile) => tile.terrain < 2).length;
@@ -1376,8 +1438,8 @@ export function Civ5MapViewer() {
   const validationIssues = useMemo(() => validateCiv5Map(map), [map]);
   const balanceReport = useMemo(() => analyzeMultiplayerBalance(map), [map]);
 
-  const majorStartCount = map.startLocations.filter((start) => !start.cityState).length;
-  const cityStateCount = map.startLocations.filter((start) => start.cityState).length;
+  const majorStartCount = canvasMap.startLocations.filter((start) => !start.cityState).length;
+  const cityStateCount = canvasMap.startLocations.filter((start) => start.cityState).length;
   const visibleLayerCount = Object.entries(layers).filter(([key, enabled]) => enabled
     && (key !== "political" || politicalAvailable)
     && (key !== "strategy" || strategyAvailable)
@@ -1676,12 +1738,124 @@ export function Civ5MapViewer() {
 
   const selectWorkspaceMode = (nextMode: WorkspaceMode) => {
     setShowLegend(false);
+    setShowDisplayPanel(false);
     if (nextMode === "SCRIPT" && mode !== "SCRIPT") {
       setShowLuaExperimentalWarning(true);
       return;
     }
+    if (nextMode === "LAB") {
+      setProjection("FLAT");
+      setLayers({ political: false, strategy: false, grid: true, features: true, resources: false, elevation: true, starts: false, cityStates: false });
+      setMode("LAB");
+      return;
+    }
     if (nextMode === "REPAIR") enterRepairMode();
     else setMode(nextMode);
+  };
+
+  const populateIdentityLabForm = (candidate: IdentityLabSession["candidates"][number]) => {
+    setLabGuessPrimary(candidate.review?.guessPrimary ?? "");
+    setLabGuessSecondary(candidate.review?.guessSecondary ?? "");
+    setLabConfidence(candidate.review?.confidence ?? 3);
+    setLabCues(new Set(candidate.review?.cues ?? []));
+    setLabNotes(candidate.review?.notes ?? "");
+  };
+
+  const openIdentityLabCandidate = async (sourceSession: IdentityLabSession, index: number) => {
+    const selected = selectIdentityLabCandidate(sourceSession, index, new Date().toISOString());
+    const candidate = selected.candidates[selected.currentIndex];
+    setLabSession(selected);
+    populateIdentityLabForm(candidate);
+    setLabStage("REVIEW");
+    setLabLoading(true);
+    setLabMap(null);
+    setLabActiveCandidateId(null);
+    setLabStatus(`Generating blind candidate ${selected.currentIndex + 1} of ${selected.candidates.length}…`);
+    try {
+      const generated = await generateMapAsync(candidate.options);
+      setLabMap(generated);
+      setLabActiveCandidateId(candidate.id);
+      fitMap(size, projectionTransform(generated.width, generated.height, "FLAT"));
+      setLabSession((current) => current?.id === selected.id ? recordIdentityLabGeneration(current, candidate.id, generated, new Date().toISOString()) : current);
+      setLabStatus(`Candidate ${selected.currentIndex + 1} is ready. Its Map Type remains hidden until a guess is submitted.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Map generation failed.";
+      setLabSession((current) => current?.id === selected.id ? recordIdentityLabGenerationError(current, candidate.id, detail, new Date().toISOString()) : current);
+      setLabStatus(`Candidate generation failed: ${detail}`);
+    } finally {
+      setLabLoading(false);
+    }
+  };
+
+  const startIdentityLabSession = () => {
+    if (labSession?.summary.reviewed && !window.confirm("Start a new blind deck? Export the current JSON first if you want to retain these reviews.")) return;
+    const now = new Date().toISOString();
+    const next = createIdentityLabSession({
+      sessionSeed: labSessionSeed,
+      samplesPerType: labSamplesPerType,
+      size: labSize,
+      style: labStyle,
+      modifier: "NONE",
+    }, now);
+    setLabSession(next);
+    setLabMap(null);
+    setLabActiveCandidateId(null);
+    setLabStage("REVIEW");
+    void openIdentityLabCandidate(next, 0);
+  };
+
+  const moveIdentityLabCandidate = (direction: -1 | 1) => {
+    if (!labSession || labLoading) return;
+    const index = Math.max(0, Math.min(labSession.candidates.length - 1, labSession.currentIndex + direction));
+    if (index === labSession.currentIndex) return;
+    void openIdentityLabCandidate(labSession, index);
+  };
+
+  const submitIdentityGuess = () => {
+    if (!labSession || !labActiveCandidateId || !labGuessPrimary) return;
+    try {
+      const reviewed = submitIdentityLabReview(labSession, labActiveCandidateId, {
+        guessPrimary: labGuessPrimary,
+        guessSecondary: labGuessSecondary || undefined,
+        confidence: labConfidence,
+        cues: [...labCues],
+        notes: labNotes,
+      }, new Date().toISOString());
+      const candidate = reviewed.candidates[reviewed.currentIndex];
+      setLabSession(reviewed);
+      setLabStatus(candidate.review?.guessPrimary === candidate.intendedPreset ? "First-choice recognition matched." : candidate.review?.guessSecondary === candidate.intendedPreset ? "The intended identity appeared as the second choice." : "The intended identity was not recognized in the top two choices.");
+    } catch (error) {
+      setLabStatus(error instanceof Error ? error.message : "The blind review could not be recorded.");
+    }
+  };
+
+  const chooseIdentityVerdict = (verdict: IdentityVerdict) => {
+    if (!labSession || !labActiveCandidateId) return;
+    setLabSession(setIdentityLabVerdict(labSession, labActiveCandidateId, verdict, new Date().toISOString()));
+    setLabStatus("Post-reveal verdict retained in this device's Lab session.");
+  };
+
+  const exportIdentityEvidence = () => {
+    if (!labSession) return;
+    download(exportIdentityLabSession(labSession), identityLabFileName(labSession), "application/json");
+    setLabStatus("Identity Lab JSON exported with exact generation options, reviews, diagnostics and narrative-guide metadata.");
+  };
+
+  const importIdentityEvidence = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const imported = importIdentityLabSession(await file.text());
+      setLabSession(imported);
+      setLabMap(null);
+      setLabActiveCandidateId(null);
+      populateIdentityLabForm(imported.candidates[imported.currentIndex]);
+      setLabStage("REVIEW");
+      setLabStatus(`${file.name} imported. Regenerate the selected candidate from its exact retained options.`);
+    } catch (error) {
+      setLabStatus(error instanceof Error ? error.message : "That file is not valid Identity Lab JSON.");
+    }
   };
 
   const copySelection = () => {
@@ -1968,6 +2142,11 @@ export function Civ5MapViewer() {
     }
   };
 
+  const labCurrentCandidate = labSession?.candidates[labSession.currentIndex] ?? null;
+  const labCurrentPrototype = labCurrentCandidate ? identityLabPrototype(labCurrentCandidate.intendedPreset) : undefined;
+  const labChoiceOptions = labCurrentCandidate ? identityLabChoices(labCurrentCandidate.engine) : [];
+  const labCandidateLoaded = Boolean(labCurrentCandidate && labMap && labActiveCandidateId === labCurrentCandidate.id);
+  const presetLabel = (preset: MapGenerationOptions["preset"] | undefined) => MAP_PRESETS.find((item) => item.id === preset)?.label ?? preset ?? "Unknown";
   const activeTile = hovered?.tile;
   const workspacePresentation = mode === "VIEW"
     ? { key: "explore", label: "Explore", symbol: "⌖" }
@@ -1975,7 +2154,9 @@ export function Civ5MapViewer() {
       ? { key: "create", label: "Create", symbol: "+" }
       : mode === "REPAIR"
         ? { key: "repair", label: "Repair", symbol: "◇" }
-        : { key: "lua", label: "Lua", symbol: "{ }" };
+        : mode === "LAB"
+          ? { key: "lab", label: "Lab", symbol: "◫" }
+          : { key: "lua", label: "Lua", symbol: "{ }" };
   const workspaceTask = mode === "VIEW"
     ? { stage: "Map inspection", title: "Explore the current world", description: "Inspect terrain, layers, starts, resources and individual tiles without changing the map." }
     : mode === "CREATE"
@@ -1992,7 +2173,13 @@ export function Civ5MapViewer() {
           : repairStage === "CORRECT"
             ? { stage: "Correct", title: "Proposed corrections", description: "Choose an automation profile and preview only the repairs you are prepared to accept." }
             : { stage: "Validate", title: "Export readiness", description: "Test the corrected preview again and identify anything that still blocks a defensible export." }
-        : luaStage === "SCRIPT"
+        : mode === "LAB"
+          ? labStage === "REVIEW"
+            ? { stage: "Blind review", title: "Identity Lab", description: "Judge an unlabeled map, record the cues you perceived, then reveal the intended narrative identity." }
+            : labStage === "RESULTS"
+              ? { stage: "Results", title: "Recognition evidence", description: "Inspect accuracy, confusion pairs and per-identity results retained in the current session." }
+              : { stage: "Guide", title: "Evidence contract", description: "Understand the JSON schema and how Lab evidence guides changes to the narrative identities." }
+          : luaStage === "SCRIPT"
           ? { stage: "Script", title: "Lua project", description: "Load generator source and dependencies, then edit the script or its post-process hook." }
           : luaStage === "GENERATE"
             ? { stage: "Generate", title: "Lua runtime", description: "Configure exposed options and execute the experimental project into an editable map." }
@@ -2008,9 +2195,15 @@ export function Civ5MapViewer() {
         : repairStage === "CORRECT" ? `${repairSelected.size} corrections selected`
           : repairPreviewIssues.some((issue) => issue.severity === "ERROR") ? `${repairPreviewIssues.filter((issue) => issue.severity === "ERROR").length} blockers remain`
             : repairPreviewIssues.length ? `${repairPreviewIssues.length} diagnostics remain` : "Ready for export"
-      : luaStage === "SCRIPT" ? luaFileName || "No script loaded"
-        : luaStage === "GENERATE" ? luaIsRunning ? "Lua project running" : luaMetadata ? "Map generated" : "Awaiting generation"
-          : luaReport?.title || "No compatibility report yet";
+      : mode === "LAB"
+        ? labLoading ? generationStage || "Generating blind candidate"
+          : labSession ? `${labSession.summary.reviewed} of ${labSession.summary.candidates} reviewed` : "No Lab session"
+        : luaStage === "SCRIPT" ? luaFileName || "No script loaded"
+          : luaStage === "GENERATE" ? luaIsRunning ? "Lua project running" : luaMetadata ? "Map generated" : "Awaiting generation"
+            : luaReport?.title || "No compatibility report yet";
+  const workspaceContextDetail = mode === "LAB"
+    ? labCurrentCandidate?.revealedAt ? presetLabel(labCurrentCandidate.intendedPreset) : labSession ? `Blind candidate ${labSession.currentIndex + 1}` : "Narrative identity development"
+    : map.name;
   const mapMetadataContent = (
     <>
       <div className="map-heading">
@@ -2062,25 +2255,28 @@ export function Civ5MapViewer() {
         <nav className="workspace-navigation" aria-label="Workspaces">
           <span className="workspace-navigation-label">Workspaces</span>
           <div className="workspace-tabs">
-            {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
+            {(["VIEW", "CREATE", "REPAIR", "LAB", "SCRIPT"] as const).map((item) => (
               <button
                 key={item}
                 type="button"
-                data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "REPAIR" ? "Inspect a Civ5Map, choose corrections, and validate the repaired result." : "Experimentally edit, generate, and diagnose Civ V Lua map projects."}
-                className={`workspace-tab workspace-tab-${item === "VIEW" ? "explore" : item === "CREATE" ? "create" : item === "REPAIR" ? "repair" : "lua"}${mode === item ? " is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`}
+                data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "REPAIR" ? "Inspect a Civ5Map, choose corrections, and validate the repaired result." : item === "LAB" ? "Run development-stage blind Map Type recognition sessions and export evidence for generator iteration." : "Experimentally edit, generate, and diagnose Civ V Lua map projects."}
+                className={`workspace-tab workspace-tab-${item === "VIEW" ? "explore" : item === "CREATE" ? "create" : item === "REPAIR" ? "repair" : item === "LAB" ? "lab" : "lua"}${mode === item ? " is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`}
                 aria-current={mode === item ? "page" : undefined}
                 aria-expanded={item === "VIEW" ? undefined : mode === item}
-                aria-controls={item === "CREATE" ? "create-workspace-navigation" : item === "REPAIR" ? "repair-workspace-navigation" : item === "SCRIPT" ? "lua-workspace-navigation" : undefined}
+                aria-controls={item === "CREATE" ? "create-workspace-navigation" : item === "REPAIR" ? "repair-workspace-navigation" : item === "LAB" ? "lab-workspace-navigation" : item === "SCRIPT" ? "lua-workspace-navigation" : undefined}
                 onClick={() => selectWorkspaceMode(item)}
               >
-                <span className="workspace-tab-symbol" aria-hidden="true">{item === "VIEW" ? "⌖" : item === "CREATE" ? "+" : item === "REPAIR" ? "◇" : "{ }"}</span>
-                <span>{item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}</span>
+                <span className="workspace-tab-symbol" aria-hidden="true">{item === "VIEW" ? "⌖" : item === "CREATE" ? "+" : item === "REPAIR" ? "◇" : item === "LAB" ? "◫" : "{ }"}</span>
+                <span>{item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : item === "LAB" ? "Lab" : "Lua"}</span>
+                {item === "LAB" && <span className="development-badge">Development</span>}
                 {item === "SCRIPT" && <span className="experimental-badge">Experimental</span>}
               </button>
             ))}
           </div>
         </nav>
         <div className="topbar-actions">
+          {mode !== "LAB" && (
+          <>
           <div className="history-actions" aria-label="Edit history">
             <button type="button" data-tooltip="Undo the most recent map edit while preserving the current zoom and pan." onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
             <button type="button" data-tooltip="Restore the most recently undone map edit while preserving the current zoom and pan." onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
@@ -2099,9 +2295,12 @@ export function Civ5MapViewer() {
             Export Civ5Map
           </button>
           <button className="button button-primary" type="button" data-tooltip="Open a .Civ5Map file from this device for inspection, editing, or repair." onClick={() => fileInputRef.current?.click()}>Open map</button>
+          </>
+          )}
           <input ref={fileInputRef} className="visually-hidden" type="file" accept=".civ5map,.Civ5Map,application/octet-stream" onChange={onFileChange} />
           <input ref={luaInputRef} className="visually-hidden" type="file" accept=".lua,text/x-lua,text/plain" onChange={onLuaFileChange} />
           <input ref={luaDependencyInputRef} className="visually-hidden" type="file" multiple accept=".lua,text/x-lua,text/plain" onChange={onLuaDependencyChange} />
+          <input ref={labInputRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={(event) => void importIdentityEvidence(event)} />
         </div>
       </header>
 
@@ -2133,7 +2332,14 @@ export function Civ5MapViewer() {
               <button type="button" role="tab" aria-controls="lua-workspace-panel" aria-selected={luaStage === "DIAGNOSTICS"} className={luaStage === "DIAGNOSTICS" ? "is-active" : ""} data-tooltip="Inspect compatibility findings, execution stages, missing APIs, and script-console output." onClick={() => setLuaStage("DIAGNOSTICS")}>Diagnostics</button>
             </div>
           )}
-          <div className="workspace-context-status" role="status"><strong>{workspaceContextStatus}</strong><small>{map.name}</small></div>
+          {mode === "LAB" && (
+            <div id="lab-workspace-navigation" className="workspace-stage-tabs lab-stage-tabs" role="tablist" aria-label="Lab workspace">
+              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "REVIEW"} className={labStage === "REVIEW" ? "is-active" : ""} data-tooltip="Generate an unlabeled candidate, submit a guess, then reveal the intended Map Type." onClick={() => setLabStage("REVIEW")}>Review</button>
+              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "RESULTS"} className={labStage === "RESULTS" ? "is-active" : ""} disabled={!labSession} data-tooltip="Inspect recognition rates, per-identity performance and confusion pairs." onClick={() => setLabStage("RESULTS")}>Results</button>
+              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "GUIDE"} className={labStage === "GUIDE" ? "is-active" : ""} data-tooltip="Read how the exported JSON maps human evidence to the narrative identities guide." onClick={() => setLabStage("GUIDE")}>Guide</button>
+            </div>
+          )}
+          <div className="workspace-context-status" role="status"><strong>{workspaceContextStatus}</strong><small>{workspaceContextDetail}</small></div>
         </section>
       )}
 
@@ -2151,7 +2357,7 @@ export function Civ5MapViewer() {
           )}
           {mode === "VIEW" ? (
             <section className="explore-map-identity" aria-label="Current map details">{mapMetadataContent}</section>
-          ) : (
+          ) : mode !== "LAB" ? (
             <details key={`${mode}-${isEditingMetadata ? "editing" : "idle"}`} className="current-map-disclosure" open={isEditingMetadata || undefined}>
               <summary data-tooltip="Expand the current map name, description, edit state and version without leaving this workspace.">
                 <span>Current map</span>
@@ -2160,7 +2366,7 @@ export function Civ5MapViewer() {
               </summary>
               <div className={`current-map-body${isEditingMetadata ? " is-editing" : ""}`}>{mapMetadataContent}</div>
             </details>
-          )}
+          ) : null}
 
           {showEditPrompt && !isEditingMetadata && (
             <div className="edit-mode-prompt" role="dialog" aria-label="Enter Edit Mode">
@@ -2171,6 +2377,93 @@ export function Civ5MapViewer() {
                 <button type="button" onClick={() => setShowEditPrompt(false)}>Not now</button>
                 <button className="confirm-edit" type="button" onClick={enterEditMode}>Edit details</button>
               </div>
+            </div>
+          )}
+
+          {mode === "LAB" && (
+            <div id="lab-workspace-panel" className="identity-lab-panel">
+              {!labSession && labStage !== "GUIDE" ? (
+                <>
+                  <section className="lab-introduction">
+                    <div className="section-title"><h3>Prototype identities</h3><span>4 narratives</span></div>
+                    <p>The first deck tests four different failures of Map Type identity. The type name, generated map name, description and seed remain hidden during review.</p>
+                    <div className="lab-prototype-list">
+                      {IDENTITY_LAB_PROTOTYPES.map((prototype) => (
+                        <div key={prototype.preset}><strong>{prototype.label}</strong><span>{prototype.dimension}</span></div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="lab-session-builder">
+                    <div className="section-title"><h3>New blind deck</h3><span>{labSamplesPerType * IDENTITY_LAB_PROTOTYPES.length} maps</span></div>
+                    <label className="control-field"><span>Samples per type</span><select value={labSamplesPerType} onChange={(event) => setLabSamplesPerType(Number(event.target.value))}><option value={1}>1 · quick calibration</option><option value={2}>2 · baseline</option><option value={3}>3 · stronger evidence</option><option value={5}>5 · extended session</option></select></label>
+                    <label className="control-field"><span>World character</span><select value={labStyle} onChange={(event) => setLabStyle(event.target.value as MapGenerationOptions["style"])}><option value="MUNDANE">Mundane · baseline recognition</option><option value="REALISTIC">Realistic</option><option value="FANTASTICAL">Fantastical</option><option value="BRUTAL">Brutal</option></select></label>
+                    <label className="control-field"><span>Map size</span><select value={labSize} onChange={(event) => setLabSize(event.target.value as MapGenerationOptions["size"])}><option value="SMALL">Small · faster</option><option value="STANDARD">Standard · recommended</option><option value="HUGE">Huge · detailed</option></select></label>
+                    <label className="control-field"><span>Session seed</span><input value={labSessionSeed} maxLength={80} onChange={(event) => setLabSessionSeed(event.target.value)} /></label>
+                    <button className="lab-primary-action" type="button" disabled={labLoading || !labSessionSeed.trim()} onClick={startIdentityLabSession}>Start blind session</button>
+                    <button className="lab-secondary-action" type="button" onClick={() => labInputRef.current?.click()}>Import session JSON</button>
+                  </section>
+                </>
+              ) : labStage === "REVIEW" && labCurrentCandidate && labSession ? (
+                <>
+                  <section className="lab-candidate-header">
+                    <div><span>Candidate {labSession.currentIndex + 1} / {labSession.candidates.length}</span><strong>{labCurrentCandidate.revealedAt ? presetLabel(labCurrentCandidate.intendedPreset) : "Identity hidden"}</strong><small>{labCurrentCandidate.engine === "ECCENTRIC" ? "Eccentric" : "Physical"} engine · {labSession.configuration.style.toLowerCase()} character</small></div>
+                    <div className="lab-candidate-nav"><button type="button" aria-label="Previous blind candidate" disabled={labLoading || labSession.currentIndex === 0} onClick={() => moveIdentityLabCandidate(-1)}>←</button><button type="button" aria-label="Next blind candidate" disabled={labLoading || labSession.currentIndex === labSession.candidates.length - 1} onClick={() => moveIdentityLabCandidate(1)}>→</button></div>
+                  </section>
+                  <p className="lab-status" role="status">{labStatus}</p>
+                  {!labCandidateLoaded && (
+                    <button className="lab-primary-action" type="button" disabled={labLoading} onClick={() => void openIdentityLabCandidate(labSession, labSession.currentIndex)}>{labLoading ? generationStage || "Generating…" : labCurrentCandidate.generationError ? "Retry candidate" : "Generate candidate"}</button>
+                  )}
+                  {labCandidateLoaded && !labCurrentCandidate.review && (
+                    <section className="lab-review-form" aria-label="Blind Map Type review">
+                      <label className="control-field"><span>Most likely Map Type</span><select value={labGuessPrimary} onChange={(event) => { const value = event.target.value as MapGenerationOptions["preset"] | ""; setLabGuessPrimary(value); if (value === labGuessSecondary) setLabGuessSecondary(""); }}><option value="">Choose within {labCurrentCandidate.engine === "ECCENTRIC" ? "Eccentric" : "Physical"}…</option>{labChoiceOptions.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label>
+                      <label className="control-field"><span>Second choice · optional</span><select value={labGuessSecondary} onChange={(event) => setLabGuessSecondary(event.target.value as MapGenerationOptions["preset"] | "")}><option value="">No second choice</option>{labChoiceOptions.filter((choice) => choice.id !== labGuessPrimary).map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label>
+                      <fieldset className="lab-confidence"><legend>Confidence</legend>{([1, 2, 3, 4, 5] as const).map((value) => <button key={value} type="button" aria-pressed={labConfidence === value} className={labConfidence === value ? "is-active" : ""} onClick={() => setLabConfidence(value)}>{value}</button>)}</fieldset>
+                      <fieldset className="lab-cue-picker"><legend>What did you perceive?</legend>{IDENTITY_LAB_CUES.map((cue) => <label key={cue.id}><input type="checkbox" checked={labCues.has(cue.id)} onChange={() => setLabCues((current) => { const next = new Set(current); if (next.has(cue.id)) next.delete(cue.id); else next.add(cue.id); return next; })} /><span>{cue.label}</span></label>)}</fieldset>
+                      <label className="control-field"><span>Observation notes · optional</span><textarea rows={4} maxLength={4000} value={labNotes} onChange={(event) => setLabNotes(event.target.value)} placeholder="Describe the geography that led to your guess. Do not try to infer the hidden seed." /></label>
+                      <button className="lab-primary-action" type="button" disabled={!labGuessPrimary} onClick={submitIdentityGuess}>Submit guess and reveal</button>
+                    </section>
+                  )}
+                  {labCurrentCandidate.review && labCurrentCandidate.revealedAt && labCurrentPrototype && (
+                    <section className="lab-reveal">
+                      <span className={labCurrentCandidate.review.guessPrimary === labCurrentCandidate.intendedPreset ? "is-correct" : "is-missed"}>{labCurrentCandidate.review.guessPrimary === labCurrentCandidate.intendedPreset ? "First-choice match" : labCurrentCandidate.review.guessSecondary === labCurrentCandidate.intendedPreset ? "Second-choice match" : "Identity not recognized"}</span>
+                      <h3>{labCurrentPrototype.label}</h3>
+                      <p>{labCurrentPrototype.premise}</p>
+                      <dl className="lab-review-summary"><div><dt>Primary guess</dt><dd>{presetLabel(labCurrentCandidate.review.guessPrimary)}</dd></div><div><dt>Second choice</dt><dd>{presetLabel(labCurrentCandidate.review.guessSecondary)}</dd></div><div><dt>Confidence</dt><dd>{labCurrentCandidate.review.confidence} / 5</dd></div></dl>
+                      <fieldset className="lab-verdict-picker"><legend>Post-reveal verdict</legend>{(["RECOGNIZABLE", "AMBIGUOUS", "ATTRACTIVE_WRONG", "FAILED"] as const).map((verdict) => <button key={verdict} type="button" aria-pressed={labCurrentCandidate.review?.verdict === verdict} className={labCurrentCandidate.review?.verdict === verdict ? "is-active" : ""} onClick={() => chooseIdentityVerdict(verdict)}>{verdict === "ATTRACTIVE_WRONG" ? "Attractive but wrong" : verdict.toLowerCase()}</button>)}</fieldset>
+                      {labCurrentCandidate.diagnostics && <details className="lab-diagnostics"><summary>Structural diagnostics</summary><dl>{Object.entries(labCurrentCandidate.diagnostics).map(([key, value]) => <div key={key}><dt>{friendlyName(key.replace(/([a-z])([A-Z])/g, "$1_$2"), "")}</dt><dd>{value}</dd></div>)}</dl></details>}
+                    </section>
+                  )}
+                  <div className="lab-session-actions"><button type="button" onClick={exportIdentityEvidence}>Export JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button><button type="button" onClick={startIdentityLabSession}>New deck</button></div>
+                </>
+              ) : labStage === "RESULTS" && labSession ? (
+                <section className="lab-results">
+                  <div className="lab-score-grid"><div><strong>{labSession.summary.reviewed}</strong><span>Reviewed</span></div><div><strong>{labSession.summary.firstChoicePercent}%</strong><span>First choice</span></div><div><strong>{labSession.summary.topTwoPercent}%</strong><span>Top two</span></div></div>
+                  <div className="section-title"><h3>By narrative identity</h3><span>{labSession.summary.candidates} candidates</span></div>
+                  <div className="lab-identity-results">{labSession.summary.byIdentity.map((result) => <div key={result.intendedPreset}><span><strong>{presetLabel(result.intendedPreset)}</strong><small>{result.reviewed} / {result.candidates} reviewed</small></span><span>{result.firstChoiceCorrect} first · {result.topTwoCorrect} top two</span></div>)}</div>
+                  <div className="section-title"><h3>Confusion pairs</h3><span>{labSession.summary.confusions.length}</span></div>
+                  {labSession.summary.confusions.length ? <div className="lab-confusions">{labSession.summary.confusions.map((confusion) => <div key={`${confusion.intendedPreset}-${confusion.guessedPreset}`}><span>{presetLabel(confusion.intendedPreset)}</span><b>→</b><span>{presetLabel(confusion.guessedPreset)}</span><strong>{confusion.count}</strong></div>)}</div> : <p className="workspace-empty-state">No first-choice confusion has been recorded yet.</p>}
+                  <p className="lab-status" role="status">{labStatus}</p>
+                  <div className="lab-session-actions"><button type="button" onClick={() => setLabStage("REVIEW")}>Return to review</button><button type="button" onClick={exportIdentityEvidence}>Export JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button></div>
+                </section>
+              ) : (
+                <section className="lab-guide">
+                  <div className="section-title"><h3>How to read the JSON</h3><span>schema v1</span></div>
+                  <p>The export is a durable evidence handoff. It contains no uploaded account data and no embedded Civ5Map binary; every candidate can be regenerated from its exact retained options.</p>
+                  <dl>
+                    <div><dt><code>narrativeGuide</code></dt><dd>Names version 1 of <code>docs/features/map-type-narrative-identities.md</code>, the specification against which the candidate is judged.</dd></div>
+                    <div><dt><code>configuration</code></dt><dd>Records the stable deck seed, character, size, samples per type and four prototype identities.</dd></div>
+                    <div><dt><code>candidates[].options</code></dt><dd>Contains the complete deterministic generation recipe used to reproduce the unlabeled map.</dd></div>
+                    <div><dt><code>intendedPreset</code></dt><dd>Connects a candidate to its narrative entry. It is deliberately hidden until the blind guess is submitted.</dd></div>
+                    <div><dt><code>review</code></dt><dd>Retains primary and secondary guesses, confidence, perceived cue tags, notes and the post-reveal verdict.</dd></div>
+                    <div><dt><code>diagnostics</code></dt><dd>Records structural measurements that explain the result. They support but do not replace human recognition.</dd></div>
+                    <div><dt><code>summary.confusions</code></dt><dd>Lists intended-versus-guessed pairs. These identify which narrative rules need iteration.</dd></div>
+                  </dl>
+                  <div className="section-title"><h3>How it changes generation</h3><span>reviewed loop</span></div>
+                  <ol><li>Export the session after blind review.</li><li>Attach the JSON or provide its local path in a development task.</li><li>Compare confusion pairs, cue tags, notes and diagnostics with the narrative guide.</li><li>Change engine rules across the stable seed deck—not individual favorable maps.</li><li>Import the same JSON and regenerate candidates to compare the next implementation.</li></ol>
+                  <p className="lab-caveat">The Lab never modifies a generator automatically. Narrative changes remain deliberate code changes reviewed against legality, accessibility, determinism and World Character variation.</p>
+                  <div className="lab-session-actions"><button type="button" onClick={exportIdentityEvidence}>Export JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button></div>
+                </section>
+              )}
             </div>
           )}
 
@@ -2895,7 +3188,7 @@ export function Civ5MapViewer() {
           </div>
           )}
 
-          <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>
+          {mode !== "LAB" && <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>}
           <footer className="sidebar-footer">
             <a href="https://github.com/AngelaDMerkel/Excogitare#readme" target="_blank" rel="noreferrer">
               README <span aria-hidden="true">↗</span>
@@ -2909,11 +3202,11 @@ export function Civ5MapViewer() {
           onDragEnter={(event) => { event.preventDefault(); setIsDraggingFile(true); }}
           onDragOver={(event) => event.preventDefault()}
           onDragLeave={(event) => { if (event.currentTarget === event.target) setIsDraggingFile(false); }}
-          onDrop={onDrop}
+          onDrop={mode === "LAB" ? undefined : onDrop}
         >
           <canvas
             ref={canvasRef}
-            aria-label={`Interactive physical map of ${canvasMap.name}`}
+            aria-label={mode === "LAB" ? "Interactive blind identity candidate" : `Interactive physical map of ${canvasMap.name}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -2922,7 +3215,7 @@ export function Civ5MapViewer() {
             onWheel={onWheel}
           />
 
-          <div className="mobile-map-actions" aria-label="Mobile map actions">
+          {mode !== "LAB" && <div className="mobile-map-actions" aria-label="Mobile map actions">
             <button
               className="mobile-randomise-button"
               type="button"
@@ -2940,7 +3233,7 @@ export function Civ5MapViewer() {
             >
               Download .Civ5Map
             </button>
-          </div>
+          </div>}
 
           <div className="map-toolbar" aria-label="Map controls">
             <button type="button" data-tooltip="Zoom into the map around the centre of the visible canvas." onClick={() => zoomAt(1.2, size.width / 2, size.height / 2)} aria-label="Zoom in">+</button>
@@ -2948,11 +3241,13 @@ export function Civ5MapViewer() {
             <button type="button" data-tooltip="Zoom away from the map around the centre of the visible canvas." onClick={() => zoomAt(0.83, size.width / 2, size.height / 2)} aria-label="Zoom out">−</button>
             <i aria-hidden="true" />
             <button className="fit-button" type="button" data-tooltip="Fit the entire map inside the available canvas, including extreme aspect ratios." onClick={() => fitMap(size)}>Fit</button>
+            {mode !== "LAB" && <>
             <i aria-hidden="true" />
             <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" data-tooltip={projection === "ISOMETRIC" ? "Return to the flat 2D hex rendering." : "Tilt the map into the decorative isometric renderer with raised hills and mountains."} aria-pressed={projection === "ISOMETRIC"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO 3D"}</button>
             <i aria-hidden="true" />
             <button className={`display-button${showDisplayPanel ? " is-active" : ""}`} type="button" data-tooltip="Show map dimensions, terrain counts, and rendering-layer switches without leaving the canvas." aria-expanded={showDisplayPanel} aria-controls="map-display-panel" aria-label={showDisplayPanel ? "Hide map display controls" : "Show map display controls"} onClick={() => { setShowDisplayPanel((current) => !current); setShowLegend(false); }}>Display</button>
             <button className={`legend-button${showLegend ? " is-active" : ""}`} type="button" data-tooltip="Explain terrain colours, relief, rivers, resources, wonders, starts, city states, camps, ruins, roads, and scenario symbols." aria-expanded={showLegend} aria-controls="map-legend" aria-label={showLegend ? "Hide map legend" : "Show map legend"} onClick={() => { setShowLegend((current) => !current); setShowDisplayPanel(false); }}>Legend</button>
+            </>}
           </div>
 
           {showDisplayPanel && (
@@ -2962,10 +3257,10 @@ export function Civ5MapViewer() {
                 <button type="button" aria-label="Close map display controls" onClick={() => setShowDisplayPanel(false)}>×</button>
               </header>
               <dl className="map-stats">
-                <div><dt>Dimensions</dt><dd>{map.width} × {map.height}</dd></div>
-                <div><dt>World</dt><dd>{friendlyName(map.worldSize, "")}</dd></div>
-                <div><dt>Tiles</dt><dd>{map.tiles.length.toLocaleString()}</dd></div>
-                <div><dt>Wrap</dt><dd>{map.wraps ? "East / west" : "None"}</dd></div>
+                <div><dt>Dimensions</dt><dd>{canvasMap.width} × {canvasMap.height}</dd></div>
+                <div><dt>World</dt><dd>{friendlyName(canvasMap.worldSize, "")}</dd></div>
+                <div><dt>Tiles</dt><dd>{canvasMap.tiles.length.toLocaleString()}</dd></div>
+                <div><dt>Wrap</dt><dd>{canvasMap.wraps ? "East / west" : "None"}</dd></div>
               </dl>
               <section>
                 <div className="section-title"><h3>Layers</h3><span>{visibleLayerCount} on</span></div>
@@ -3093,7 +3388,7 @@ export function Civ5MapViewer() {
             </aside>
           )}
 
-          <div className="file-status" role="status">{message}</div>
+          <div className="file-status" role="status">{mode === "LAB" ? labStatus : message}</div>
 
           {activeTile && hovered ? (
             <div className="tile-card">
@@ -3106,7 +3401,7 @@ export function Civ5MapViewer() {
               </div>
             </div>
           ) : (
-            <div className="map-hint">{mode === "CREATE" && createView === "EDIT" ? "Click to edit" : mode === "REPAIR" ? "Review proposed corrections" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
+            <div className="map-hint">{mode === "CREATE" && createView === "EDIT" ? "Click to edit" : mode === "REPAIR" ? "Review proposed corrections" : mode === "LAB" ? "Judge the unlabeled world" : "Hover for tile data"} <span>·</span> Drag to pan <span>·</span> Scroll to zoom</div>
           )}
 
           {isDraggingFile && (

@@ -32,6 +32,7 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.match(html, />Explore</);
   assert.match(html, />Create</);
   assert.match(html, />Repair</);
+  assert.match(html, />Lab</);
   assert.match(html, />Lua</);
   assert.match(html, /Edit map name and description/);
   assert.doesNotMatch(html, /Files stay on this device/);
@@ -274,7 +275,7 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.doesNotMatch(source, /\}, \[canvasMap, size, fitMap\]\);/);
 });
 
-test("workspace navigation separates Create, Repair, and Lua stages", async () => {
+test("workspace navigation separates Create, Repair, Lab, and Lua stages", async () => {
   const [source, css, readme] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -290,6 +291,7 @@ test("workspace navigation separates Create, Repair, and Lua stages", async () =
   assert.match(source, /mode === "VIEW" \? \([\s\S]{0,180}className="explore-map-identity"/);
   assert.ok(source.indexOf("</header>") < source.indexOf('className="workspace-context-bar"'));
   assert.match(source, /aria-label="Repair workspace"[\s\S]{0,900}>Inspect<\/button>[\s\S]{0,900}>Correct<\/button>[\s\S]{0,900}>Validate<\/button>/);
+  assert.match(source, /aria-label="Lab workspace"[\s\S]{0,900}>Review<\/button>[\s\S]{0,900}>Results<\/button>[\s\S]{0,900}>Guide<\/button>/);
   assert.match(source, /aria-label="Lua workspace"[\s\S]{0,900}>Script<\/button>[\s\S]{0,900}>Generate<\/button>[\s\S]{0,900}>Diagnostics<\/button>/);
   assert.match(source, /const \[repairStage, setRepairStage\] = useState<RepairStage>\("INSPECT"\)/);
   assert.match(source, /const \[luaStage, setLuaStage\] = useState<LuaStage>\("SCRIPT"\)/);
@@ -297,6 +299,7 @@ test("workspace navigation separates Create, Repair, and Lua stages", async () =
   assert.match(source, /Repair workspace restored · corrections and validation preserved/);
   assert.match(source, /aria-controls="create-workspace-panel"/);
   assert.match(source, /aria-controls="repair-workspace-panel"/);
+  assert.match(source, /aria-controls="lab-workspace-panel"/);
   assert.match(source, /aria-controls="lua-workspace-panel"/);
   assert.match(source, /createView === "ITERATE"[\s\S]{0,500}className="iteration-workspace"/);
   assert.match(source, /<h3>World recipe<\/h3>/);
@@ -315,6 +318,7 @@ test("workspace navigation separates Create, Repair, and Lua stages", async () =
   assert.match(css, /\.workspace-stage-tabs \{[\s\S]{0,220}display: flex/);
   assert.match(css, /\.viewer-app\.workspace-create \{ --workspace-accent: #dfbe72/);
   assert.match(css, /\.viewer-app\.workspace-repair \{ --workspace-accent: #d18a68/);
+  assert.match(css, /\.viewer-app\.workspace-lab \{ --workspace-accent: #69aee8/);
   assert.match(css, /\.viewer-app\.workspace-lua \{ --workspace-accent: #d76b60/);
   assert.match(css, /\.workspace-context-bar \{[\s\S]{0,180}height: 42px/);
   assert.match(css, /\.workspace-masthead \{[\s\S]{0,180}border-left: 2px solid var\(--workspace-accent\)/);
@@ -326,11 +330,43 @@ test("workspace navigation separates Create, Repair, and Lua stages", async () =
   assert.match(css, /\.world-recipe-card \{ display: grid; gap: 8px; \}/);
   assert.doesNotMatch(css, /\.world-model-picker button:not\(\.is-active\) small/);
   assert.equal((source.match(/className="generation-summary/g) ?? []).length, 1);
-  assert.match(readme, /## Workspaces[\s\S]{0,1200}Design[\s\S]{0,100}Iterate[\s\S]{0,100}Edit[\s\S]{0,100}Review/);
+  assert.match(readme, /## Workspaces[\s\S]{0,2000}Design[\s\S]{0,100}Iterate[\s\S]{0,100}Edit[\s\S]{0,100}Review/);
   assert.match(readme, /Repair separates \*\*Inspect\*\*, \*\*Correct\*\* and \*\*Validate\*\*/);
+  assert.match(readme, /Lab separates \*\*Review\*\*, \*\*Results\*\* and \*\*Guide\*\*/);
   assert.match(readme, /Lua separates \*\*Script\*\*, \*\*Generate\*\* and \*\*Diagnostics\*\*/);
   assert.match(readme, /dedicated contextual strip beneath the primary header/);
   assert.match(readme, /compact \*\*Current map\*\* disclosure/);
+});
+
+test("Identity Lab retains blind reviews and documents its narrative JSON handoff", async () => {
+  const [source, css, model, readme, feature, narratives] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/identity-lab.ts", import.meta.url), "utf8"),
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/features/identity-lab.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/features/map-type-narrative-identities.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /className="development-badge">Development<\/span>/);
+  assert.match(css, /\.development-badge \{[^}]*background: #245f91;/);
+  assert.match(source, /Identity hidden/);
+  assert.match(source, /Submit guess and reveal/);
+  assert.match(source, /mode === "LAB" \? "Interactive blind identity candidate"/);
+  assert.match(source, /mode !== "LAB" && <div className="mobile-map-actions"/);
+  assert.match(source, /IDENTITY_LAB_STORAGE_KEY/);
+  assert.match(source, /Export JSON/);
+  assert.match(source, /Import JSON/);
+  assert.match(source, /How to read the JSON/);
+  for (const preset of ["LONELY_OCEANS", "SHATTERED_ARCHIPELAGO", "GREAT_WATERSHEDS", "ICEHOUSE_EARTH"]) assert.match(model, new RegExp(`preset: "${preset}"`));
+  assert.match(model, /excogitare\.identity-lab/);
+  assert.match(model, /docs\/features\/map-type-narrative-identities\.md/);
+  assert.match(readme, /## Lab[\s\S]*### Reading Identity Lab JSON/);
+  assert.match(readme, /summary\.confusions/);
+  assert.match(feature, /Evidence-to-implementation loop/);
+  assert.match(narratives, /## Lonely Oceans/);
+  assert.match(narratives, /## Shattered Archipelago/);
+  assert.match(narratives, /## Great Watersheds/);
+  assert.match(narratives, /## Icehouse Earth/);
 });
 
 test("dense controls expose unclipped contextual help on hover and focus", async () => {

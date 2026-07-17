@@ -16,17 +16,17 @@ AI was relied upon heavily for the production of this tool. Often I performed ma
 
 ## Workspaces
 
-The top bar is organized around four workspaces rather than four unrelated menus: **Explore**, **Create**, **Repair** and **Lua**. Selecting a workspace changes the job the sidebar is doing without replacing the current map or disturbing its zoom, pan, layers, history or selections. The switcher gives each workspace a restrained identity—teal Explore, gold Create, copper Repair and red Lua—while retaining written labels so colour is never the only explanation.
+The top bar is organized around five workspaces rather than five unrelated menus: **Explore**, **Create**, **Repair**, **Lab** and **Lua**. Selecting a workspace changes the job the sidebar is doing without replacing the current map or disturbing its zoom, pan, layers, history or selections. The switcher gives each workspace a restrained identity—teal Explore, gold Create, copper Repair, blue Lab and red Lua—while retaining written labels so colour is never the only explanation. Lab carries a blue **Development** label; Lua carries a red **Experimental** label. Neither is a claim of maturity.
 
-Create, Repair and Lua open a dedicated contextual strip beneath the primary header. That strip names the active workspace and stage, exposes only that workspace's stages, and reports useful state such as the generation seed, edit selection, repair count or Lua runtime status. It is deliberately separate from the top-level switcher: “where am I?” and “what am I doing here?” are related questions, not the same control. Returning to a workspace restores the stage last used there.
+Create, Repair, Lab and Lua open a dedicated contextual strip beneath the primary header. That strip names the active workspace and stage, exposes only that workspace's stages, and reports useful state such as the generation seed, edit selection, repair count, blind-review progress or Lua runtime status. It is deliberately separate from the top-level switcher: “where am I?” and “what am I doing here?” are related questions, not the same control. Returning to a workspace restores the stage last used there.
 
-These stages are navigation, not a compulsory wizard. Create may move freely between **Design**, **Iterate**, **Edit** and **Review**. Repair separates **Inspect**, **Correct** and **Validate**. Experimental Lua separates **Script**, **Generate** and **Diagnostics**. Explore needs no subordinate stage because inspection is already its entire purpose. Every sidebar begins with a task masthead—such as **World Design**, **Map Audit** or **Compatibility Report**—and a plain description of that stage. Explore retains the complete map name and description; the working spaces reduce them to a compact **Current map** disclosure so generic metadata no longer buries the actual job.
+These stages are navigation, not a compulsory wizard. Create may move freely between **Design**, **Iterate**, **Edit** and **Review**. Repair separates **Inspect**, **Correct** and **Validate**. Development Lab separates **Review**, **Results** and **Guide**. Experimental Lua separates **Script**, **Generate** and **Diagnostics**. Explore needs no subordinate stage because inspection is already its entire purpose. Every sidebar begins with a task masthead—such as **World Design**, **Map Audit**, **Identity Lab** or **Compatibility Report**—and a plain description of that stage. Explore retains the complete map name and description; ordinary working spaces reduce them to a compact **Current map** disclosure. Lab hides the candidate name, description and preset until the reviewer has committed a guess.
 
 ## Explore
 
 Open a local `.Civ5Map` with **Open map** or drag one onto the canvas; the parser reads the physical map and whatever scenario records it recognizes, then renders the result without uploading the file. Drag to pan, scroll to zoom, use **Fit** to recover the whole map, and use **ISO 3D** to exchange the normal 2D view for a decorative relief projection. The isometric view has raised hills and mountains, but it remains a renderer rather than a miniature Civ V engine.
 
-The controls in the top bar remain available in every workspace:
+The controls in the top bar remain available in the ordinary map workspaces. Lab deliberately substitutes a fixed blind-review view so export names, edit history and display changes cannot disclose or distort a candidate:
 
 - **Undo / Redo** move through edits made during the current session. View position is independent of map state, so an edit should not throw away the current pan or zoom.
 - **Export PNG** captures the rendered map with a transparent background. It exports the map, not the surrounding interface.
@@ -119,6 +119,8 @@ The same character therefore has different work to do in each engine:
 Character remains part of the deterministic recipe: an identical seed and identical complete settings reproduce the same result. It also follows selective regeneration. Rerunning Climate applies the new character to climate and biome composition while retaining the existing land and elevation; rerunning Rivers changes drainage propensity while retaining terrain, features, resources and wonders.
 
 **Map type** supplies the initial geography and sensible defaults. Selecting one also selects its owning engine.
+
+The complete [Map Type narrative reference](docs/features/map-type-narrative-identities.md) defines the premise, recognizable geography, World Character interpretations and failure conditions proposed for every type. It is deliberately aspirational where current generation remains weaker than the name: the reference is a specification for future implementation, not a claim that all thirty identities are already equally recognizable.
 
 | Engine | Map type | Result |
 | --- | --- | --- |
@@ -294,6 +296,44 @@ Repair checks dimensions, tile counts and malformed terrain values; illegal terr
 Illegal resources are relocated to a compatible nearby tile when a defensible destination exists and deleted when it does not. Illegal features and wonders are removed or corrected according to their rule. River repair may discard broken fragments and rebuild a continuous mountain-to-water network because preserving a nonsensical river more faithfully would still leave it nonsensical. Start repair may replace a complete overcrowded layout, correct city-state flags and synchronize the logical player count. A zero-start geography-only map can now receive a fresh scenario section containing spaced major and city-state starts. A file that already contains unrelated scenario data but exposes no writable player slots remains blocked, because replacing that scenario wholesale would be a more destructive intervention than Repair pretends to be.
 
 Repair is useful, but it is not an oracle. Its legality tables know the ordinary content bundled into Excogitare, not every rule introduced by every mod. A strange but intentional river may be replaced by a more conventional one; damaged scenario data may be beyond salvage; and passing every check means only that the map is internally coherent to Excogitare. It does not amount to a blood oath that Civ V will load every possible file. Review Difference and retain the original.
+
+## Lab
+
+Lab is marked **Development** in blue. It is an evidence-gathering workspace for answering a deliberately uncomfortable question: if Excogitare hides the label, can a person still recognize the Map Type? It does not quietly declare a generator successful because a map is attractive, nor does it rewrite generation code from one favorable seed.
+
+The first deck concentrates on four identities whose intended distinctions are large enough to test honestly:
+
+- **Lonely Oceans** tests isolation and negative space: a few viable realms should feel genuinely separated by intimidating water, not merely scattered through an ordinary archipelago.
+- **Shattered Archipelago** tests correlated island geometry: chains, crescents and branching arcs should read as systems rather than a collection of unrelated islands.
+- **Great Watersheds** tests hierarchical hydrology: dominant trunks, merging tributaries, marshes and deltas should organize the world rather than decorate it.
+- **Icehouse Earth** tests planetary climate: glaciation, tundra margins and scarce temperate refuges should make the entire map read as a cold world.
+
+These four are starting points, not the only Map Types that will ever enter the Lab. Together they isolate four different generator problems—absence, shape correlation, drainage hierarchy and climate—without pretending that a thirty-type recognition experiment is useful before the workflow itself has been calibrated.
+
+### Lab workspace stages
+
+- **Review** creates a deterministically shuffled deck. Choose one to five samples per identity, a World Character, map size and stable session seed. Candidate name, description, exact seed and intended preset remain hidden. The Lab fixes the view to flat geography and suppresses editing, export and mutable display controls during the blind judgment.
+- **Results** reports first-choice and top-two recognition, counts by identity and the most frequent intended-versus-guessed confusion pairs. A high score is evidence that the narrative is legible; it is not proof of Civ V legality or multiplayer quality.
+- **Guide** explains the versioned JSON in the interface, including which fields reproduce a candidate and which fields carry human evidence back to the narrative specification.
+
+For each candidate, select the most likely Map Type within its owning engine and optionally a second choice. Confidence is recorded from 1–5. Cue tags state what was actually perceived—empty ocean, island chains, trunk rivers, ice sheets and so forth—and notes preserve anything the fixed tags fail to say. Only **Submit guess and reveal** exposes the intended identity. A post-reveal verdict distinguishes **Recognizable**, **Ambiguous**, **Attractive but wrong** and **Failed**; this matters because a beautiful map that reads as the wrong narrative is still a failed identity test.
+
+The current session is retained in browser storage on this device. **Export JSON** is the durable development handoff; **Import JSON** restores a compatible session without replacing it when validation fails. The export contains no `.Civ5Map` binary and no account data. It contains exact generation options, which are enough to deterministically regenerate the candidates.
+
+### Reading Identity Lab JSON
+
+The root `schema` is `excogitare.identity-lab`, and `schemaVersion` identifies the evidence format. `narrativeGuide` points to version 1 of [`docs/features/map-type-narrative-identities.md`](docs/features/map-type-narrative-identities.md); that guide states the premise, signature motifs, anti-motifs and engine-specific obligations against which the human review is interpreted.
+
+- `configuration` records the stable session seed, World Character, size, samples per type and prototype list. It defines the experiment rather than any one map.
+- `candidates[].options` is the complete deterministic recipe. Use it to reproduce the same map after a generator change.
+- `candidates[].intendedPreset` connects that recipe to one narrative entry. The normal interface conceals it until review submission; JSON is a development artifact and therefore does not pretend to remain blind after export.
+- `candidates[].review.guessPrimary` and `guessSecondary` produce first-choice and top-two recognition. `confidence`, `cues`, `notes` and `verdict` explain why the numeric result occurred.
+- `candidates[].diagnostics` records structural measurements such as land share, river count, islands, ice, marsh and mountain coverage. They help explain a judgment but cannot replace it: a quota can be technically correct while the map still looks generic.
+- `summary.byIdentity` aggregates recognition per narrative. `summary.confusions` lists intended and first-choice guessed pairs, making systematic identity collisions visible.
+
+The intended development loop is prosaic on purpose: export a reviewed session, attach the JSON or provide its local path in a later task, compare its confusions, cues, notes and diagnostics with the narrative guide, then change the engine rules across the stable seed deck. Import the session and regenerate the same recipes for the next comparison. A later code change still has to pass legality, accessibility, determinism and World Character tests. The Lab never converts opinion into an automatic generator patch.
+
+The formal implementation record and JSON contract live in [`docs/features/identity-lab.md`](docs/features/identity-lab.md).
 
 ## Lua
 
