@@ -14,11 +14,19 @@ Realistic generation adapts [terrain-diffusion](https://github.com/xandergos/ter
 
 AI was relied upon heavily for the production of this tool. Often I performed manual review, but more often I did not; although, most of the architecture and logic is my own making—  not always. This was meant to be a quick and dirty tool for making fun makes so that I can while away my waking hours unproductively. None of this is tested for security and if you decide to host this and expose it publicly, you do so at your own risk. 
 
+## Workspaces
+
+The top bar is organized around four workspaces rather than four unrelated menus: **Explore**, **Create**, **Repair** and **Lua**. Selecting a workspace changes the job the sidebar is doing without replacing the current map or disturbing its zoom, pan, layers, history or selections. The switcher gives each workspace a restrained identity—teal Explore, gold Create, copper Repair and red Lua—while retaining written labels so colour is never the only explanation.
+
+Create, Repair and Lua open a dedicated contextual strip beneath the primary header. That strip names the active workspace and stage, exposes only that workspace's stages, and reports useful state such as the generation seed, edit selection, repair count or Lua runtime status. It is deliberately separate from the top-level switcher: “where am I?” and “what am I doing here?” are related questions, not the same control. Returning to a workspace restores the stage last used there.
+
+These stages are navigation, not a compulsory wizard. Create may move freely between **Design**, **Iterate**, **Edit** and **Review**. Repair separates **Inspect**, **Correct** and **Validate**. Experimental Lua separates **Script**, **Generate** and **Diagnostics**. Explore needs no subordinate stage because inspection is already its entire purpose. Every sidebar begins with a task masthead—such as **World Design**, **Map Audit** or **Compatibility Report**—and a plain description of that stage. Explore retains the complete map name and description; the working spaces reduce them to a compact **Current map** disclosure so generic metadata no longer buries the actual job.
+
 ## Explore
 
 Open a local `.Civ5Map` with **Open map** or drag one onto the canvas; the parser reads the physical map and whatever scenario records it recognizes, then renders the result without uploading the file. Drag to pan, scroll to zoom, use **Fit** to recover the whole map, and use **ISO 3D** to exchange the normal 2D view for a decorative relief projection. The isometric view has raised hills and mountains, but it remains a renderer rather than a miniature Civ V engine.
 
-The controls in the top bar remain available in every menu:
+The controls in the top bar remain available in every workspace:
 
 - **Undo / Redo** move through edits made during the current session. View position is independent of map state, so an edit should not throw away the current pan or zoom.
 - **Export PNG** captures the rendered map with a transparent background. It exports the map, not the surrounding interface.
@@ -61,7 +69,7 @@ The binary format is not blessed with a complete public specification. Unusual v
 
 ## Create
 
-Create contains four workflow tabs: **Design**, **Iterate**, **Edit** and **Review**. Design builds a deterministic map from a seed and a set of constraints. Iterate revisits generations and reruns selected passes. Edit changes the result directly. Review reports whether that result is plausible, legal and remotely fair. **Randomise** remains fixed at the top and chooses a new combination of settings before immediately producing a map. It excludes known game-breaking geometries and tile budgets unless their separate risk control has been enabled.
+Create expands the workspace bar with four non-linear stages: **Design**, **Iterate**, **Edit** and **Review**. Design builds a deterministic map from a seed and a set of constraints. Iterate revisits generations and reruns selected passes. Edit changes the result directly. Review reports whether that result is plausible, legal and remotely fair. **Randomise** remains fixed at the top of the Create sidebar and chooses a new combination of settings before immediately producing a map. It excludes known game-breaking geometries and tile budgets unless their separate risk control has been enabled.
 
 ![Create workflow showing Design, Iterate and contextual guidance](public/readme/create-workflow.png)
 
@@ -245,6 +253,12 @@ The generator is an independent approximation of Civ V's rules, not Firaxis code
 
 Repair examines the current map immediately upon entry. Open another `.Civ5Map` while remaining in Repair to run the same parser, salvage and rule checks on that file. Findings are proposals until they are applied or exported from the corrected preview.
 
+### Repair workspace stages
+
+- **Inspect** is deliberately read-only. It presents parser recovery notes, the complete test coverage and every structural, terrain, river, scenario or start-location finding without mixing those results with mutation controls.
+- **Correct** selects Safe, Standard or Competitive automation, exposes each proposed mutation, and provides Original, Corrected and Difference views. Checked corrections remain a live preview until **Apply selected** adds them to edit history or **Export repaired Civ5Map** writes the preview directly.
+- **Validate** reruns Repair's tests against that corrected preview, including selected corrections that have not yet been committed. It reports blockers or remaining warnings and provides the final repaired export. Passing means Excogitare found no remaining problem in its own rule set; it is not a guarantee about every mod or every obscure Civ V engine limit.
+
 ### Repair profiles
 
 - **Safe** preselects the most mechanical corrections with an actual mutation: malformed values, incompatible features, broken city links, impossible city or start placement, city-state flags and player-count mismatches.
@@ -274,6 +288,12 @@ Repair is useful, but it is not an oracle. Its legality tables know the ordinary
 
 Lua is marked **Experimental** in red and presents an incomplete-feature warning before entry. That warning is not decorative legal compost: this is the least finished menu. It is a sandboxed compatibility workspace for trying Civ V map scripts, not a faithful copy of the game's Lua host.
 
+### Lua workspace stages
+
+- **Script** loads or replaces the main `.lua`, manages named dependencies, edits the complete source, and stores the optional post-process hook. Editing source or the hook clears stale execution metadata.
+- **Generate** contains discovered script options, fallback size, player and city-state counts, runtime seed, and the actual Generate/Regenerate action. A successful run replaces the current map with an ordinary editable Excogitare map.
+- **Diagnostics** contains the compatibility report, execution pipeline and captured console output. Keeping these results separate prevents a long failure report from burying the source or generation action.
+
 ### Project and generation
 
 - **Open main script / Replace main script** loads one `.lua` file as the project entry point. Its filename and line count are shown.
@@ -281,7 +301,7 @@ Lua is marked **Experimental** in red and presents an incomplete-feature warning
 - **Generate map from Lua** runs the project for the first time. **Regenerate map from Lua** reruns it after source, option, dependency, runtime or hook changes. A successful result replaces the current map and becomes an ordinary editable Excogitare map.
 - The status line reports preparation, execution, conversion or failure. Execution occurs inside an isolated WebAssembly worker with a strict timeout.
 
-### Lua workspace submenus
+### Controls within the Lua stages
 
 - **Source editor** edits the complete main script in place. This can change generator functions directly; editing clears stale runtime metadata so the next report describes the revised source.
 - **Dependencies** lists supplied include files and their line counts. **Add .lua files** may load several at once. Literal named includes can be matched; dynamic or computed include paths generally cannot be discovered in advance.

@@ -173,7 +173,7 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Generation history/);
   assert.match(source, /MAX_GENERATION_HISTORY/);
   assert.match(source, /openGeneration/);
-  assert.match(source, /aria-label="Create workflow"/);
+  assert.match(source, /aria-label="Create workspace"/);
   assert.match(source, /World shape/);
   assert.match(source, /Climate and terrain/);
   assert.match(source, /Players and starts/);
@@ -227,7 +227,9 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, />Review</);
   assert.match(source, /Multiplayer balance/);
   assert.match(source, /Civ5 validation/);
-  assert.match(source, /Automated repair/);
+  assert.match(source, /<h3>Inspect map<\/h3>/);
+  assert.match(source, /<h3>Correct map<\/h3>/);
+  assert.match(source, /<h3>Validate result<\/h3>/);
   assert.match(source, /Start-location tests included/);
   assert.match(source, /Bounds · land access · mountain safety · duplicates · spacing · player count · city-state flags/);
   assert.match(source, /ORIGINAL", "CORRECTED", "DIFFERENCE/);
@@ -272,13 +274,30 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.doesNotMatch(source, /\}, \[canvasMap, size, fitMap\]\);/);
 });
 
-test("Create sidebar separates design, iteration, editing, and review", async () => {
+test("workspace navigation separates Create, Repair, and Lua stages", async () => {
   const [source, css, readme] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
   ]);
   assert.match(source, />Design<\/button>[\s\S]{0,500}>Iterate<\/button>[\s\S]{0,500}>Edit<\/button>[\s\S]{0,500}>Review<\/button>/);
+  assert.match(source, /aria-label="Workspaces"/);
+  assert.match(source, /className="workspace-context-bar"/);
+  assert.match(source, /className="workspace-context-identity"/);
+  assert.match(source, /className="workspace-context-status" role="status"/);
+  assert.match(source, /className="workspace-masthead"/);
+  assert.match(source, /className="current-map-disclosure"/);
+  assert.match(source, /mode === "VIEW" \? \([\s\S]{0,180}className="explore-map-identity"/);
+  assert.ok(source.indexOf("</header>") < source.indexOf('className="workspace-context-bar"'));
+  assert.match(source, /aria-label="Repair workspace"[\s\S]{0,900}>Inspect<\/button>[\s\S]{0,900}>Correct<\/button>[\s\S]{0,900}>Validate<\/button>/);
+  assert.match(source, /aria-label="Lua workspace"[\s\S]{0,900}>Script<\/button>[\s\S]{0,900}>Generate<\/button>[\s\S]{0,900}>Diagnostics<\/button>/);
+  assert.match(source, /const \[repairStage, setRepairStage\] = useState<RepairStage>\("INSPECT"\)/);
+  assert.match(source, /const \[luaStage, setLuaStage\] = useState<LuaStage>\("SCRIPT"\)/);
+  assert.match(source, /repairSourceMapRef\.current !== mapRef\.current/);
+  assert.match(source, /Repair workspace restored · corrections and validation preserved/);
+  assert.match(source, /aria-controls="create-workspace-panel"/);
+  assert.match(source, /aria-controls="repair-workspace-panel"/);
+  assert.match(source, /aria-controls="lua-workspace-panel"/);
   assert.match(source, /createView === "ITERATE"[\s\S]{0,500}className="iteration-workspace"/);
   assert.match(source, /<h3>World recipe<\/h3>/);
   assert.match(source, /className="engine-carousel-controls"/);
@@ -292,14 +311,26 @@ test("Create sidebar separates design, iteration, editing, and review", async ()
   assert.match(source, /className="generation-summary action-recipe-summary"/);
   assert.match(source, /id="map-display-panel"/);
   assert.match(source, />Display<\/button>/);
-  assert.match(css, /\.create-mode-tabs \{[\s\S]{0,180}grid-template-columns: repeat\(4, 1fr\)/);
+  assert.match(css, /\.workspace-navigation \{[\s\S]{0,180}position: absolute/);
+  assert.match(css, /\.workspace-stage-tabs \{[\s\S]{0,220}display: flex/);
+  assert.match(css, /\.viewer-app\.workspace-create \{ --workspace-accent: #dfbe72/);
+  assert.match(css, /\.viewer-app\.workspace-repair \{ --workspace-accent: #d18a68/);
+  assert.match(css, /\.viewer-app\.workspace-lua \{ --workspace-accent: #d76b60/);
+  assert.match(css, /\.workspace-context-bar \{[\s\S]{0,180}height: 42px/);
+  assert.match(css, /\.workspace-masthead \{[\s\S]{0,180}border-left: 2px solid var\(--workspace-accent\)/);
+  assert.match(css, /\.current-map-disclosure \{/);
+  assert.doesNotMatch(source, /className="create-mode-tabs"/);
   assert.match(source, /\{mode === "VIEW" && \([\s\S]{0,120}<div className="explore-sidebar-display">/);
   assert.match(css, /\.advanced-controls/);
   assert.match(css, /\.engine-carousel > button \{[\s\S]{0,180}flex: 0 0 100%/);
   assert.match(css, /\.world-recipe-card \{ display: grid; gap: 8px; \}/);
   assert.doesNotMatch(css, /\.world-model-picker button:not\(\.is-active\) small/);
   assert.equal((source.match(/className="generation-summary/g) ?? []).length, 1);
-  assert.match(readme, /Design[\s\S]{0,100}Iterate[\s\S]{0,100}Edit[\s\S]{0,100}Review/);
+  assert.match(readme, /## Workspaces[\s\S]{0,1200}Design[\s\S]{0,100}Iterate[\s\S]{0,100}Edit[\s\S]{0,100}Review/);
+  assert.match(readme, /Repair separates \*\*Inspect\*\*, \*\*Correct\*\* and \*\*Validate\*\*/);
+  assert.match(readme, /Lua separates \*\*Script\*\*, \*\*Generate\*\* and \*\*Diagnostics\*\*/);
+  assert.match(readme, /dedicated contextual strip beneath the primary header/);
+  assert.match(readme, /compact \*\*Current map\*\* disclosure/);
 });
 
 test("dense controls expose unclipped contextual help on hover and focus", async () => {
@@ -399,12 +430,12 @@ test("Lua uses an editable, staged, multi-file project workspace", async () => {
     readFile(new URL("../lib/lua-runtime.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(source, /<h3>Lua project<\/h3><span>sandboxed<\/span>/);
+  assert.match(source, /<h3>Lua script<\/h3><span>sandboxed<\/span>/);
   assert.match(source, /Replace main script/);
   assert.match(source, /Add dependencies/);
   assert.match(source, /className="lua-source-editor"/);
   assert.match(source, /Script options/);
-  assert.match(source, /GetMapInitData\(\) overrides the fallback dimensions/);
+  assert.match(source, /GetMapInitData\(\) overrides fallback dimensions/);
   assert.match(source, /className="lua-hook-editor"/);
   assert.match(source, /Generate map from Lua/);
   assert.match(source, /Regenerate map from Lua/);

@@ -81,6 +81,8 @@ type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
 type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
 type Projection = "FLAT" | "ISOMETRIC";
 type RepairView = "ORIGINAL" | "CORRECTED" | "DIFFERENCE";
+type RepairStage = "INSPECT" | "CORRECT" | "VALIDATE";
+type LuaStage = "SCRIPT" | "GENERATE" | "DIAGNOSTICS";
 type UiTooltip = { text: string; x: number; y: number; above: boolean };
 type ProjectionTransform = { a: number; b: number; c: number; d: number; e: number; f: number; width: number; height: number };
 type GenerationWorkerMessage = { id: number; type: "PROGRESS"; stage: string } | { id: number; type: "COMPLETE"; map: Civ5Map } | { id: number; type: "ERROR"; message: string };
@@ -990,6 +992,7 @@ export function Civ5MapViewer() {
   const [repairSelected, setRepairSelected] = useState<Set<string>>(new Set());
   const [repairProfile, setRepairProfile] = useState<RepairProfile>("STANDARD");
   const [repairView, setRepairView] = useState<RepairView>("CORRECTED");
+  const [repairStage, setRepairStage] = useState<RepairStage>("INSPECT");
   const [repairDiagnostics, setRepairDiagnostics] = useState<string[]>([]);
   const [luaReport, setLuaReport] = useState<LuaCompatibilityReport | null>(null);
   const [luaFileName, setLuaFileName] = useState("");
@@ -1001,6 +1004,7 @@ export function Civ5MapViewer() {
   const [luaLogs, setLuaLogs] = useState<string[]>([]);
   const [luaIsRunning, setLuaIsRunning] = useState(false);
   const [luaRunStatus, setLuaRunStatus] = useState("");
+  const [luaStage, setLuaStage] = useState<LuaStage>("SCRIPT");
   const [size, setSize] = useState<Size>({ width: 900, height: 620 });
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const [layers, setLayers] = useState<Layers>({ political: false, strategy: false, grid: true, features: true, resources: true, elevation: true, starts: true, cityStates: true });
@@ -1022,6 +1026,7 @@ export function Civ5MapViewer() {
   const exportConfirmationCancelRef = useRef<HTMLButtonElement>(null);
   const gameBreakingGeometryCancelRef = useRef<HTMLButtonElement>(null);
   const luaExperimentalCancelRef = useRef<HTMLButtonElement>(null);
+  const repairSourceMapRef = useRef<Civ5Map | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
   const luaDependencyInputRef = useRef<HTMLInputElement>(null);
@@ -1187,16 +1192,17 @@ export function Civ5MapViewer() {
   const beginRepair = useCallback((target: Civ5Map, diagnostics: string[] = []) => {
     const baseline = cloneMap(target);
     const issues = buildRepairIssues(baseline);
+    repairSourceMapRef.current = target;
     setRepairBaseline(baseline);
     setRepairIssues(issues);
     setRepairSelected(new Set(issues.filter((issue) => issueSelectedByProfile(issue, "STANDARD")).map((issue) => issue.id)));
     setRepairProfile("STANDARD");
     setRepairView("CORRECTED");
     setRepairDiagnostics(diagnostics);
-    setSelection(null);
   }, []);
 
   const repairPreviewMap = useMemo(() => repairBaseline ? applyRepairIssues(repairBaseline, repairIssues, repairSelected) : map, [repairBaseline, repairIssues, repairSelected, map]);
+  const repairPreviewIssues = useMemo(() => buildRepairIssues(repairPreviewMap), [repairPreviewMap]);
   const comparisonCheckpoint = useMemo(() => checkpoints.find((checkpoint) => checkpoint.id === comparisonCheckpointId) ?? null, [checkpoints, comparisonCheckpointId]);
   const mapComparison = useMemo(() => comparisonCheckpoint ? compareMaps(map, comparisonCheckpoint.map) : null, [map, comparisonCheckpoint]);
   const canvasMap = mode === "REPAIR" && repairBaseline
@@ -1659,8 +1665,12 @@ export function Civ5MapViewer() {
 
   const enterRepairMode = () => {
     setMode("REPAIR");
-    beginRepair(mapRef.current);
-    setMessage("Repair tests complete · review the proposed corrections");
+    if (repairSourceMapRef.current !== mapRef.current) {
+      beginRepair(mapRef.current);
+      setMessage("Repair tests complete · review the proposed corrections");
+    } else {
+      setMessage("Repair workspace restored · corrections and validation preserved");
+    }
   };
 
   const selectWorkspaceMode = (nextMode: WorkspaceMode) => {
@@ -1958,8 +1968,89 @@ export function Civ5MapViewer() {
   };
 
   const activeTile = hovered?.tile;
+  const workspacePresentation = mode === "VIEW"
+    ? { key: "explore", label: "Explore", symbol: "⌖" }
+    : mode === "CREATE"
+      ? { key: "create", label: "Create", symbol: "+" }
+      : mode === "REPAIR"
+        ? { key: "repair", label: "Repair", symbol: "◇" }
+        : { key: "lua", label: "Lua", symbol: "{ }" };
+  const workspaceTask = mode === "VIEW"
+    ? { stage: "Map inspection", title: "Explore the current world", description: "Inspect terrain, layers, starts, resources and individual tiles without changing the map." }
+    : mode === "CREATE"
+      ? createView === "GENERATE"
+        ? { stage: "Design", title: "World design", description: "Define geography, climate, content, players and the rules that shape a new world." }
+        : createView === "ITERATE"
+          ? { stage: "Iterate", title: "Generation workshop", description: "Revisit candidates, compare checkpoints and rerun selected parts of the current world." }
+          : createView === "EDIT"
+            ? { stage: "Edit", title: "Map editor", description: "Paint tiles, reshape regions and relocate structures or starting positions directly." }
+            : { stage: "Review", title: "Balance and validation", description: "Judge multiplayer fairness, strategic structure and Civ V export readiness." }
+      : mode === "REPAIR"
+        ? repairStage === "INSPECT"
+          ? { stage: "Inspect", title: "Map audit", description: "Read structural, terrain, river, scenario and start-location findings without mutation controls." }
+          : repairStage === "CORRECT"
+            ? { stage: "Correct", title: "Proposed corrections", description: "Choose an automation profile and preview only the repairs you are prepared to accept." }
+            : { stage: "Validate", title: "Export readiness", description: "Test the corrected preview again and identify anything that still blocks a defensible export." }
+        : luaStage === "SCRIPT"
+          ? { stage: "Script", title: "Lua project", description: "Load generator source and dependencies, then edit the script or its post-process hook." }
+          : luaStage === "GENERATE"
+            ? { stage: "Generate", title: "Lua runtime", description: "Configure exposed options and execute the experimental project into an editable map." }
+            : { stage: "Diagnostics", title: "Compatibility report", description: "Inspect runtime stages, unsupported behavior and captured console output." };
+  const workspaceContextStatus = mode === "CREATE"
+    ? createView === "GENERATE"
+      ? generationRunning ? generationStage : `${GENERATION_ENGINES.find((engine) => engine.id === generationOptions.engine)?.label ?? generationOptions.engine} · ${generationOptions.seed}`
+      : createView === "ITERATE" ? `${generationHistory.length} of ${MAX_GENERATION_HISTORY} generations retained`
+        : createView === "EDIT" ? `${pastMaps.length ? "Edited" : "Unmodified"} · ${selection ? `${selection.maxX - selection.minX + 1}×${selection.maxY - selection.minY + 1} selected` : "No region selected"}`
+          : `${balanceReport.grade} balance · ${validationIssues.filter((issue) => issue.severity !== "INFO").length} validation findings`
+    : mode === "REPAIR"
+      ? repairStage === "INSPECT" ? `${repairIssues.filter((issue) => issue.severity !== "INFO").length} findings`
+        : repairStage === "CORRECT" ? `${repairSelected.size} corrections selected`
+          : repairPreviewIssues.some((issue) => issue.severity === "ERROR") ? `${repairPreviewIssues.filter((issue) => issue.severity === "ERROR").length} blockers remain`
+            : repairPreviewIssues.length ? `${repairPreviewIssues.length} diagnostics remain` : "Ready for export"
+      : luaStage === "SCRIPT" ? luaFileName || "No script loaded"
+        : luaStage === "GENERATE" ? luaIsRunning ? "Lua project running" : luaMetadata ? "Map generated" : "Awaiting generation"
+          : luaReport?.title || "No compatibility report yet";
+  const mapMetadataContent = (
+    <>
+      <div className="map-heading">
+        {isEditingMetadata ? (
+          <label className="metadata-field metadata-name-field">
+            <span>Name</span>
+            <input value={draftName} maxLength={160} onChange={(event) => setDraftName(event.target.value)} autoFocus />
+          </label>
+        ) : (
+          <div>
+            <p className="eyebrow">{map.source === "demo" ? "Sample map" : map.source === "file" ? "Open map" : map.source === "script" ? "Lua map" : "Generated map"}</p>
+            <button className="editable-map-name" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
+              <h2>{map.name}</h2>
+            </button>
+          </div>
+        )}
+        <div className="map-badges">
+          {pastMaps.length > 0 && <span className="dirty-badge">Edited</span>}
+          <span className="version-badge" aria-label={`Excogitare version ${APP_VERSION}`}>{`v${APP_VERSION}`}</span>
+        </div>
+      </div>
+      {isEditingMetadata ? (
+        <div className="metadata-editor">
+          <label className="metadata-field">
+            <span>Description</span>
+            <textarea value={draftDescription} maxLength={2000} rows={4} onChange={(event) => setDraftDescription(event.target.value)} />
+          </label>
+          <div className="metadata-actions">
+            <button type="button" onClick={cancelEditMode}>Cancel</button>
+            <button className="save-metadata" type="button" disabled={!draftName.trim()} onClick={saveMetadata}>Save changes</button>
+          </div>
+        </div>
+      ) : (
+        <button className="editable-map-description" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
+          {map.description || "Physical terrain extracted from the Civ5 map file."}
+        </button>
+      )}
+    </>
+  );
   return (
-    <main className="viewer-app">
+    <main className={`viewer-app workspace-${workspacePresentation.key}${mode === "VIEW" ? "" : " has-workspace-context"}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">V</span>
@@ -1967,13 +2058,26 @@ export function Civ5MapViewer() {
             <h1>Excogitare</h1>
           </div>
         </div>
-        <nav className="mode-tabs" aria-label="Workspace mode">
-          {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
-            <button key={item} type="button" data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "REPAIR" ? "Audit an imported Civ5Map and preview automatic corrections for terrain, rivers, resources, scenarios, and starts." : "Experimentally load, inspect, run, and modify Civ V Lua map-generation projects."} className={`${mode === item ? "is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`} onClick={() => selectWorkspaceMode(item)}>
-              {item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}
-              {item === "SCRIPT" && <span className="experimental-badge">Experimental</span>}
-            </button>
-          ))}
+        <nav className="workspace-navigation" aria-label="Workspaces">
+          <span className="workspace-navigation-label">Workspaces</span>
+          <div className="workspace-tabs">
+            {(["VIEW", "CREATE", "REPAIR", "SCRIPT"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "REPAIR" ? "Inspect a Civ5Map, choose corrections, and validate the repaired result." : "Experimentally edit, generate, and diagnose Civ V Lua map projects."}
+                className={`workspace-tab workspace-tab-${item === "VIEW" ? "explore" : item === "CREATE" ? "create" : item === "REPAIR" ? "repair" : "lua"}${mode === item ? " is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`}
+                aria-current={mode === item ? "page" : undefined}
+                aria-expanded={item === "VIEW" ? undefined : mode === item}
+                aria-controls={item === "CREATE" ? "create-workspace-navigation" : item === "REPAIR" ? "repair-workspace-navigation" : item === "SCRIPT" ? "lua-workspace-navigation" : undefined}
+                onClick={() => selectWorkspaceMode(item)}
+              >
+                <span className="workspace-tab-symbol" aria-hidden="true">{item === "VIEW" ? "⌖" : item === "CREATE" ? "+" : item === "REPAIR" ? "◇" : "{ }"}</span>
+                <span>{item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : "Lua"}</span>
+                {item === "SCRIPT" && <span className="experimental-badge">Experimental</span>}
+              </button>
+            ))}
+          </div>
         </nav>
         <div className="topbar-actions">
           <div className="history-actions" aria-label="Edit history">
@@ -2000,47 +2104,61 @@ export function Civ5MapViewer() {
         </div>
       </header>
 
+      {mode !== "VIEW" && (
+        <section className="workspace-context-bar" aria-label={`${workspacePresentation.label} workspace navigation`}>
+          <div className="workspace-context-identity">
+            <span className="workspace-context-symbol" aria-hidden="true">{workspacePresentation.symbol}</span>
+            <span><small>{workspacePresentation.label} workspace</small><strong>{workspaceTask.stage}</strong></span>
+          </div>
+          {mode === "CREATE" && (
+            <div id="create-workspace-navigation" className="workspace-stage-tabs" role="tablist" aria-label="Create workspace">
+              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Choose the world engine, shape, climate, content, players, and starting conditions." aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Design</button>
+              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Reopen previous generations, rerun individual passes, rank candidate seeds, and compare checkpoints." aria-selected={createView === "ITERATE"} className={createView === "ITERATE" ? "is-active" : ""} onClick={() => setCreateView("ITERATE")}>Iterate</button>
+              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Paint individual tiles, flood-fill terrain, modify regions and world structure, or relocate starts." aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
+              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Inspect multiplayer balance and Civ V validation findings without changing the map." aria-selected={createView === "ANALYZE"} className={createView === "ANALYZE" ? "is-active" : ""} onClick={() => setCreateView("ANALYZE")}>Review</button>
+            </div>
+          )}
+          {mode === "REPAIR" && (
+            <div id="repair-workspace-navigation" className="workspace-stage-tabs" role="tablist" aria-label="Repair workspace">
+              <button type="button" role="tab" aria-controls="repair-workspace-panel" aria-selected={repairStage === "INSPECT"} className={repairStage === "INSPECT" ? "is-active" : ""} data-tooltip="Read structural, terrain, river, scenario, and start-location findings without changing the map." onClick={() => setRepairStage("INSPECT")}>Inspect</button>
+              <button type="button" role="tab" aria-controls="repair-workspace-panel" aria-selected={repairStage === "CORRECT"} className={repairStage === "CORRECT" ? "is-active" : ""} data-tooltip="Select an automation profile, preview individual corrections, and apply the repairs you accept." onClick={() => setRepairStage("CORRECT")}>Correct</button>
+              <button type="button" role="tab" aria-controls="repair-workspace-panel" aria-selected={repairStage === "VALIDATE"} className={repairStage === "VALIDATE" ? "is-active" : ""} data-tooltip="Run the repair tests against the corrected preview and review any remaining blockers before export." onClick={() => setRepairStage("VALIDATE")}>Validate</button>
+            </div>
+          )}
+          {mode === "SCRIPT" && (
+            <div id="lua-workspace-navigation" className="workspace-stage-tabs lua-stage-tabs" role="tablist" aria-label="Lua workspace">
+              <button type="button" role="tab" aria-controls="lua-workspace-panel" aria-selected={luaStage === "SCRIPT"} className={luaStage === "SCRIPT" ? "is-active" : ""} data-tooltip="Load the main script and its dependencies, then edit generator functions and the post-process hook." onClick={() => setLuaStage("SCRIPT")}>Script</button>
+              <button type="button" role="tab" aria-controls="lua-workspace-panel" aria-selected={luaStage === "GENERATE"} className={luaStage === "GENERATE" ? "is-active" : ""} data-tooltip="Configure exposed script options and fallback runtime values, then execute the project." onClick={() => setLuaStage("GENERATE")}>Generate</button>
+              <button type="button" role="tab" aria-controls="lua-workspace-panel" aria-selected={luaStage === "DIAGNOSTICS"} className={luaStage === "DIAGNOSTICS" ? "is-active" : ""} data-tooltip="Inspect compatibility findings, execution stages, missing APIs, and script-console output." onClick={() => setLuaStage("DIAGNOSTICS")}>Diagnostics</button>
+            </div>
+          )}
+          <div className="workspace-context-status" role="status"><strong>{workspaceContextStatus}</strong><small>{map.name}</small></div>
+        </section>
+      )}
+
       <section className="workspace">
         <aside className="sidebar" aria-label="Map information and layers">
+          <header className="workspace-masthead">
+            <p><span aria-hidden="true">{workspacePresentation.symbol}</span>{workspacePresentation.label} / {workspaceTask.stage}</p>
+            <h2>{workspaceTask.title}</h2>
+            <span>{workspaceTask.description}</span>
+          </header>
           {mode === "CREATE" && (
             <button className="randomise-world-button" type="button" data-tooltip="Choose a completely new safe combination of generation settings and immediately build the resulting map." disabled={generationRunning} onClick={() => void randomiseWorld()}>
               <span>Randomise</span><small>{generationRunning ? generationStage : allowGameBreakingGeometry ? "New map from every option" : "New map from Civ V-safe options"}</small>
             </button>
           )}
-          <div className="map-heading">
-            {isEditingMetadata ? (
-              <label className="metadata-field metadata-name-field">
-                <span>Name</span>
-                <input value={draftName} maxLength={160} onChange={(event) => setDraftName(event.target.value)} autoFocus />
-              </label>
-            ) : (
-              <div>
-                <p className="eyebrow">{map.source === "demo" ? "Sample map" : map.source === "file" ? "Open map" : map.source === "script" ? "Lua map" : "Generated map"}</p>
-                <button className="editable-map-name" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
-                  <h2>{map.name}</h2>
-                </button>
-              </div>
-            )}
-            <div className="map-badges">
-              {pastMaps.length > 0 && <span className="dirty-badge">Edited</span>}
-              <span className="version-badge" aria-label={`Excogitare version ${APP_VERSION}`}>{`v${APP_VERSION}`}</span>
-            </div>
-          </div>
-          {isEditingMetadata ? (
-            <div className="metadata-editor">
-              <label className="metadata-field">
-                <span>Description</span>
-                <textarea value={draftDescription} maxLength={2000} rows={4} onChange={(event) => setDraftDescription(event.target.value)} />
-              </label>
-              <div className="metadata-actions">
-                <button type="button" onClick={cancelEditMode}>Cancel</button>
-                <button className="save-metadata" type="button" disabled={!draftName.trim()} onClick={saveMetadata}>Save changes</button>
-              </div>
-            </div>
+          {mode === "VIEW" ? (
+            <section className="explore-map-identity" aria-label="Current map details">{mapMetadataContent}</section>
           ) : (
-            <button className="editable-map-description" type="button" onClick={requestEditMode} aria-haspopup="dialog" title="Edit map name and description">
-              {map.description || "Physical terrain extracted from the Civ5 map file."}
-            </button>
+            <details key={`${mode}-${isEditingMetadata ? "editing" : "idle"}`} className="current-map-disclosure" open={isEditingMetadata || undefined}>
+              <summary data-tooltip="Expand the current map name, description, edit state and version without leaving this workspace.">
+                <span>Current map</span>
+                <strong>{map.name}</strong>
+                <small>{pastMaps.length ? "Edited" : map.source === "file" ? "Imported" : map.source === "script" ? "Lua generated" : "Generated"} · v{APP_VERSION}</small>
+              </summary>
+              <div className={`current-map-body${isEditingMetadata ? " is-editing" : ""}`}>{mapMetadataContent}</div>
+            </details>
           )}
 
           {showEditPrompt && !isEditingMetadata && (
@@ -2056,65 +2174,98 @@ export function Civ5MapViewer() {
           )}
 
           {mode === "REPAIR" && repairBaseline && (
-            <div className="repair-panel">
-              <div className="section-title"><h3>Automated repair</h3><span>{repairIssues.filter((issue) => issue.severity !== "INFO").length} findings</span></div>
-              <p className="repair-intro">Checks file structure, legal terrain content, complete mountain-to-ocean-or-lake river drainage, scenario records, and start locations before export.</p>
-
-              <div className="repair-profile" role="group" aria-label="Repair profile">
-                {(["SAFE", "STANDARD", "COMPETITIVE"] as const).map((profile) => (
-                  <button key={profile} type="button" data-tooltip={profile === "SAFE" ? "Apply only high-confidence structural and scenario corrections." : profile === "STANDARD" ? "Also clean up illegal resources and rebuild complete logical river networks." : "Include competitive start-count, spacing, reachability, and balance-oriented corrections."} className={repairProfile === profile ? "is-active" : ""} onClick={() => selectRepairProfile(profile)}>{profile.toLowerCase()}</button>
-                ))}
-              </div>
-              <small className="repair-profile-note">{repairProfile === "SAFE" ? "Only certain structural and scenario corrections." : repairProfile === "STANDARD" ? "Safe fixes plus guaranteed resource cleanup and complete river-network rebuilding." : "All automated fixes plus competitive start-location review."}</small>
-
-              <div className="repair-view-tabs" role="tablist" aria-label="Repair comparison view">
-                {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" data-tooltip={item === "ORIGINAL" ? "Show the imported map before any proposed repairs." : item === "CORRECTED" ? "Preview the map after all currently selected corrections." : "Overlay tiles affected by the proposed repair set."} role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
-              </div>
-              <p className="repair-preview-note"><strong>Corrected is a live preview.</strong> Apply selected to commit the checked fixes, or export the repaired preview directly.</p>
-
-              {repairDiagnostics.length > 0 && (
-                <details className="repair-diagnostics">
-                  <summary>File recovery report</summary>
-                  <ul>{repairDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul>
-                </details>
+            <div id="repair-workspace-panel" className="repair-panel">
+              {repairStage === "INSPECT" && (
+                <>
+                  <div className="section-title"><h3>Inspect map</h3><span>{repairIssues.filter((issue) => issue.severity !== "INFO").length} findings</span></div>
+                  <p className="repair-intro">Read-only tests cover file structure, legal terrain content, complete mountain-to-ocean-or-lake river drainage, scenario records, and start locations.</p>
+                  {repairDiagnostics.length > 0 && (
+                    <details className="repair-diagnostics" open>
+                      <summary>File recovery report</summary>
+                      <ul>{repairDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul>
+                    </details>
+                  )}
+                  <div className="start-test-summary">
+                    <strong>Start-location tests included</strong>
+                    <span>Bounds · land access · mountain safety · duplicates · spacing · player count · city-state flags</span>
+                    <strong>Scenario-city tests included</strong>
+                    <span>Tile links · duplicate IDs · missing records · water and mountain placement</span>
+                  </div>
+                  <div className="repair-issue-list">
+                    {repairIssues.length ? repairIssues.map((issue) => (
+                      <div key={issue.id} className={`repair-issue severity-${issue.severity.toLowerCase()}`}>
+                        <div className="repair-issue-heading"><span>{issue.severity}</span><span><strong>{issue.title}</strong><small>{issue.category.toLowerCase()} · {issue.confidence.toLowerCase()}</small></span></div>
+                        <p>{issue.detail}</p>
+                        {issue.x !== undefined && issue.y !== undefined && <button type="button" onClick={() => focusRepairIssue(issue)}>Show tile {issue.x}, {issue.y}</button>}
+                      </div>
+                    )) : <p className="workspace-empty-state">No repair findings were detected. Validate still performs a final pass against the corrected preview.</p>}
+                  </div>
+                </>
               )}
 
-              <div className="start-test-summary">
-                <strong>Start-location tests included</strong>
-                <span>Bounds · land access · mountain safety · duplicates · spacing · player count · city-state flags</span>
-                <strong>Scenario-city tests included</strong>
-                <span>Tile links · duplicate IDs · missing records · water and mountain placement</span>
-              </div>
-
-              <div className="repair-issue-list">
-                {repairIssues.map((issue) => (
-                  <div key={issue.id} className={`repair-issue severity-${issue.severity.toLowerCase()}${repairSelected.has(issue.id) ? " is-selected" : ""}`}>
-                    <label>
-                      <input type="checkbox" checked={repairSelected.has(issue.id)} disabled={!issue.mutation} onChange={() => toggleRepairIssue(issue)} />
-                      <span><strong>{issue.title}</strong><small>{issue.category.toLowerCase()} · {issue.confidence.toLowerCase()}</small></span>
-                    </label>
-                    <p>{issue.detail}</p>
-                    {issue.x !== undefined && issue.y !== undefined && <button type="button" onClick={() => focusRepairIssue(issue)}>Show tile {issue.x}, {issue.y}</button>}
+              {repairStage === "CORRECT" && (
+                <>
+                  <div className="section-title"><h3>Correct map</h3><span>{repairSelected.size} selected</span></div>
+                  <p className="repair-intro">Choose how aggressive automation may be, inspect the live preview, and apply only the corrections you accept.</p>
+                  <div className="repair-profile" role="group" aria-label="Repair profile">
+                    {(["SAFE", "STANDARD", "COMPETITIVE"] as const).map((profile) => (
+                      <button key={profile} type="button" data-tooltip={profile === "SAFE" ? "Apply only high-confidence structural and scenario corrections." : profile === "STANDARD" ? "Also clean up illegal resources and rebuild complete logical river networks." : "Include competitive start-count, spacing, reachability, and balance-oriented corrections."} className={repairProfile === profile ? "is-active" : ""} onClick={() => selectRepairProfile(profile)}>{profile.toLowerCase()}</button>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <small className="repair-profile-note">{repairProfile === "SAFE" ? "Only certain structural and scenario corrections." : repairProfile === "STANDARD" ? "Safe fixes plus guaranteed resource cleanup and complete river-network rebuilding." : "All automated fixes plus competitive start-location review."}</small>
+                  <div className="repair-view-tabs" role="tablist" aria-label="Repair comparison view">
+                    {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" data-tooltip={item === "ORIGINAL" ? "Show the imported map before any proposed repairs." : item === "CORRECTED" ? "Preview the map after all currently selected corrections." : "Overlay tiles affected by the proposed repair set."} role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
+                  </div>
+                  <p className="repair-preview-note"><strong>Corrected is a live preview.</strong> Applying selected fixes adds them to edit history; exporting can use the preview directly.</p>
+                  <div className="repair-issue-list">
+                    {repairIssues.map((issue) => (
+                      <div key={issue.id} className={`repair-issue severity-${issue.severity.toLowerCase()}${repairSelected.has(issue.id) ? " is-selected" : ""}`}>
+                        <label>
+                          <input type="checkbox" checked={repairSelected.has(issue.id)} disabled={!issue.mutation} onChange={() => toggleRepairIssue(issue)} />
+                          <span><strong>{issue.title}</strong><small>{issue.category.toLowerCase()} · {issue.confidence.toLowerCase()}</small></span>
+                        </label>
+                        <p>{issue.detail}</p>
+                        {issue.x !== undefined && issue.y !== undefined && <button type="button" onClick={() => focusRepairIssue(issue)}>Show tile {issue.x}, {issue.y}</button>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="repair-actions">
+                    <button type="button" disabled={!repairSelected.size} onClick={applySelectedRepairs}>Apply selected ({repairSelected.size})</button>
+                    <button className="repair-export" type="button" onClick={() => performCiv5MapExport(repairPreviewMap, true)}>Export repaired Civ5Map</button>
+                  </div>
+                </>
+              )}
 
-              <div className="repair-actions">
-                <button type="button" disabled={!repairSelected.size} onClick={applySelectedRepairs}>Apply selected ({repairSelected.size})</button>
-                <button className="repair-export" type="button" onClick={() => performCiv5MapExport(repairPreviewMap, true)}>Export repaired Civ5Map</button>
-              </div>
+              {repairStage === "VALIDATE" && (
+                <>
+                  <div className="section-title"><h3>Validate result</h3><span>{repairPreviewIssues.filter((issue) => issue.severity !== "INFO").length ? `${repairPreviewIssues.filter((issue) => issue.severity !== "INFO").length} remaining` : "ready"}</span></div>
+                  <p className="repair-intro">This pass tests the corrected preview—including selected but not yet committed repairs—so the final result can be judged before export.</p>
+                  <div className={`repair-validation-summary${repairPreviewIssues.some((issue) => issue.severity === "ERROR") ? " has-errors" : " is-clear"}`}>
+                    <strong>{repairPreviewIssues.some((issue) => issue.severity === "ERROR") ? "Blocking findings remain" : repairPreviewIssues.some((issue) => issue.severity === "WARNING") ? "Warnings remain" : "Repair checks pass"}</strong>
+                    <span>{repairPreviewIssues.length ? `${repairPreviewIssues.length} total diagnostic finding${repairPreviewIssues.length === 1 ? "" : "s"} on the corrected preview.` : "No structural, placement, river, scenario, or start-location findings remain."}</span>
+                  </div>
+                  <div className="repair-view-tabs" role="tablist" aria-label="Validated repair view">
+                    {(["ORIGINAL", "CORRECTED", "DIFFERENCE"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={repairView === item} className={repairView === item ? "is-active" : ""} onClick={() => setRepairView(item)}>{item.toLowerCase()}</button>)}
+                  </div>
+                  <div className="repair-issue-list">
+                    {repairPreviewIssues.length ? repairPreviewIssues.map((issue) => (
+                      <div key={issue.id} className={`repair-issue severity-${issue.severity.toLowerCase()}`}>
+                        <div className="repair-issue-heading"><span>{issue.severity}</span><span><strong>{issue.title}</strong><small>{issue.category.toLowerCase()} · corrected preview</small></span></div>
+                        <p>{issue.detail}</p>
+                      </div>
+                    )) : <p className="workspace-empty-state">The corrected preview passes Excogitare&apos;s repair checks. Mod-specific rules and Civ V engine limits remain outside this validation.</p>}
+                  </div>
+                  <div className="repair-actions repair-validation-actions">
+                    <button type="button" onClick={() => setRepairStage("CORRECT")}>Review corrections</button>
+                    <button className="repair-export" type="button" onClick={() => performCiv5MapExport(repairPreviewMap, true)}>Export validated Civ5Map</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {mode === "CREATE" && (
-            <div className="creator-panel">
-              <div className="create-mode-tabs" role="tablist" aria-label="Create workflow">
-                <button type="button" role="tab" data-tooltip="Choose the world engine, shape, climate, content, players, and starting conditions." aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Design</button>
-                <button type="button" role="tab" data-tooltip="Reopen previous generations, rerun individual passes, rank candidate seeds, and compare checkpoints." aria-selected={createView === "ITERATE"} className={createView === "ITERATE" ? "is-active" : ""} onClick={() => setCreateView("ITERATE")}>Iterate</button>
-                <button type="button" role="tab" data-tooltip="Paint individual tiles, flood-fill terrain, modify regions and world structure, or relocate starts." aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
-                <button type="button" role="tab" data-tooltip="Inspect multiplayer balance and Civ V validation findings without changing the map." aria-selected={createView === "ANALYZE"} className={createView === "ANALYZE" ? "is-active" : ""} onClick={() => setCreateView("ANALYZE")}>Review</button>
-              </div>
-
+            <div id="create-workspace-panel" className="creator-panel">
               {createView === "GENERATE" || createView === "ITERATE" ? (
                 createView === "ITERATE" ? (
                   <div className="iteration-workspace">
@@ -2568,108 +2719,94 @@ export function Civ5MapViewer() {
           )}
 
           {mode === "SCRIPT" && (
-            <div className="script-panel">
-              <div className="section-title"><h3>Lua project</h3><span>sandboxed</span></div>
-              <p>Load a main Civ V map script, supply its named Lua dependencies, edit the source, and replay a post-generation hook. A successful run becomes an ordinary editable map.</p>
-              <div className="lua-project-actions">
-                <button type="button" onClick={() => luaInputRef.current?.click()}>{luaSource ? "Replace main script" : "Open main script"}</button>
-                <button type="button" disabled={!luaSource} onClick={() => luaDependencyInputRef.current?.click()}>Add dependencies</button>
-              </div>
-              {luaSource && (
+            <div id="lua-workspace-panel" className="script-panel">
+              {luaStage === "SCRIPT" && (
                 <>
-                  <div className="lua-project-file">
-                    <span>Main</span><strong>{luaFileName}</strong><small>{luaSource.split("\n").length.toLocaleString()} lines</small>
+                  <div className="section-title"><h3>Lua script</h3><span>sandboxed</span></div>
+                  <p>Load the main Civ V map script and its named dependencies, then edit generator functions or add a repeatable post-process hook.</p>
+                  <div className="lua-project-actions">
+                    <button type="button" onClick={() => luaInputRef.current?.click()}>{luaSource ? "Replace main script" : "Open main script"}</button>
+                    <button type="button" disabled={!luaSource} onClick={() => luaDependencyInputRef.current?.click()}>Add dependencies</button>
                   </div>
-                  <div className="lua-generate-panel">
-                    <button className="lua-run-button" type="button" disabled={luaIsRunning} onClick={runLuaProject}>{luaIsRunning ? "Generating map from Lua…" : luaMetadata ? "Regenerate map from Lua" : "Generate map from Lua"}</button>
-                    <div className={`lua-run-status${luaIsRunning ? " is-running" : ""}`} role="status" aria-live="polite">
-                      {luaRunStatus || "Ready to generate an editable map."}
-                    </div>
-                    <small>Runs the main script, supplied dependencies, selected options, and post-process hook. The result replaces the current map and remains fully editable.</small>
-                  </div>
-                  <details className="lua-workspace-group" open>
-                    <summary><span>Source editor</span><small>Modify generator functions directly</small></summary>
-                    <div className="lua-workspace-body">
-                      <textarea className="lua-source-editor" aria-label="Lua main script source" spellCheck={false} value={luaSource} onChange={(event) => { setLuaSource(event.target.value); setLuaMetadata(null); }} />
-                    </div>
-                  </details>
-
-                  <details className="lua-workspace-group" open={luaDependencies.length > 0}>
-                    <summary><span>Dependencies</span><small>{luaDependencies.length ? `${luaDependencies.length} supplied` : "Built-in compatibility includes only"}</small></summary>
-                    <div className="lua-workspace-body">
-                      {luaDependencies.length ? (
-                        <div className="lua-dependency-list">
-                          {luaDependencies.map((dependency) => (
-                            <div key={dependency.name}><span>{dependency.name}</span><small>{dependency.source.split("\n").length} lines</small><button type="button" aria-label={`Remove ${dependency.name}`} onClick={() => setLuaDependencies((current) => current.filter((item) => item.name !== dependency.name))}>Remove</button></div>
-                          ))}
+                  {luaSource ? (
+                    <>
+                      <div className="lua-project-file"><span>Main</span><strong>{luaFileName}</strong><small>{luaSource.split("\n").length.toLocaleString()} lines</small></div>
+                      <details className="lua-workspace-group" open>
+                        <summary><span>Source editor</span><small>Modify generator functions directly</small></summary>
+                        <div className="lua-workspace-body"><textarea className="lua-source-editor" aria-label="Lua main script source" spellCheck={false} value={luaSource} onChange={(event) => { setLuaSource(event.target.value); setLuaMetadata(null); }} /></div>
+                      </details>
+                      <details className="lua-workspace-group" open={luaDependencies.length > 0}>
+                        <summary><span>Dependencies</span><small>{luaDependencies.length ? `${luaDependencies.length} supplied` : "Built-in compatibility includes only"}</small></summary>
+                        <div className="lua-workspace-body">
+                          {luaDependencies.length ? <div className="lua-dependency-list">{luaDependencies.map((dependency) => <div key={dependency.name}><span>{dependency.name}</span><small>{dependency.source.split("\n").length} lines</small><button type="button" aria-label={`Remove ${dependency.name}`} onClick={() => setLuaDependencies((current) => current.filter((item) => item.name !== dependency.name))}>Remove</button></div>)}</div> : <p className="lua-empty-note">Common Civ V helpers such as MapGenerator, bit, vectors, and starting-plot scaffolding are supplied by the runtime. Add mod-specific files here.</p>}
+                          <button className="lua-inline-button" type="button" onClick={() => luaDependencyInputRef.current?.click()}>Add .lua files</button>
                         </div>
-                      ) : <p className="lua-empty-note">Common Civ V helpers such as MapGenerator, bit, vectors, and starting-plot scaffolding are supplied by the runtime. Add mod-specific files here.</p>}
-                      <button className="lua-inline-button" type="button" onClick={() => luaDependencyInputRef.current?.click()}>Add .lua files</button>
-                    </div>
-                  </details>
-
-                  {luaCustomOptions.length > 0 && (
-                    <details className="lua-workspace-group" open>
-                      <summary><span>Script options</span><small>{luaCustomOptions.length} discovered by GetMapScriptInfo()</small></summary>
-                      <div className="lua-workspace-body">
-                        {luaCustomOptions.map((option) => (
-                          <label className="control-field" key={option.index}>
-                            <span>{option.name}</span>
-                            {option.values.length ? (
-                              <select value={option.selectedValue} onChange={(event) => setLuaCustomOptions((current) => current.map((item) => item.index === option.index ? { ...item, selectedValue: Number(event.target.value) } : item))}>
-                                {option.values.map((value, index) => <option key={`${value}-${index}`} value={index + 1}>{value || `Value ${index + 1}`}</option>)}
-                              </select>
-                            ) : (
-                              <input type="number" min="1" value={option.selectedValue} onChange={(event) => setLuaCustomOptions((current) => current.map((item) => item.index === option.index ? { ...item, selectedValue: Number(event.target.value) } : item))} />
-                            )}
-                          </label>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-
-                  <details className="lua-workspace-group">
-                    <summary><span>Runtime</span><small>Fallback allocation, seed, and starts</small></summary>
-                    <div className="lua-workspace-body">
-                      <div className="control-grid">
-                        <label className="control-field"><span>Fallback size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.filter((item) => allowGameBreakingGeometry || !item.gameBreaking).map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}{item.gameBreaking ? " · experimental" : ""}</option>)}</select></label>
-                        <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
-                      </div>
-                      <div className="control-grid">
-                        <label className="control-field" data-tooltip="Minor powers are spaced from all other settler starts by at least five hexes."><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
-                        <label className="control-field"><span>Runtime seed</span><input value={generationOptions.seed} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
-                      </div>
-                      <p className="lua-empty-note">GetMapInitData() overrides the fallback dimensions and wrap type. Excogitare fills any player starts the script leaves unassigned.</p>
-                    </div>
-                  </details>
-
-                  <details className="lua-workspace-group">
-                    <summary><span>Post-process hook</span><small>Replay modifications after generation</small></summary>
-                    <div className="lua-workspace-body">
-                      <textarea className="lua-hook-editor" aria-label="Lua post-process hook" spellCheck={false} placeholder={'-- Runs after the script finishes.\n-- Example:\n-- Map.GetPlot(4, 4):SetTerrainType(TerrainTypes.TERRAIN_DESERT)'} value={luaPostProcess} onChange={(event) => { setLuaPostProcess(event.target.value); setLuaMetadata(null); }} />
-                      <p className="lua-empty-note">The hook can call the same Map and plot APIs as the generator. It is stored in this workspace and reruns every time you generate.</p>
-                    </div>
-                  </details>
+                      </details>
+                      <details className="lua-workspace-group">
+                        <summary><span>Post-process hook</span><small>Replay modifications after generation</small></summary>
+                        <div className="lua-workspace-body">
+                          <textarea className="lua-hook-editor" aria-label="Lua post-process hook" spellCheck={false} placeholder={'-- Runs after the script finishes.\n-- Example:\n-- Map.GetPlot(4, 4):SetTerrainType(TerrainTypes.TERRAIN_DESERT)'} value={luaPostProcess} onChange={(event) => { setLuaPostProcess(event.target.value); setLuaMetadata(null); }} />
+                          <p className="lua-empty-note">The hook can call the same Map and plot APIs as the generator. It reruns every time you generate.</p>
+                        </div>
+                      </details>
+                    </>
+                  ) : <p className="workspace-empty-state">Open a main `.lua` map script to begin. Excogitare will inspect it before generation and report unsupported APIs separately.</p>}
                 </>
               )}
-              {luaReport && (
-                <div className={`lua-report${luaReport.compatible ? " is-compatible" : ""}`}>
-                  <strong>{luaReport.title}</strong>
-                  <small>{luaFileName}</small>
-                  <ul>{luaReport.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
-                </div>
+
+              {luaStage === "GENERATE" && (
+                <>
+                  <div className="section-title"><h3>Lua generation</h3><span>{luaSource ? "configured" : "script required"}</span></div>
+                  <p>Configure script options and fallback runtime values, then execute the project into an ordinary editable Excogitare map.</p>
+                  {luaSource ? (
+                    <>
+                      <div className="lua-project-file"><span>Main</span><strong>{luaFileName}</strong><small>{luaDependencies.length} dependencies</small></div>
+                      <div className="lua-generate-panel">
+                        <button className="lua-run-button" type="button" disabled={luaIsRunning} onClick={runLuaProject}>{luaIsRunning ? "Generating map from Lua…" : luaMetadata ? "Regenerate map from Lua" : "Generate map from Lua"}</button>
+                        <div className={`lua-run-status${luaIsRunning ? " is-running" : ""}`} role="status" aria-live="polite">{luaRunStatus || "Ready to generate an editable map."}</div>
+                        <small>Runs the main script, supplied dependencies, selected options, and post-process hook. The result replaces the current map and remains fully editable.</small>
+                      </div>
+                      {luaCustomOptions.length > 0 && (
+                        <details className="lua-workspace-group" open>
+                          <summary><span>Script options</span><small>{luaCustomOptions.length} discovered by GetMapScriptInfo()</small></summary>
+                          <div className="lua-workspace-body">
+                            {luaCustomOptions.map((option) => (
+                              <label className="control-field" key={option.index}>
+                                <span>{option.name}</span>
+                                {option.values.length ? <select value={option.selectedValue} onChange={(event) => setLuaCustomOptions((current) => current.map((item) => item.index === option.index ? { ...item, selectedValue: Number(event.target.value) } : item))}>{option.values.map((value, index) => <option key={`${value}-${index}`} value={index + 1}>{value || `Value ${index + 1}`}</option>)}</select> : <input type="number" min="1" value={option.selectedValue} onChange={(event) => setLuaCustomOptions((current) => current.map((item) => item.index === option.index ? { ...item, selectedValue: Number(event.target.value) } : item))} />}
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                      <details className="lua-workspace-group" open>
+                        <summary><span>Runtime</span><small>Fallback allocation, seed, and starts</small></summary>
+                        <div className="lua-workspace-body">
+                          <div className="control-grid">
+                            <label className="control-field"><span>Fallback size</span><select value={generationOptions.size} onChange={(event) => setGenerationOptions((current) => ({ ...current, size: event.target.value as MapGenerationOptions["size"] }))}>{MAP_SIZES.filter((item) => allowGameBreakingGeometry || !item.gameBreaking).map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}{item.gameBreaking ? " · experimental" : ""}</option>)}</select></label>
+                            <label className="control-field"><span>Players</span><input type="number" min="2" max="22" value={generationOptions.players} onChange={(event) => setGenerationOptions((current) => ({ ...current, players: Number(event.target.value) }))} /></label>
+                          </div>
+                          <div className="control-grid">
+                            <label className="control-field" data-tooltip="Minor powers are spaced from all other settler starts by at least five hexes."><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
+                            <label className="control-field"><span>Runtime seed</span><input value={generationOptions.seed} onChange={(event) => setGenerationOptions((current) => ({ ...current, seed: event.target.value }))} /></label>
+                          </div>
+                          <p className="lua-empty-note">GetMapInitData() overrides fallback dimensions and wrap type. Excogitare fills player starts the script leaves unassigned.</p>
+                        </div>
+                      </details>
+                    </>
+                  ) : <div className="workspace-empty-state"><p>Generation needs a main Lua script.</p><button className="lua-inline-button" type="button" onClick={() => { setLuaStage("SCRIPT"); luaInputRef.current?.click(); }}>Open main script</button></div>}
+                </>
               )}
-              {luaMetadata && (
-                <details className="lua-pipeline" open>
-                  <summary>Execution pipeline</summary>
-                  <ol>{luaMetadata.stages.map((stage) => <li key={stage.id} className={stage.status === "COMPLETE" ? "is-complete" : "is-skipped"}><span>{stage.label}</span><small>{stage.detail}</small></li>)}</ol>
-                </details>
-              )}
-              {luaLogs.length > 0 && (
-                <details className="lua-console">
-                  <summary>Script console · {luaLogs.length} lines</summary>
-                  <pre>{luaLogs.join("\n")}</pre>
-                </details>
+
+              {luaStage === "DIAGNOSTICS" && (
+                <>
+                  <div className="section-title"><h3>Lua diagnostics</h3><span>{luaReport ? "report available" : "not run"}</span></div>
+                  <p>Compatibility inspection, execution stages, missing includes, and console output are collected here rather than interrupting script editing.</p>
+                  {luaReport && <div className={`lua-report${luaReport.compatible ? " is-compatible" : ""}`}><strong>{luaReport.title}</strong><small>{luaFileName}</small><ul>{luaReport.details.map((detail) => <li key={detail}>{detail}</li>)}</ul></div>}
+                  {luaMetadata && <details className="lua-pipeline" open><summary>Execution pipeline</summary><ol>{luaMetadata.stages.map((stage) => <li key={stage.id} className={stage.status === "COMPLETE" ? "is-complete" : "is-skipped"}><span>{stage.label}</span><small>{stage.detail}</small></li>)}</ol></details>}
+                  {luaLogs.length > 0 && <details className="lua-console" open><summary>Script console · {luaLogs.length} lines</summary><pre>{luaLogs.join("\n")}</pre></details>}
+                  {!luaReport && !luaMetadata && !luaLogs.length && <p className="workspace-empty-state">Open a script to receive the initial compatibility report, then generate it to record the execution pipeline and console output.</p>}
+                </>
               )}
               <div className="script-export-grid">
                 <button type="button" onClick={exportLua}>Export map Lua</button>
