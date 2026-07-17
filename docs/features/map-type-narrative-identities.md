@@ -15,7 +15,7 @@ Excogitare should be readable as one sentence:
 
 > **Generation Engine** determines how the world is constructed. **Map Type** determines what story its geography tells. **World Character** determines the tone of that story. **World Modifier** introduces an additional condition or event.
 
-An Eccentric Shattered Archipelago with Realistic character and Doomsday modifier is therefore still a chain-built island world. Its chains are comparatively coherent and tectonic in appearance, while ruins and fallout complicate rather than replace that premise.
+An Eccentric Broken Island Chains with Realistic character and Doomsday modifier is therefore still a chain-built island world. Its chains are comparatively coherent and tectonic in appearance, while ruins and fallout complicate rather than replace that premise.
 
 ## Global narrative rules
 
@@ -28,6 +28,22 @@ An Eccentric Shattered Archipelago with Realistic character and Doomsday modifie
 7. **The seed is not evidence.** Changing the random stream can produce a different map without producing a different narrative.
 8. **Identity is inspectable.** Future generation diagnostics should retain the geographic structures and measurements used to judge the premise.
 9. **Map Types own parameter envelopes.** Every detailed identity must define a preferred water range, preferred mountain range and meaningful default. The ordinary sliders and Randomise should adapt to that envelope rather than applying one global range. Some identities may prefer zero water or zero mountains. Deliberate values outside the envelope remain available when legal, but generation must honor them, preserve what identity it can and report material weakening rather than silently forcing the preferred range.
+10. **Every type has a narrative verb.** The verb states the indispensable geographic action performed by the Map Type. World Character may reinterpret that action and explicit controls may weaken it, but neither may silently remove or replace it.
+11. **Nearest confusions are explicit.** A type is not distinct merely because it belongs to another engine. Its structure, gameplay and retained diagnostics must separate it from the Map Types a blind reviewer is most likely to confuse with it.
+12. **Recognition is stated in ordinary language.** Each type needs a short blind-recognition statement describing what a player should perceive without knowing its label, seed or implementation method.
+
+## Narrative identity schema
+
+Every implementation profile should retain the following fields even when the prose below is later translated into runtime data:
+
+- a unique narrative verb;
+- mandatory structural relationships and gameplay consequences;
+- preferred parameter envelopes and honest weakened-identity behavior;
+- nearest confusions and explicit anti-motifs;
+- retained diagnostics that measure the premise rather than decorative totals; and
+- a blind-recognition statement suitable for Identity Lab review.
+
+Engine ownership is not sufficient evidence of identity. World Character may change the physical explanation, tone and severity of a Map Type, but the type's verb and defining relationships remain authoritative. When explicit controls make those relationships infeasible, the interface should report the Map Type as weakened and identify the modifier or control that became the dominant emergent identity.
 
 ## World Character vocabulary
 
@@ -42,45 +58,45 @@ This register distinguishes the original concise specification from the detailed
 
 | Map Type | Design state | Last decision |
 | --- | --- | --- |
-| Convoluted Continents | Accepted | Unpredictable continental exploration produced by fjords, inland seas, hooks, route surprises and real interiors. |
+| Crooked Continents | Accepted | Unpredictable continental exploration produced by fjords, inland seas, hooks, route surprises and real interiors. |
 | Broken Pangaea | Accepted | One fractured continental system whose rifts become sea, lake, dry basin or mountain division according to water level. |
-| Shattered Isles | Accepted | Compact drowned-shelf mosaics with anchor islands, regional naval theatres and consequential short crossings. |
-| Inland Kingdoms | Accepted | A bounded continental interior organized by hierarchical internal waters, endorheic drainage and broad terrestrial kingdoms. |
-| Earthsea Realms | Accepted | Several destination-like island-continents with viable interiors, satellites and consequential inter-realm voyages. |
-| Astronomy Rifts | Accepted | Authoritative deep-ocean barriers create pre-Astronomy navigation basins and a later global-contact transition. |
-| Labyrinth Realm | Accepted | A genuinely difficult irregular barrier maze with tortuous, deceptive and strategically unequal routes—not regular islands. |
-| Fantastical Regions | Accepted | A six-to-twelve-province mosaic using mixed physical, ecological and transitional boundaries; variety and juxtaposition distinguish it from Mythic Regions’ monumental realms. |
-| Living World | Accepted | One large connected landscape tells one compelling causal environmental narrative through an extensive ecological transect; islands and optional subplots must not dilute it. |
-| Tectonic Continents | Accepted | Authored continental-scale collision belts, rifts, active margins and quiet interiors make tectonic history readable without exposing the hidden graph. |
+| Drowned Shelves | Accepted | Recently drowned shelves leave compact mosaics whose anchor islands, ridge-following fragments and shallow-water ancestry remain legible. |
+| Lake Kingdoms | Accepted | A bounded continental interior organized by hierarchical internal waters, endorheic drainage and broad terrestrial kingdoms. |
+| Island Continents | Accepted | Several destination-like island-continents with viable interiors, satellites and consequential inter-realm voyages. |
+| Deep-Ocean Divides | Accepted | A few monumental deep-ocean barriers gate otherwise substantial worlds into pre-Astronomy navigation basins and a later global-contact transition. |
+| Land and Sea Maze | Accepted | A genuinely difficult irregular barrier maze with tortuous, deceptive and strategically unequal routes—not regular islands. |
+| Patchwork Provinces | Accepted | Six to twelve incompatible but internally composed provinces juxtapose different local geographic, ecological and economic laws. |
+| Ecological Transect | Accepted | One large connected landscape tells one compelling causal environmental narrative through an extensive ecological transect; islands and optional subplots must not dilute it. |
+| Plate-Built Continents | Accepted | An authored tectonic atlas gives each continent a different readable geological history without exposing the hidden graph. |
 | Great Watersheds | Accepted | Preserve the already recognizable basin and trunk-river architecture; complete the downstream story with connected tributaries, floodplains, marshes and valid distributary deltas. |
-| Shattered Basins | Accepted | Great resource-rich inland seas dominate a non-wrapping world; scarce marginal land, narrow straits and canal isthmuses organize civilizations around naval power. |
-| Mythic Regions | Accepted | Each grand realm surrounds a legal wonder or composed geographic heart of concentrated value, separated from ordinary civilization by mountains or low-productivity marches. |
-| Encircling Lands | Accepted | A robust asymmetric exterior land framework provides a continuous circumferential route around hierarchical inner seas, islands and inward-facing water kingdoms. |
-| Astral Pangaea | Accepted | One substantial pangaea is partitioned by abstract graph-scale alien scars, flooded and dry voids, incompatible marches and several robust surviving sutures. |
-| Riftworld | Accepted | A hierarchical irregular lattice of authoritative deep-water fractures is generated first; viable local worlds are fitted inside its unequal cells. |
+| Inland Sea Crossroads | Accepted | Great resource-rich inland seas dominate a non-wrapping world; scarce marginal land, narrow straits and canal isthmuses organize civilizations around naval power. |
+| Wonder Heartlands | Accepted | Each grand realm surrounds a legal wonder or composed geographic heart of concentrated value, separated from ordinary civilization by mountains or low-productivity marches. |
+| Encircled Seas | Accepted | A robust asymmetric exterior land framework encloses hierarchical inner waters and guarantees a meaningful continuous circumferential land route. |
+| Scarred Pangaea | Accepted | One substantial pangaea is scarred by a small number of alien branching or ringed systems, incompatible marches and several broad surviving sutures. |
+| Rift Lattice | Accepted | A hierarchical irregular lattice of authoritative deep-water fractures is generated first; viable local worlds are fitted inside its unequal cells. |
 | Lonely Oceans | Accepted | Vast empty oceans confine each major civilization to a distant viable island realm, making isolation and scarcity endure until Astronomy. |
-| Peninsula Realm | Accepted | One bounded continental framework is composed from complete peninsular provinces—Floridas, Italys and other regional lands—not mere shoreline protrusions. |
-| Shattered Archipelago | Accepted | Several directional parent systems form broken necklaces, crescents, branches and parallel arcs whose anchor islands and satellites share visible ancestry. |
-| Dynamic Earth | Accepted | Ancient interiors, young collisions, opening rifts, active margins and mature drainage coexist as a causally consistent record of a changing planet. |
+| Great Peninsulas | Accepted | One bounded continental framework is composed from complete peninsular provinces—Floridas, Italys and other regional lands—not mere shoreline protrusions. |
+| Broken Island Chains | Accepted | Several directional parent systems form broken necklaces, crescents, branches and parallel arcs whose anchor islands and satellites share visible ancestry. |
+| Dynamic Earth | Accepted | Several linked geological transformations at different stages preserve the chronology of a planet visibly becoming something else. |
 | Colliding Plates | Accepted | Compression dominates through sutures, paired ranges, plateaus, forelands, rain shadows and deliberate traversable passes rather than indiscriminate mountains. |
-| Ancient Cratons | Accepted | Deep time has worn ancient shields, ghost ranges and escarpments into broad river-shaped continents with fertile basins and mineral-rich exposed cores. |
-| Island Arc Earth | Accepted | Several distinct rugged strings of volcanic pearls curve around sheltered atoll-like seas, aging from high active islands into eroded anchors and drowned rings. |
-| Supercontinent Interior | Accepted | The map is an entirely landbound world enclosed by peripheral highlands, with all water and drainage terminating in its remote continental heart. |
+| Ancient Continental Shields | Accepted | Deep time has worn ancient shields, ghost ranges and escarpments into broad river-shaped continents with fertile basins and mineral-rich exposed cores. |
+| Volcanic Island Arcs | Accepted | Several distinct rugged strings of volcanic pearls curve around sheltered atoll-like seas, aging from high active islands into eroded anchors and drowned rings. |
+| Inland Supercontinent | Accepted | The map is an entirely landbound world enclosed by peripheral highlands, with all water and drainage terminating in its remote continental heart. |
 | Monsoon Continents | Accepted | Directional seasonal moisture links warm seas and funnelling coasts to wet mountain fronts, great river basins, valid deltas and dry leeward interiors. |
-| Icehouse Earth | Accepted | Ice devours the world while productive but resource-poor temperate capitals must support distant, valuable settlements across the frozen frontier. |
+| Glacial World | Accepted | Ice devours the world while productive but resource-poor temperate capitals must support distant, valuable settlements across the frozen frontier. |
 | Imperial Ring | Accepted | Isolated outer founding enclaves expand through disguised geographic spokes into a broad shared axle where the principal competition begins. |
 | Opposing Fronts | Accepted | Two explicit teams develop behind a mountain curtain or deep DMZ before contesting several invasion theatres; Brutal turns the frontier into a fallout-scarred barbarian war zone. |
 | Contested Heartland | Accepted | Irregular peripheral realms overlap through a porous many-to-many route mesh around exceptionally valuable country; radial spokes are explicitly prohibited. |
 | Rival Continents | Accepted | Two populated continental worlds almost meet through several costly hinge theatres of straits, short seas, plateaus and mountain corridors. |
 | Three Realms | Accepted | Three explicit teams occupy natural-looking realms that each border both rivals, making every two-front war an opportunity for the third power. |
 | Thalassic League | Accepted | Viable coastal powers and restrained city states share a redundant many-to-many network of ports, islands, straits and sea lanes. |
-| Unequal Realms | In discussion | Approved for inclusion as a deliberately asymmetric Polis type assigning viable but unequal Tall, Wide, War and Turtle geographic roles. |
+| Unequal Realms | Accepted | Deliberately unequal but viable Tall, Wide, War and Turtle starts impose different geographic obligations and victory paths. |
 
 ---
 
 # Excogitare Map Types
 
-## Convoluted Continents
+## Crooked Continents
 
 **Design state:** Accepted.
 
@@ -120,11 +136,13 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain dominant-land share, continental-lobe sizes, fracture depth and penetration, flooded versus dry fracture extent, suture width and length, independent overland connections, chokepoint centrality, land-versus-naval route stretch and connectivity after removing any single connecting tile. Recognition should be “one continent visibly becoming several,” not several continents accidentally touching.
 
-## Shattered Isles
+## Drowned Shelves
 
 **Design state:** Accepted.
 
-**Narrative premise:** Dense island chains and fragments produce frequent coastal contact, naval maneuver and short but consequential sea crossings.
+**Narrative verb:** Drowns.
+
+**Narrative premise:** Recently drowned continental shelves leave compact island mosaics whose former unity remains visible beneath shallow water. Frequent coastal contact, naval maneuver and short but consequential sea crossings arise from that submergence rather than from scattered island placement.
 
 **Recognizable geography:** Numerous islands arranged in clusters and loose chains; mixed island sizes; abundant coast; frequent stepping stones; relatively little empty ocean; several compact naval theatres; occasional larger anchor islands supporting inland cities.
 
@@ -134,13 +152,17 @@ This register distinguishes the original concise specification from the detailed
 
 **Gameplay experience:** Several compact maritime theatres support frequent coastal contact, consequential short crossings, amphibious pressure and useful satellite islands. Anchor islands retain terrestrial development; deep channels keep every fragment from becoming a trivial stepping stone.
 
-**Structural commitments:** Begin with several continental shelves or broad land regions, fracture and partially submerge them, and retain roughly four to seven recognizable clusters on a Standard map. Each cluster should contain one or two settlement-capable anchor islands, medium fragments, small shards, a shared coastal shelf and at least one deeper internal channel. Wider ocean separates clusters. The silhouette is a drowned mosaic, not long correlated chains.
+**Structural commitments:** Begin with several continental shelves or broad land regions, fracture and partially submerge them, and retain roughly four to seven recognizable clusters on a Standard map. Each cluster should contain one or two settlement-capable anchor islands representing former uplands, medium fragments and small shards that follow submerged ridges, a shared coastal shelf and at least one deeper internal channel. Shallow-water contours should reveal the shape of the lost landmass. Wider ocean separates clusters. The silhouette is a drowned mosaic, not long correlated chains.
 
 **Setting negotiation:** High water loosens clusters and widens channels while protecting viable anchors; moderate water is the intended mixed-island default; low water reconnects fragments through crooked bridges and perforated coastal regions; zero water preserves fractures through basins and relief but reports the maritime identity as substantially weakened. Realistic and Mundane emphasize drowned shelves; Fantastical and Brutal may make the shattering more violent and strategically exposed.
 
-**Evidence and diagnostics:** Retain cluster count and separation, island-size distribution, anchor settlement capacity, within-cluster shelf continuity, between-cluster deep-water width, stepping-stone connectivity, local crossing distance, independent naval approaches and unclustered-island share. Distinguish Shattered Isles’ clusters and mosaics from Shattered Archipelago’s chains and arcs.
+**Evidence and diagnostics:** Retain cluster count and separation, island-size distribution, anchor settlement capacity, within-cluster shelf continuity, ridge alignment of minor islands, shallow-water reconstruction of the parent landmass, between-cluster deep-water width, stepping-stone connectivity, local crossing distance, independent naval approaches and unclustered-island share.
 
-## Inland Kingdoms
+**Nearest confusions:** Broken Island Chains is built from long directional necklaces, crescents and parent arcs; Drowned Shelves is a compact set of drowned continental shelves. A generic archipelago lacks both the reconstructed shelf and the anchor-to-fragment hierarchy.
+
+**Blind-recognition test:** “These islands are the remaining highlands of several drowned continents.”
+
+## Lake Kingdoms
 
 **Design state:** Accepted.
 
@@ -160,7 +182,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain enclosed-water count and size hierarchy, edge-connected water share, dominant-land share, settlement area between basins, internal river outlets, basin-rim continuity and passes, independent inland naval theatres, shoreline access by settlement region and alternative land routes around major seas.
 
-## Earthsea Realms
+## Island Continents
 
 **Design state:** Accepted.
 
@@ -180,9 +202,11 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain principal-realm count and sizes, land share in principal realms, settlement capacity, starts per realm, within- and between-realm travel, deep-water separation, stepping-stone paths, satellites, landing regions and geographic differentiation. Reduce player or city-state counts rather than overcrowding a realm; city states may favour satellites but must respect major-start spacing.
 
-## Astronomy Rifts
+## Deep-Ocean Divides
 
 **Design state:** Accepted.
+
+**Narrative verb:** Gates.
 
 **Narrative premise:** Long, deep-water scars partition the world into navigation basins and isolated habitable shelves.
 
@@ -194,13 +218,17 @@ This register distinguishes the original concise specification from the detailed
 
 **Gameplay experience:** Primary deep-ocean rifts are technology gates. Before ocean travel, civilizations inhabit locally complete navigation basins; after Astronomy, new political systems meet and rift-margin cities become global staging points. Every populated basin needs sufficient land and normally at least one reachable rival before that transition.
 
-**Structural commitments:** Define three to six viable navigation basins, then separate them with two to five long authoritative rifts whose deep-ocean cores cross the map, join another rift, reach a boundary or close into a loop. Allocate land, local seas and coastal shelves inside the basins without filling the rift cores. On wrapped maps, verify the complete topology rather than accepting barriers bypassed through the seam.
+**Structural commitments:** Define two to four large, viable navigation basins inside an otherwise substantial world, then separate them with two to four monumental authoritative rifts whose deep-ocean cores cross the map, join another rift, reach a boundary or close into a loop. Allocate land, local seas and coastal shelves inside the basins without filling the rift cores. On wrapped maps, verify the complete topology rather than accepting barriers bypassed through the seam. The rifts must be few enough to read as imposed global barriers rather than as the fabric of the entire world.
 
 **Setting negotiation:** High water widens rifts and basins; moderate water balances deep barriers and substantial shelves; low water spends its limited water budget on one or two continuous deep rifts before decorative seas; zero water cannot express the technology gate and must report the identity as absent rather than disguising mountains as Astronomy. Primary rifts require ocean travel; only secondary fractures may contain deliberate island bridges.
 
-**Evidence and diagnostics:** Retain pre-Astronomy basin count, post-Astronomy global connectivity, deep-rift continuity and minimum width, shallow bypasses, non-dividing terminations, basin settlement capacity and populations, start distance from margins, deliberate early crossings and wrapped bypass routes.
+**Evidence and diagnostics:** Retain pre-Astronomy basin count, post-Astronomy global connectivity, contact-graph change at ocean travel, deep-rift continuity and minimum width, shallow bypasses, non-dividing terminations, basin settlement capacity and populations, start distance from margins, deliberate early crossings and wrapped bypass routes.
 
-## Labyrinth Realm
+**Nearest confusions:** Rift Lattice generates a hierarchical lattice first and fits local worlds into its many unequal cells. Deep-Ocean Divides imposes only a few enormous technology-gated barriers across otherwise conventional, substantial geography. Scarred Pangaea scars one connected continent without requiring the same pre- and post-Astronomy contact transition.
+
+**Blind-recognition test:** “A few impossible oceans divide complete civilizations until Astronomy changes the political world.”
+
+## Land and Sea Maze
 
 **Design state:** Accepted after rejecting the current regular-oblong-island expression.
 
@@ -222,9 +250,11 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain route tortuosity, meaningful decision density, false-proximity pairs, second-route stretch, dead-end depth, barrier continuity, land/water network divergence, chamber irregularity and an island-regularity penalty. A substantial share of chamber pairs should exceed roughly 1.8 traversable-to-direct distance, with selected pairs above 2.5. Recognition must describe a difficult barrier maze, not regular islands presented as chambers.
 
-## Fantastical Regions
+## Patchwork Provinces
 
 **Design state:** Accepted.
+
+**Narrative verb:** Juxtaposes.
 
 **Narrative premise:** Strongly authored geographic provinces collide: strange coastlines, abrupt but composed biomes and dramatic local identities matter more than physical restraint.
 
@@ -236,19 +266,23 @@ This register distinguishes the original concise specification from the detailed
 
 **Gameplay experience:** Crossing a regional boundary should change settlement spacing, movement, improvement priorities, expansion direction and resource opportunity. Provinces become natural political frontiers; transition regions are valuable because they combine opportunities from both sides. Exploration is motivated by discovering qualitatively different places rather than more of the same terrain.
 
-**Structural commitments:** Divide a Standard world into roughly six to twelve unequal contiguous provinces. Give each a package of two or three mutually supporting motifs spanning silhouette, elevation, drainage, biome palette, coastline and features—for example a rain-shadow salt basin, glaciated fjord highland, drowned marsh coast or volcanic peninsula with fertile margins. Avoid one-motif labels such as “the desert region.”
+**Structural commitments:** Divide a Standard world into roughly six to twelve unequal contiguous provinces. Give each a package of two or three mutually supporting motifs spanning silhouette, elevation, drainage, biome palette, coastline, features, resource tendencies and settlement rhythm—for example a rain-shadow salt basin, glaciated fjord highland, drowned marsh coast or volcanic peninsula with fertile margins. These packages act as local geographic, ecological and economic laws rather than mere palettes. Avoid one-motif labels such as “the desert region.”
 
 **Boundary composition:** Use a deliberate mixture: roughly one third strong physical boundaries such as ranges or inland seas, one third ecological boundaries such as forest margins, wetlands, wastes or rain shadows, and one third interlocking or graded transition zones. Rivers and coastlines may belong to multiple regions and should create interaction rather than enclosing every province. The geography must make boundaries inferable without displaying the internal region overlay.
 
 **Setting negotiation:** High water makes selected provinces maritime; low and zero water favour basins, highlands, forests, wastes and river countries without weakening the regional premise. Mundane uses familiar packages, Realistic derives contrast from causal geography, Fantastical permits composed impossible adjacencies, and Brutal makes provinces unequally hospitable without making any legal start indefensible. Major civilizations are not assigned one region each: large provinces may support rivals, while small exceptional regions may hold city states, wonders or contested opportunities.
 
-**Evidence and diagnostics:** Retain region count, size and contiguity, within-region geographic coherence, between-region contrast, boundary type and strength, motif completion, silhouette diversity, transition width, repeated-template similarity, settlement capacity, accessibility and opportunity by region. Distinguish Fantastical Regions’ intricate environmental mosaic from Mythic Regions’ fewer monumental, almost nameable realms.
+**Evidence and diagnostics:** Retain region count, size and contiguity, within-region geographic coherence, between-region contrast, local-law completion, boundary type and strength, motif completion, silhouette diversity, transition width, repeated-template similarity, settlement capacity, accessibility and opportunity by region.
+
+**Nearest confusions:** Wonder Heartlands creates a few monumental, objective-centred realms with concentrated hearts of value. Patchwork Provinces composes a denser mosaic of many contrasting provinces whose differences govern ordinary settlement and travel throughout the map. Biome confetti and arbitrary tile-scale contradiction satisfy neither identity.
+
+**Blind-recognition test:** “This world appears to have been assembled from several different worlds.”
 
 ---
 
 # Eccentric Map Types
 
-## Living World
+## Ecological Transect
 
 **Design state:** Accepted.
 
@@ -266,15 +300,17 @@ This register distinguishes the original concise specification from the detailed
 
 **Causal commitments:** Complete ordered relationships rather than independent layers. Mountain headwaters feed merging tributaries and major trunks; lower rivers create floodplains, braided channels, marsh basins and distributary deltas. Green desert requires rivers, springs, aquifers or mountain runoff. Warm tundra pockets require retained geothermal or volcanic causes. Forests, wetlands, oases and fertile corridors must be explained by water, shelter, elevation or heat. Surprising geography is welcome when its cause remains legible.
 
-**Setting negotiation:** Dominant terrain, rainfall, temperature and water settings should help choose and scale the narrative rather than scatter unrelated motifs. A dry or Brutal Living World may be more compelling than a generally lush one when its narrow living corridors govern play. Mundane uses familiar causal transects, Realistic strengthens physical continuity, Fantastical bends causes without abandoning them, and Brutal concentrates viability into severe but accessible systems.
+**Setting negotiation:** Dominant terrain, rainfall, temperature and water settings should help choose and scale the narrative rather than scatter unrelated motifs. A dry or Brutal Ecological Transect may be more compelling than a generally lush one when its narrow living corridors govern play. Mundane uses familiar causal transects, Realistic strengthens physical continuity, Fantastical bends causes without abandoning them, and Brutal concentrates viability into severe but accessible systems.
 
 **Evidence and diagnostics:** Retain the selected narrative archetype, primary-transect length and continuity, ordered ecological transitions, range extent, windward-to-leeward precipitation change, river hierarchy, tributary depth, delta and marsh extent, life-corridor width, vegetation associated with water or heat, unsupported anomalies, and the share of settlement-quality land explained by the narrative. Blind recognition should describe the world’s causal story, not merely call the map varied or realistic.
 
-## Tectonic Continents
+## Plate-Built Continents
 
 **Design state:** Accepted.
 
-**Narrative premise:** Continental forms are visibly assembled around boundary arcs, collision belts, rifts and sheltered interiors.
+**Narrative verb:** Chronicles.
+
+**Narrative premise:** The world is an authored tectonic atlas in which every major continent chronicles a different geological history through its boundary arcs, collision belts, rifts, margins and sheltered interiors.
 
 **Recognizable geography:** Several major continents; long mountain belts; coastal arcs; interior basins; rifted or sutured margins; terrain contrast across ranges; islands and peninsulas associated with active boundaries.
 
@@ -284,11 +320,15 @@ This register distinguishes the original concise specification from the detailed
 
 **Gameplay experience:** Long mountain fronts, foreland valleys, active coasts, rift corridors and quiet interiors create different modes of expansion and conflict. Passes matter, but starts belong in accessible interiors, forelands or broad valleys rather than pockets sealed behind collision belts.
 
-**Boundary architecture:** Compose three to five major continents and assign their regional boundaries as continental collision, oceanic subduction, continental rifting, transform motion or passive margin. Collisions create long ranges, plateaus and forelands; subduction creates coastal ranges and offshore arcs; rifts create valleys, lake chains and inland seas; transforms create offset coasts and linear valleys; passive margins create broad shelves and mature plains. Each continent needs a stable interior contrasting with its active systems.
+**Boundary architecture:** Compose three to five major continents and give each a dominant history distinct from the others: a rifted continent, a collisional continent, an ancient passive-margin continent, an accreted or island-arc continent, or another coherent combination. Assign their regional boundaries as continental collision, oceanic subduction, continental rifting, transform motion or passive margin. Collisions create long ranges, plateaus and forelands; subduction creates coastal ranges and offshore arcs; rifts create valleys, lake chains and inland seas; transforms create offset coasts and linear valleys; passive margins create broad shelves and mature plains. Each continent needs a stable interior contrasting with its active systems, and the set must read as several chapters rather than the same tectonic template repeated.
 
 **Setting negotiation:** Higher water foregrounds oceanic boundaries, arcs, shelves and rifted fragments; lower and zero water preserve the identity through collision belts, exposed shelves, dry rifts, transform valleys and plateaus. The preferred water and mountain envelopes must later be fixed quantitatively; the ordinary range should support several continents with visible active margins and materially more continuous relief than a generic Continents map, without turning every boundary into mountains.
 
-**Evidence and diagnostics:** Retain boundary types and extent, range alignment and continuity, interior-to-margin relief contrast, coastal and offshore arc alignment, flooded and dry rifts, transform valleys, passive shelf width, tectonically responsive rivers, deliberate passes, enclosed starts and mountains unsupported by a boundary. Distinguish this authored Eccentric morphology from Physical’s numerical plate simulation.
+**Evidence and diagnostics:** Retain continent-level history assignments, repeated-history penalties, boundary types and extent, range alignment and continuity, interior-to-margin relief contrast, coastal and offshore arc alignment, flooded and dry rifts, transform valleys, passive shelf width, tectonically responsive rivers, deliberate passes, enclosed starts and mountains unsupported by a boundary.
+
+**Nearest confusions:** Dynamic Earth is a retained physical simulation whose interacting processes show a planet changing through time. Colliding Plates makes global convergence the dominant event. Plate-Built Continents instead authors several visually distinct continental histories as one readable atlas.
+
+**Blind-recognition test:** “Each continent tells a different geological history.”
 
 ## Great Watersheds
 
@@ -312,7 +352,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain basin count and area, mountain-source validity, divide continuity, tributary depth and hierarchy, trunk length and accumulation, connected edge share, tributary-to-trunk completion, valid lake or ocean outlets, distributaries, floodplain and marsh extent, fertile river corridors, starts per basin and any river that crosses its assigned divide. Recognition should come from the world being arranged around great rivers, not their raw count.
 
-## Shattered Basins
+## Inland Sea Crossroads
 
 **Design state:** Accepted after replacing the original open-ocean interpretation with a great-inland-seas model.
 
@@ -336,9 +376,9 @@ This register distinguishes the original concise specification from the detailed
 
 **Population safeguards:** Land scarcity must remain playable. Scale major and city-state counts to shoreline settlement capacity, preserve five-tile start spacing, keep city states from consuming the few expansion corridors, and guarantee each major civilization a defensible core with several viable city sites. A civilization controlling only inland marginal terrain should be poorer than one that controls its adjacent sea.
 
-**Evidence and diagnostics:** Retain great-sea count and hierarchy, marginal land width, settleable land per major, shoreline capacity, strait widths and connectivity, verified canal sites, competing approaches, travel reduction through passages, peninsulas, unintended basin connections, maritime-versus-terrestrial resource value, food and luxuries by basin, offshore strategic value, starts and city states per sea, and strategically empty basins. Distinguish these crowded wealthy seas from Lonely Oceans’ intimidating empty water and Inland Kingdoms’ land-dominant realms.
+**Evidence and diagnostics:** Retain great-sea count and hierarchy, marginal land width, settleable land per major, shoreline capacity, strait widths and connectivity, verified canal sites, competing approaches, travel reduction through passages, peninsulas, unintended basin connections, maritime-versus-terrestrial resource value, food and luxuries by basin, offshore strategic value, starts and city states per sea, and strategically empty basins. Distinguish these crowded wealthy seas from Lonely Oceans’ intimidating empty water and Lake Kingdoms’ land-dominant realms.
 
-## Mythic Regions
+## Wonder Heartlands
 
 **Design state:** Accepted with legendary hearts as the defining structure.
 
@@ -348,9 +388,9 @@ This register distinguishes the original concise specification from the detailed
 
 **Character interpretations:** Realistic interprets the realms as extreme but causally related provinces. Fantastical gives each realm a powerful contradictory identity. Mundane retains broad provinces with restrained climate differences. Brutal makes realm borders difficult and interiors unequally hospitable.
 
-**Failure conditions:** Small noisy patches; every region having the same palette; arbitrary biome adjacency without boundary logic; geography that could be mistaken for Living World; dramatic names unsupported by visible territorial identity.
+**Failure conditions:** Small noisy patches; every region having the same palette; arbitrary biome adjacency without boundary logic; geography that could be mistaken for Ecological Transect; dramatic names unsupported by visible territorial identity.
 
-**Realm architecture:** Compose roughly four to seven immense, internally structured realms rather than Fantastical Regions’ denser mosaic. Each realm needs a monumental silhouette, a distinct boundary system, supporting subregions and one central or near-central mythic heart. Geography must make the realms almost nameable without relying on a future Labels layer.
+**Realm architecture:** Compose roughly four to seven immense, internally structured realms rather than Patchwork Provinces’ denser mosaic. Each realm needs a monumental silhouette, a distinct boundary system, supporting subregions and one central or near-central mythic heart. Geography must make the realms almost nameable without relying on a future Labels layer.
 
 **Mythic hearts:** Place a distinct legal natural wonder where the supported pool and terrain permit; otherwise compose a valid geographic landmark such as a caldera, sacred lake, oasis complex, geothermal refuge, river confluence, mountain crown or fertile enclosed basin. Surround the heart with thematic luxuries, strategic resources, food and workable terrain so it is materially extraordinary. Never duplicate a unique wonder, invent an unsupported identifier or retain an illegal placement merely to satisfy the narrative.
 
@@ -360,11 +400,13 @@ This register distinguishes the original concise specification from the detailed
 
 **Competition and starts:** Unless Legendary Start explicitly applies, place major civilizations in viable peripheral regions with comparable travel difficulty to the hearts rather than directly beside them. Provide multiple approaches, keep city states away from decisive passes and settlement sites, and permit several civilizations to compete for one realm’s centre. A mythic heart is normally a discovered objective, not a private starting gift.
 
-**Evidence and diagnostics:** Retain realm and heart count, heart type, legal wonder assignment, geographic fallbacks, thematic resource composition, heart and periphery value, core-to-march ratio, unproductive buffer depth, enclosure and pass validity, route difficulty from starts, competing approaches, city-state occupation, repeated heart templates and realms lacking a sufficiently powerful centre. Distinguish these monumental objective-centred lands from Fantastical Regions’ varied provincial mosaic.
+**Evidence and diagnostics:** Retain realm and heart count, heart type, legal wonder assignment, geographic fallbacks, thematic resource composition, heart and periphery value, core-to-march ratio, unproductive buffer depth, enclosure and pass validity, route difficulty from starts, competing approaches, city-state occupation, repeated heart templates and realms lacking a sufficiently powerful centre. Distinguish these monumental objective-centred lands from Patchwork Provinces’ varied provincial mosaic.
 
-## Encircling Lands
+## Encircled Seas
 
 **Design state:** Accepted.
+
+**Narrative verb:** Encloses.
 
 **Narrative premise:** A predominantly terrestrial exterior encloses water kingdoms, inland seas and remote aquatic interiors.
 
@@ -378,15 +420,21 @@ This register distinguishes the original concise specification from the detailed
 
 **Preferred parameter envelope:** Ordinary water should be approximately 20–48%, defaulting around 34–38%; mountains should be approximately 8–24%, defaulting around 14%; wrap should default to None. Resolve the requested water inside the enclosure first. Zero water retains enclosed basins and relief but materially weakens the aquatic-kingdom premise.
 
-**Enclosing architecture:** Construct one robust exterior land framework touching or approaching most map boundaries, a continuous land route around the principal internal waters, one large central or off-centre inland sea, two to five secondary seas or lakes, inward-projecting peninsulas, selected interior island realms and several radial land connections. High water may narrow the enclosing arms but should not breach the ordinary circumferential route.
+**Enclosing architecture:** Construct one robust exterior land framework touching or approaching most map boundaries, a continuous and strategically meaningful land route around the principal internal waters, one large central or off-centre inland sea, two to five secondary seas or lakes, inward-projecting peninsulas, selected interior island realms and several radial land connections. The route must support actual circumferential travel through inhabitable regions rather than achieve continuity through a technical filament. High water may narrow the enclosing arms but should not breach the ordinary circumferential route.
 
 **Interior kingdoms and population:** Internal water must contain meaningful shelves, resources, islands, city-state opportunities and, where capacity permits, one or two settlement-capable realms. Major starts normally occupy substantial outer land with access to both the circumferential and inward networks. Interior starts require viable expansion and access; city states may use smaller realms but cannot crowd major starts or pre-own the decisive passages.
 
-**Evidence and diagnostics:** Retain enclosure completeness, exterior connectivity and robustness, circumferential route continuity, internal-versus-edge-connected water, inner-sea hierarchy, inward-facing coastline share, radial routes, internal naval connections, peninsulas, interior settlement capacity, start access, regular-ring penalties and any high-water breach. Distinguish abundant enclosing land from Shattered Basins’ scarce margins and Inland Kingdoms’ basin geography without a required global enclosure.
+**Evidence and diagnostics:** Retain enclosure completeness, exterior connectivity and robustness, circumferential route continuity, width, habitability and strategic relevance, internal-versus-edge-connected water, inner-sea hierarchy, inward-facing coastline share, radial routes, internal naval connections, peninsulas, interior settlement capacity, start access, regular-ring penalties and any high-water breach.
 
-## Astral Pangaea
+**Nearest confusions:** Lake Kingdoms contains important local inland waters but requires no global terrestrial circuit. Inland Sea Crossroads crowds scarce land against dominant seas. Encircled Seas must preserve abundant enclosing land and the long outer journey around the world.
+
+**Blind-recognition test:** “I could travel around the whole world by land, taking the long outer road around its enclosed seas.”
+
+## Scarred Pangaea
 
 **Design state:** Accepted.
+
+**Narrative verb:** Scars.
 
 **Narrative premise:** One immense continent is partitioned internally by deep, uncanny scars and incompatible regional marches.
 
@@ -400,11 +448,15 @@ This register distinguishes the original concise specification from the detailed
 
 **Preferred parameter envelope:** Ordinary water should be approximately 18–48%, defaulting around 36–40%; mountains should be approximately 10–30%, defaulting around 18%. Retain roughly 75–92% of all land in one meaningful component. High water floods the scars into inland seas and near-rifts; low and zero water express them through salt wastes, canyon systems, lake remnants, plateaus, ranges and hostile marches.
 
-**Scar and march architecture:** Build two to four graph-scale branching, offset, intersecting or partially ringed scar systems before resolving water. Give each scar flooded and dry segments according to elevation and water budget. Compose strong regional identities on either side so biome contradiction is explained by the boundary. Protect several broad continental sutures and reject technical one-tile unity, ordinary sinusoidal cuts, complete fragmentation and unsupported tile-scale contradictions.
+**Scar and march architecture:** Build two to four graph-scale branching, offset, intersecting or partially ringed alien scar systems before resolving water. Give each scar flooded and dry segments according to elevation and water budget, with strange but composed resource and wonder opportunities concentrated along selected scar nodes, chambers or crossings. Compose strong regional identities on either side so biome contradiction is explained by the boundary. Protect several broad continental sutures and reject technical one-tile unity, ordinary sinusoidal cuts, complete fragmentation and unsupported tile-scale contradictions.
 
-**Evidence and diagnostics:** Retain dominant-land share and interior depth, march count and contiguity, scar length and branching, flooded and dry extent, inland-sea hierarchy, cross-scar contrast, suture count and robustness, route stretch, starts dependent on one suture, fragmentation and geometric regularity. Distinguish this alien internal organization from Broken Pangaea’s recognizable geology, Astronomy Rifts’ technology-gated basins and Riftworld’s globally authoritative rift lattice.
+**Evidence and diagnostics:** Retain dominant-land share and interior depth, march count and contiguity, scar length, branching, rings and node opportunities, flooded and dry extent, inland-sea hierarchy, cross-scar contrast, suture count, width and robustness, route stretch, starts dependent on one suture, fragmentation and geometric regularity.
 
-## Riftworld
+**Nearest confusions:** Broken Pangaea divides according to recognizable geological fractures and the available water budget. Deep-Ocean Divides gates several navigation basins with monumental deep oceans, while Rift Lattice is built from a globally authoritative rift lattice. Scarred Pangaea remains one continent whose internal organization follows visibly alien graph logic.
+
+**Blind-recognition test:** “One continent has been unnaturally reorganized by several enormous alien scars.”
+
+## Rift Lattice
 
 **Design state:** Accepted.
 
@@ -424,7 +476,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Crossings and population:** Primary rifts normally require ocean technology. A small number of shelf bridges, island chains, sutures or routes around secondary terminations may connect selected neighbors without opening a complete early global route. Populate cells according to settlement capacity, normally retaining local rivals; keep starts and ordinary city states away from decisive global junctions and bridge sites.
 
-**Evidence and diagnostics:** Retain cell count, size and capacity, primary and secondary rift lengths, branches and intersections, deep continuity and width, wrapped-seam closure, shelf association, shallow bypasses, deliberate early crossings, pre- and post-Astronomy connectivity, populations, isolated openings, cross-boundary geography and lattice regularity. Distinguish this rift-first world from Astronomy Rifts’ few imposed barriers, Astral Pangaea’s scarred continent and Labyrinth Realm’s corridor puzzle.
+**Evidence and diagnostics:** Retain cell count, size and capacity, primary and secondary rift lengths, branches and intersections, deep continuity and width, wrapped-seam closure, shelf association, shallow bypasses, deliberate early crossings, pre- and post-Astronomy connectivity, populations, isolated openings, cross-boundary geography and lattice regularity. Distinguish this rift-first world from Deep-Ocean Divides’ few imposed barriers, Scarred Pangaea’s scarred continent and Land and Sea Maze’s corridor puzzle.
 
 ## Lonely Oceans
 
@@ -450,7 +502,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain requested and achieved major-player counts, principal-island count, settleable city capacity per realm, land and freshwater per start, early navigation components, minimum deep-ocean separation, wrapped-seam separation, visibility and coast-route bypasses, stepping-stone chains, city states per realm and within crossings, local luxuries and strategic sufficiency, ocean-resource density, and post-Astronomy connectivity. Blind recognition should describe civilizations confined to distant islands by a forbidding empty ocean—not merely a map with a high water percentage.
 
-## Peninsula Realm
+## Great Peninsulas
 
 **Design state:** Accepted.
 
@@ -474,7 +526,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain principal-peninsula count, root and neck width, length-to-neck ratio, interior area, settlement capacity, directional coherence, gulf depth and branching, mainland connectivity, route stretch, terrestrial and naval alternatives, start placement, repeated-shape similarity, subordinate-island share and detached-primary failures. Long one- or two-tile tendrils do not qualify. Blind recognition should describe one continental realm assembled from several Floridas, Italys or other complete peninsular countries—not an archipelago, coastal noise, a regular comb or a labyrinth.
 
-## Shattered Archipelago
+## Broken Island Chains
 
 **Design state:** Accepted.
 
@@ -506,6 +558,8 @@ This register distinguishes the original concise specification from the detailed
 
 **Design state:** Accepted.
 
+**Narrative verb:** Transforms.
+
 **Narrative premise:** No single geological regime dominates. Active and quiet plates, young and old terrain, maritime and continental climates all participate in a visibly changing planet.
 
 **Recognizable geography:** Several continental and oceanic plates; mixed convergent and divergent margins; varied continent ages; mountain belts and rifts; open oceans; multiple climate regimes; mature and youthful watersheds existing together.
@@ -514,7 +568,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Failure conditions:** One geological regime everywhere; generic continents without boundary evidence; uniform terrain age; climate unrelated to oceans and relief; output indistinguishable from a simple field generator.
 
-**Planetary history:** A Standard map should normally retain approximately three to five legible geological provinces and at least three different active or historical processes. Compose an ancient continental core with mature drainage, a young collision belt, a continental rift opening into lakes or a narrow sea, an active ocean margin with an associated trench or arc, a broad passive margin, or a spreading ocean whose opposing coasts retain their relationship. These are not isolated set pieces: plate motion and crustal age must explain their positions and transitions.
+**Planetary history:** A Standard map should normally retain approximately three to five legible geological provinces and at least three linked active or historical processes at visibly different stages. Compose an ancient continental core with mature drainage, a young collision belt, a continental rift opening into lakes or a narrow sea, an active ocean margin with an associated trench or arc, a broad passive margin, or a spreading ocean whose opposing coasts retain their relationship. Preserve chronology and age gradients so old consequences remain connected to younger processes. These are not isolated set pieces: plate motion and crustal age must explain their positions, transitions and causal relationships.
 
 **Causal landscape:** Ancient interiors produce subdued relief, broad plains and mature watersheds. Young collisions produce high ranges, narrow valleys and concentrated strategic geology. Rifts organize linear lakes, fertile corridors, volcanism and competing routes. Passive margins build shelves, coastal plains, wetlands and deltas, while active margins compress mountains, coasts and offshore arcs into difficult frontiers. Climate, drainage, erosion, terrain and resource tendencies must respond to those retained structures rather than being painted independently afterward.
 
@@ -524,7 +578,11 @@ This register distinguishes the original concise specification from the detailed
 
 **Character interpretation:** Realistic emphasizes restrained elevation, erosion, coherent boundaries and causal climate. Fantastical amplifies elevation contrasts and unusual plate geometries without breaking physical relationships. Mundane presents an older, calmer planet with familiar continents and fewer extreme boundaries. Brutal emphasizes active margins, severe rain shadows, narrow habitable corridors and valuable frontier geology.
 
-**Evidence and diagnostics:** Retain plate and province identity, crustal age, boundary type and velocity, uplift and erosion, corresponding coast relationships, margin classification, rift and collision continuity, drainage maturity, climate response, resource correlation and playable capacity by geological regime. Blind recognition should describe a complete active planet where old interiors, young mountains, opening rifts and contrasting margins coexist—not an ordinary Continents map with realistic terrain colouring. Unlike Eccentric’s Tectonic Continents, this identity depends upon a retained physical history rather than tectonic-looking composition.
+**Evidence and diagnostics:** Retain plate and province identity, crustal age, boundary type and velocity, uplift and erosion, corresponding coast relationships, margin classification, rift and collision continuity, drainage maturity, climate response, resource correlation and playable capacity by geological regime. Blind recognition should describe a complete active planet where old interiors, young mountains, opening rifts and contrasting margins coexist—not an ordinary Continents map with realistic terrain colouring. Unlike Eccentric’s Plate-Built Continents, this identity depends upon a retained physical history rather than tectonic-looking composition.
+
+**Nearest confusions:** Colliding Plates lets convergence dominate the whole world. Ancient Continental Shields depicts a world whose major activity has largely ended. Plate-Built Continents authors distinct continental chapters without simulating their shared chronology. Dynamic Earth must retain several interacting transformations and the evidence of their different ages.
+
+**Blind-recognition test:** “Several parts of this planet are visibly becoming something else, and its older landscapes show how they arrived here.”
 
 ## Colliding Plates
 
@@ -550,7 +608,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain convergent-boundary length and motion, relief adherence, suture and belt continuity, belt width and parallel fronts, plateau, trapped-basin and foreland formation, pass count and redundancy, land accessibility, rain-shadow magnitude, river crossing explanations, sedimentary lowlands and resource correlation. Reject random mountain scatter, one uniform wall, relief uncorrelated with plate boundaries, belts without surrounding consequences, or difficulty produced only by indiscriminate mountain coverage. Blind recognition should describe several worlds crushed together whose ranges, plateaus and basins preserve the collisions.
 
-## Ancient Cratons
+## Ancient Continental Shields
 
 **Design state:** Accepted.
 
@@ -574,7 +632,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain crustal age and stability, shield and basin extent, ghost-belt correlation, relief sharpness and isolation, escarpment continuity, river length and hierarchy, drainage maturity, reused rift corridors, passive-margin width, soil and resource correlation, settlement capacity and defensive-terrain scarcity. Reject uniform plains without retained history, abundant sharp mountains, short immature drainage or active boundaries dominating every coast. Blind recognition should describe an immensely old, broad and river-shaped world whose original violence survives only in worn scars and remnants.
 
-## Island Arc Earth
+## Volcanic Island Arcs
 
 **Design state:** Accepted.
 
@@ -584,7 +642,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Character interpretations:** Realistic follows plausible subduction arcs. Fantastical creates towering crescent chains and contradictory island climates. Mundane resembles a readable volcanic archipelago. Brutal limits habitable lowlands and makes inter-island routes exposed.
 
-**Failure conditions:** Random island scatter; broad passive continents; islands without relief; dry continental interiors; no association between chains and oceanic boundaries; output indistinguishable from Shattered Archipelago except for the engine label.
+**Failure conditions:** Random island scatter; broad passive continents; islands without relief; dry continental interiors; no association between chains and oceanic boundaries; output indistinguishable from Broken Island Chains except for the engine label.
 
 **Arc-province grammar:** Compose approximately three to six clearly separate arc provinces on a Standard map. Each must have its own curvature, orientation, deep-water surroundings, recognizable beginning and end, and rhythmic sequence of pearl-like islands. Use open volcanic crescents around protected seas, near-rings with atoll-like interiors, double arcs enclosing lagoon-like basins, deformed junctions and older remnant chains. Deep water between provinces must be materially broader than the local channels between their pearls so the arc hierarchy is immediately visible.
 
@@ -594,13 +652,13 @@ This register distinguishes the original concise specification from the detailed
 
 **Climate, gameplay and resources:** Maritime winds make exposed windward slopes wet while island spines produce local rain shadows and short continuous mountain-to-sea rivers. Protected back-arc margins accumulate shelves, wetlands and reliable settlement. Major civilizations occupy mature anchors and broad inner margins; smaller pearls extend naval reach; sheltered seas organize local interaction; and deep gaps divide major theatres. Volcanic geology favours strategic minerals, while old islands and shelves provide better soils, freshwater and maritime resources.
 
-**Preferred parameter envelope:** Ordinary water should be approximately 66–86%, defaulting around 76%; mountains should be approximately 12–32%, defaulting around 20%. East–west wrap is normal only when every cross-seam arc and trench relationship is preserved. Low water connects and broadens arcs before exposing back-arc floors; at zero water, curved volcanic belts and trench depressions may survive but the Island Arc Earth identity cannot honestly be retained.
+**Preferred parameter envelope:** Ordinary water should be approximately 66–86%, defaulting around 76%; mountains should be approximately 12–32%, defaulting around 20%. East–west wrap is normal only when every cross-seam arc and trench relationship is preserved. Low water connects and broadens arcs before exposing back-arc floors; at zero water, curved volcanic belts and trench depressions may survive but the Volcanic Island Arcs identity cannot honestly be retained.
 
 **Character interpretation:** Realistic emphasizes plausible subduction geometry, age gradients, shelf asymmetry and maritime rainfall. Fantastical builds towering pearls, immense sheltered rings, interlocking crescents and spectacular junctions. Mundane uses simpler arcs, broader habitable anchors and restrained relief. Brutal narrows coastal lowlands, intensifies volcanic spines and makes inter-island approaches exposed without sealing inhabited land.
 
-**Evidence and diagnostics:** Retain arc-province count and separation, membership confidence, curvature and orientation, pearl rhythm, anchor capacity, local and inter-arc gap widths, oceanic-boundary adherence, trench continuity, trench-to-volcanic offset, island-age progression, atoll ancestry, shelf asymmetry, watershed length, climatic response, navigation components and inhabited-land access. Reject a global island mesh, continuous crescent continents, mechanically identical arcs, random volcanic scatter or unexplained atolls. Blind recognition should describe several rugged strings of volcanic pearls curving around sheltered, nearly atoll-like seas; physical causality distinguishes them from Eccentric’s authored Shattered Archipelago.
+**Evidence and diagnostics:** Retain arc-province count and separation, membership confidence, curvature and orientation, pearl rhythm, anchor capacity, local and inter-arc gap widths, oceanic-boundary adherence, trench continuity, trench-to-volcanic offset, island-age progression, atoll ancestry, shelf asymmetry, watershed length, climatic response, navigation components and inhabited-land access. Reject a global island mesh, continuous crescent continents, mechanically identical arcs, random volcanic scatter or unexplained atolls. Blind recognition should describe several rugged strings of volcanic pearls curving around sheltered, nearly atoll-like seas; physical causality distinguishes them from Eccentric’s authored Broken Island Chains.
 
-## Supercontinent Interior
+## Inland Supercontinent
 
 **Design state:** Accepted.
 
@@ -652,7 +710,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Evidence and diagnostics:** Retain moisture-source seas, seasonal wind exposure, bay funnelling, continental heating potential, orographic uplift, windward–leeward precipitation contrast, catchment hierarchy, trunk dominance, river continuity, floodplain and marsh adjacency, delta validity, dry-country extent, biome-transition gradients, start productivity and valuable-land concentration. Reject uniform jungle, equal rainfall on every coast, random marshes, short rivers or climatic patterns unrelated to wind and relief. Blind recognition should describe civilizations organized around enormous seasonal river systems where maritime deluge meets dry continental interiors.
 
-## Icehouse Earth
+## Glacial World
 
 **Design state:** Accepted.
 
@@ -848,9 +906,25 @@ This register distinguishes the original concise specification from the detailed
 
 ## Unequal Realms
 
-**Design state:** In discussion; inclusion approved.
+**Design state:** Accepted.
 
-**Working premise:** The map deliberately assigns players different geographic problems: compact abundance rewards Tall play, broad lower-density country rewards Wide expansion, resource-rich pressure makes conquest attractive, and defensible enclosure rewards Turtle play. These starts are not competitively equal, but every role must remain legal, viable and connected to at least one plausible victory path. The interface and balance report must disclose the intended asymmetry, and validation or Repair must not normalize it unless the user explicitly requests competitive rebalancing.
+**Narrative premise:** Players deliberately inherit different geographic fates. Compact abundance rewards Tall development, broad lower-density country requires Wide expansion, cramped production and early strategic access make War attractive, and defensible enclosure rewards Turtle play. The positions are unequal by design but remain legal, viable and connected to plausible victory paths.
+
+**Role contract:** Every generation includes Tall, Wide, War and Turtle. Tall receives approximately three to five exceptionally productive connected city sites but limited territorial depth. Wide receives substantially more moderate-quality settlement land, with luxuries and resources distributed so expansion is necessary, at the cost of long borders and reinforcement. War receives strong production, early Horses or Iron, limited peaceful capacity and at least two reachable targets. Turtle receives ordinary-to-good land behind expensive but plural approaches, gaining time and security rather than Tall’s concentrated yield density.
+
+**Player counts and assignment:** Unequal Realms requires at least four majors. Four uses one of each role; five to seven repeats selected roles after including all four; eight uses two of each; larger games repeat roles as evenly as geography permits. Randomise cannot select the type below four players. Start-slot roles are deterministic recipe data and appear in Excogitare’s Start Locations layer and Review report; Civ V may still assign players randomly unless the user creates a fixed scenario.
+
+**Interaction and natural disguise:** War covets developed Tall land or Wide territory; Wide absorbs pressure but struggles to defend its extent; Tall offers valuable concentrated cities but limited replacements; Turtle survives attack but must leave its enclosure to influence the world. Every realm should possess something desirable and lack something available elsewhere. Translate these roles into coherent basins, plains, mineral frontiers, plateaus, peninsulas or islands rather than four quadrants or visibly authored handicap zones.
+
+**Asymmetry strength:** A later advanced control may offer Subtle, Pronounced and Severe, with Pronounced as the narrative default and Severe requiring explicit warning. This control changes the distance between role signatures without relaxing legality, minimum start separation, access or viability. World Modifier and World Character operate after the role graph and may complicate but not erase those signatures.
+
+**Victory geography:** Domination favours War while every original capital remains eventually reachable through more than one structure. Science favours Tall and Turtle, while Wide and War retain sufficient production and late strategic access through successful expansion. Culture favours concentrated development but every role can establish trade and contact. Diplomacy cannot give Wide a private city-state bloc. Time may favour Wide’s territory, balanced partly by population and development potential elsewhere. These are disclosed biases, not exclusive victory permissions.
+
+**Interface, validation and Repair:** Display an Asymmetric label and confirmation stating that land, resources, defence and opportunity intentionally differ. Replace ordinary parity scoring with a Role Viability Report covering role, city capacity, yield density, expansion, defensive access, luxury and strategic profile, rival travel, trade connectivity and favoured or difficult victories. Legality remains absolute, while intended parity failures are suppressed. Repair preserves role contracts; Competitive Repair requires confirmation that equalizing the starts destroys the identity and should relabel the result as a custom balanced map.
+
+**Character interpretation:** Realistic produces asymmetry through plausible environmental and geological provinces. Fantastical exaggerates fertile kingdoms, immense frontiers, warrior highlands and fortress realms. Mundane retains the roles through restrained familiar geography. Brutal confines Tall, exposes Wide, makes War more desperate and isolates Turtle while preserving viability, legal routes and plausible victory access.
+
+**Evidence and diagnostics:** Retain assigned role, role-discrimination score, city capacity, core yield density, settleable territory, border length, reinforcement cost, early strategic access, peaceful expansion ceiling, target count and distance, approach count and defensive centrality, trade and cultural contact, city-state contestability, late production and strategic access, victory biases and unintended parity. Blind review shows start locations but hides role labels; reviewers should identify the four roles substantially above chance. If they cannot, the map is randomly unfair rather than deliberately asymmetric.
 
 ---
 
@@ -885,24 +959,24 @@ Identity should be measured from retained structure rather than image similarity
 - start relationship to safe, contested, coastal and frontier regions;
 - route redundancy and chokepoint criticality.
 
-Scores should be explanatory rather than a single opaque percentage. A result may report, for example, that Shattered Archipelago achieved strong arc continuity but weak deep-water separation.
+Scores should be explanatory rather than a single opaque percentage. A result may report, for example, that Broken Island Chains achieved strong arc continuity but weak deep-water separation.
 
 ## Control conflicts
 
 Explicit controls remain authoritative, but the interface should disclose consequential conflicts. Examples:
 
-- Low water weakens Lonely Oceans, Shattered Isles and Island Arc Earth.
-- Very high water weakens Broken Pangaea, Inland Kingdoms and Supercontinent Interior.
-- Zero mountains weakens Colliding Plates and Tectonic Continents.
+- Low water weakens Lonely Oceans, Drowned Shelves and Volcanic Island Arcs.
+- Very high water weakens Broken Pangaea, Lake Kingdoms and Inland Supercontinent.
+- Zero mountains weakens Colliding Plates and Plate-Built Continents.
 - Sparse rivers weakens Great Watersheds.
-- Strong ocean influence weakens the continental core of Supercontinent Interior.
+- Strong ocean influence weakens the continental core of Inland Supercontinent.
 - Extreme geometry may make ring, front or basin relationships infeasible.
 
 The generator should attempt a lawful interpretation, report the weakened motifs and never silently change a deliberate user setting merely to improve its score.
 
 ## Proposed implementation order
 
-1. Prototype Lonely Oceans, Shattered Archipelago, Great Watersheds and Icehouse Earth because their present output exposes four different identity failures: isolation, correlation, hydrological hierarchy and planetary climate.
+1. Prototype Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World because their present output exposes four different identity failures: isolation, correlation, hydrological hierarchy and planetary climate.
 2. Add retained identity diagnostics and deterministic regression fixtures for those four types.
 3. Add concise interface explanations showing premise, defining motifs and any weakened identity after generation.
 4. Expand the same system to the remaining Eccentric and Physical types.
@@ -912,7 +986,7 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 
 ## Completion gates
 
-- [x] All thirty current Map Types are catalogued.
+- [x] All thirty current Map Types and three approved Polis additions are catalogued.
 - [x] Narrative premises, recognizable geography, character interpretations and failure conditions are specified.
 - [x] Engine, Character, Modifier and explicit-control responsibilities are separated conceptually.
 - [ ] Authoritative runtime narrative profiles implemented.

@@ -120,36 +120,36 @@ Character remains part of the deterministic recipe: an identical seed and identi
 
 **Map type** supplies the initial geography and sensible defaults. Selecting one also selects its owning engine.
 
-The complete [Map Type narrative reference](docs/features/map-type-narrative-identities.md) defines the premise, recognizable geography, World Character interpretations and failure conditions proposed for every type. It is deliberately aspirational where current generation remains weaker than the name: the reference is a specification for future implementation, not a claim that all thirty identities are already equally recognizable.
+The complete [Map Type narrative reference](docs/features/map-type-narrative-identities.md) defines the premise, recognizable geography, World Character interpretations and failure conditions for the thirty current types and three approved Polis additions. It is deliberately aspirational where generation remains weaker than the name: the reference is a specification for future implementation, and Three Realms, Thalassic League and Unequal Realms are not yet generator options.
 
 | Engine | Map type | Result |
 | --- | --- | --- |
-| Excogitare | Convoluted Continents | Broad asymmetric continents, hooked peninsulas and broken inland coasts. |
+| Excogitare | Crooked Continents | Fjords, inland seas, hooks and difficult interiors make continental exploration unpredictable. |
 | Excogitare | Broken Pangaea | One dominant landmass cut by gulfs, rifts and difficult interiors. |
-| Excogitare | Shattered Isles | Dense island chains, coastal empires and narrow naval routes. |
-| Excogitare | Inland Kingdoms | A land-heavy, non-wrapping realm punctured by lakes and irregular inland seas. |
-| Excogitare | Earthsea Realms | Numerous irregular continents, isolated minor islands and long voyages. |
-| Excogitare | Astronomy Rifts | Fantastical basins divided by deep scars and isolated shelves. |
-| Excogitare | Labyrinth Realm | A non-wrapping maze of land bridges, inland channels, chambers and chokepoints. |
-| Excogitare | Fantastical Regions | Violently warped coasts and climate regions with little concern for restraint. |
-| Eccentric | Living World | Coherent continents, climate provinces, watersheds and open oceans. |
-| Eccentric | Tectonic Continents | Coastal arcs, interior boundaries, long ranges and sheltered basins. |
+| Excogitare | Drowned Shelves | Compact island mosaics preserve the outlines, uplands and ridges of submerged continents. |
+| Excogitare | Lake Kingdoms | Broad terrestrial kingdoms are organized around lakes, enclosed seas and endorheic drainage. |
+| Excogitare | Island Continents | Substantial island homelands have real interiors, satellites and consequential voyages. |
+| Excogitare | Deep-Ocean Divides | A few monumental ocean barriers gate substantial navigation basins until Astronomy. |
+| Excogitare | Land and Sea Maze | Tortuous terrestrial and aquatic corridors make navigation the principal geographic problem. |
+| Excogitare | Patchwork Provinces | Contrasting provinces obey different composed geographic, ecological and economic rules. |
+| Eccentric | Ecological Transect | One connected landscape tells a causal environmental story through broad transitions. |
+| Eccentric | Plate-Built Continents | Every continent records a different authored geological history. |
 | Eccentric | Great Watersheds | Land-heavy river basins, inland lakes, wet lowlands and mountain drainage. |
-| Eccentric | Shattered Basins | Deep oceans dividing broken continents, island chains and long rifts. |
-| Eccentric | Mythic Regions | Deliberately composed climate realms, epic ranges and implausible transitions. |
-| Eccentric | Encircling Lands | Exterior land encloses inland seas, lakes and remote water kingdoms. |
-| Eccentric | Astral Pangaea | A dominant continent is cut by deep astronomy scars and impossible climate marches. |
-| Eccentric | Riftworld | Deep-water barriers isolate several navigation basins and their inhabitable shelves. |
+| Eccentric | Inland Sea Crossroads | Great seas crowd scarce marginal land while straits and canal isthmuses control movement. |
+| Eccentric | Wonder Heartlands | Monumental regions concentrate wonders and value behind poor or difficult marches. |
+| Eccentric | Encircled Seas | A meaningful continuous outer land journey surrounds hierarchical inner waters. |
+| Eccentric | Scarred Pangaea | One continent is reorganized by branching alien scars and broad surviving sutures. |
+| Eccentric | Rift Lattice | A hierarchical deep-water fracture network defines unequal but viable local worlds. |
 | Eccentric | Lonely Oceans | Vast open seas separate small island realms and remote archipelagos. |
-| Eccentric | Peninsula Realm | An edge-anchored realm is invaded by gulfs, crooked peninsulas and inland channels. |
-| Eccentric | Shattered Archipelago | Uneven island chains, drowned shelves and tiny islets fill the world. |
+| Eccentric | Great Peninsulas | Complete Florida- and Italy-like provinces project between deep gulfs and estuaries. |
+| Eccentric | Broken Island Chains | Directional necklaces, crescents and branching arcs preserve visible ancestry. |
 | Physical | Dynamic Earth | Mixed moving plates, convergence, rifting, moderate erosion and coupled climate. |
 | Physical | Colliding Plates | Young violent collision belts, high ranges, rain shadows and hard interiors. |
-| Physical | Ancient Cratons | Quiet old plates, broad river country, subdued uplands and mature coasts. |
-| Physical | Island Arc Earth | Oceanic boundaries, maritime climates, wet volcanic arcs and compact watersheds. |
-| Physical | Supercontinent Interior | Severe continentality, dry interiors, coastal margins and long outlet paths. |
+| Physical | Ancient Continental Shields | Eroded shields, ghost ranges, mature rivers and exposed mineral cores record deep time. |
+| Physical | Volcanic Island Arcs | Rugged volcanic chains curve around sheltered seas and age toward drowned atolls. |
+| Physical | Inland Supercontinent | A landbound world drains toward a remote heart behind dry interiors and peripheral highlands. |
 | Physical | Monsoon Continents | Strong seasonal contrast draws ocean moisture across warm continental coasts. |
-| Physical | Icehouse Earth | Cool mean climate, strong seasons, glacial regions and expanded tundra. |
+| Physical | Glacial World | Valuable frozen frontiers compel expansion beyond a few temperate refuges. |
 | Polis | Imperial Ring | Civilizations surround a contested interior with neighboring fronts and radial approaches. |
 | Polis | Opposing Fronts | Players or teams occupy defended sides joined by several readable invasion corridors. |
 | Polis | Contested Heartland | Safe territories open toward a valuable central crossroads and flanking routes. |
@@ -304,11 +304,11 @@ Lab is marked **Development** in blue. It is an evidence-gathering workspace for
 The first deck concentrates on four identities whose intended distinctions are large enough to test honestly:
 
 - **Lonely Oceans** tests isolation and negative space: a few viable realms should feel genuinely separated by intimidating water, not merely scattered through an ordinary archipelago.
-- **Shattered Archipelago** tests correlated island geometry: chains, crescents and branching arcs should read as systems rather than a collection of unrelated islands.
+- **Broken Island Chains** tests correlated island geometry: chains, crescents and branching arcs should read as systems rather than a collection of unrelated islands.
 - **Great Watersheds** tests hierarchical hydrology: dominant trunks, merging tributaries, marshes and deltas should organize the world rather than decorate it.
-- **Icehouse Earth** tests planetary climate: glaciation, tundra margins and scarce temperate refuges should make the entire map read as a cold world.
+- **Glacial World** tests planetary climate: glaciation, tundra margins and scarce temperate refuges should make the entire map read as a cold world.
 
-These four are starting points, not the only Map Types that will ever enter the Lab. Together they isolate four different generator problems—absence, shape correlation, drainage hierarchy and climate—without pretending that a thirty-type recognition experiment is useful before the workflow itself has been calibrated.
+These four are starting points, not the only Map Types that will ever enter the Lab. Together they isolate four different generator problems—absence, shape correlation, drainage hierarchy and climate—without pretending that a full-catalogue recognition experiment is useful before the workflow itself has been calibrated.
 
 ### Lab workspace stages
 

@@ -4,7 +4,7 @@
 
 - Status: Verified
 - User outcome: A reviewer can conduct a genuinely blind Map Type recognition session inside Excogitare, retain guesses and observations, reveal the intended identity only after submitting a review, revisit candidates, and export evidence that can guide later generator work.
-- Initial scope: Lonely Oceans, Shattered Archipelago, Great Watersheds and Icehouse Earth. These test isolation, correlated island chains, hierarchical hydrology and planetary climate respectively.
+- Initial scope: Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World. These test isolation, correlated island chains, hierarchical hydrology and planetary climate respectively.
 - Workspace: A fifth top-level **Lab** workspace with a blue **Development** badge. Development means the evidence format and workflow may evolve; it must not imply that the four narrative identities are already implemented.
 - Persistence: The current session is device-local. A versioned JSON export is the durable handoff between the Lab, the narrative guide and a later implementation task.
 - Failure behavior: Invalid JSON must be rejected without replacing the current session. A generation failure must remain visible and retryable. Revealing an answer before a guess is not allowed by the normal workflow.

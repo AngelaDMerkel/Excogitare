@@ -199,10 +199,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Arborea · forest world/);
   assert.match(source, /Plate activity/);
   assert.match(source, /Erosion/);
-  assert.match(generator, /Island Arc Earth/);
-  assert.match(generator, /Supercontinent Interior/);
+  assert.match(generator, /Volcanic Island Arcs/);
+  assert.match(generator, /Inland Supercontinent/);
   assert.match(generator, /Monsoon Continents/);
-  assert.match(generator, /Icehouse Earth/);
+  assert.match(generator, /Glacial World/);
   assert.match(source, /Rotation/);
   assert.match(source, /Retrograde · reversed winds/);
   assert.match(source, /Axial seasonality/);
@@ -364,9 +364,9 @@ test("Identity Lab retains blind reviews and documents its narrative JSON handof
   assert.match(readme, /summary\.confusions/);
   assert.match(feature, /Evidence-to-implementation loop/);
   assert.match(narratives, /## Lonely Oceans/);
-  assert.match(narratives, /## Shattered Archipelago/);
+  assert.match(narratives, /## Broken Island Chains/);
   assert.match(narratives, /## Great Watersheds/);
-  assert.match(narratives, /## Icehouse Earth/);
+  assert.match(narratives, /## Glacial World/);
 });
 
 test("dense controls expose unclipped contextual help on hover and focus", async () => {

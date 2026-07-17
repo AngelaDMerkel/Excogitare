@@ -1101,6 +1101,42 @@ test("Fantastical landmass grammars produce distinct legal navigation architectu
   assert.equal(signatures.size, presets.length);
 });
 
+test("Map Type display-name migration preserves stable preset ids and exempt names", () => {
+  const expectedLabels = new Map([
+    ["CONTINENTS", "Crooked Continents"],
+    ["PANGAEA", "Broken Pangaea"],
+    ["ARCHIPELAGO", "Drowned Shelves"],
+    ["INLAND_SEAS", "Lake Kingdoms"],
+    ["EARTHSEA", "Island Continents"],
+    ["RIFT_REALMS", "Deep-Ocean Divides"],
+    ["LABYRINTH", "Land and Sea Maze"],
+    ["WILD_REGIONS", "Patchwork Provinces"],
+    ["LIVING_WORLD", "Ecological Transect"],
+    ["TECTONIC_CONTINENTS", "Plate-Built Continents"],
+    ["GREAT_WATERSHEDS", "Great Watersheds"],
+    ["SHATTERED_BASINS", "Inland Sea Crossroads"],
+    ["MYTHIC_REGIONS", "Wonder Heartlands"],
+    ["ENCIRCLING_LANDS", "Encircled Seas"],
+    ["ASTRAL_PANGAEA", "Scarred Pangaea"],
+    ["RIFTWORLD", "Rift Lattice"],
+    ["LONELY_OCEANS", "Lonely Oceans"],
+    ["PENINSULA_REALM", "Great Peninsulas"],
+    ["SHATTERED_ARCHIPELAGO", "Broken Island Chains"],
+    ["DYNAMIC_EARTH", "Dynamic Earth"],
+    ["COLLIDING_PLATES", "Colliding Plates"],
+    ["ANCIENT_CRATONS", "Ancient Continental Shields"],
+    ["ISLAND_ARC_EARTH", "Volcanic Island Arcs"],
+    ["SUPERCONTINENT_INTERIOR", "Inland Supercontinent"],
+    ["MONSOON_CONTINENTS", "Monsoon Continents"],
+    ["ICEHOUSE_EARTH", "Glacial World"],
+    ["IMPERIAL_RING", "Imperial Ring"],
+    ["OPPOSING_FRONTS", "Opposing Fronts"],
+    ["CONTESTED_HEARTLAND", "Contested Heartland"],
+    ["RIVAL_CONTINENTS", "Rival Continents"],
+  ]);
+  assert.deepEqual(new Map(MAP_PRESETS.map((preset) => [preset.id, preset.label])), expectedLabels);
+});
+
 test("Eccentric retains its dense hierarchy across stock map budgets", () => {
   const minimumSubregions = { DUEL: 580, STANDARD: 1300, HUGE: 2400 } as const;
   for (const size of ["DUEL", "STANDARD", "HUGE"] as const) {

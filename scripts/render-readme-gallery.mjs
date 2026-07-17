@@ -244,7 +244,7 @@ async function renderInterfaceSheet() {
     field(left + 28, top + 166, 500, "Projection Type", "Polar centered"),
     `<text x="${left + 28}" y="${top + 252}" fill="${COLORS.muted}" font-family="Arial" font-size="11" font-weight="700" letter-spacing="1">GENERATION ENGINE</text>`,
     button(left + 28, top + 270, 240, "Excogitare", true), button(left + 280, top + 270, 240, "Eccentric"), button(left + 532, top + 270, 240, "Physical"),
-    field(left + 28, top + 348, 360, "Map type", "Fantastical Regions"), field(left + 408, top + 348, 270, "Map size", "Standard · 80×52"),
+    field(left + 28, top + 348, 360, "Map type", "Patchwork Provinces"), field(left + 408, top + 348, 270, "Map size", "Standard · 80×52"),
     `<text x="${left + 28}" y="${top + 455}" fill="${COLORS.text}" font-family="Arial" font-size="15">World shape</text><rect x="${left + 28}" y="${top + 474}" width="720" height="8" rx="4" fill="#16363c"/><rect x="${left + 28}" y="${top + 474}" width="390" height="8" rx="4" fill="${COLORS.gold}"/><circle cx="${left + 418}" cy="${top + 478}" r="10" fill="${COLORS.gold}"/>`,
   ].join("");
   parts.push(workspacePanel(left, top, panelWidth, panelHeight, "Create · Generate", "DETERMINISTIC", generate));
@@ -303,7 +303,7 @@ async function renderCreateWorkflowSheet() {
     `<rect x="${x1 + 88}" y="${top + 112}" width="544" height="126" rx="10" fill="#102f35" stroke="${COLORS.gold}"/><text x="${x1 + 112}" y="${top + 150}" fill="${COLORS.cream}" font-family="Georgia, serif" font-size="25" font-weight="700">Excogitare</text><text x="${x1 + 112}" y="${top + 182}" fill="${COLORS.text}" font-family="Arial" font-size="14">Warped fields, expressive landforms, and the</text><text x="${x1 + 112}" y="${top + 204}" fill="${COLORS.text}" font-family="Arial" font-size="14">widest stylistic range.</text>`,
     `<text x="${x1 + 28}" y="${top + 278}" fill="${COLORS.muted}" font-family="Arial" font-size="11" font-weight="700" letter-spacing="1.5">WORLD CHARACTER</text>`,
     button(x1 + 28, top + 296, 150, "Realistic"), button(x1 + 188, top + 296, 150, "Fantastical", true), button(x1 + 348, top + 296, 150, "Mundane"), button(x1 + 508, top + 296, 150, "Brutal"),
-    field(x1 + 28, top + 370, 320, "Map type", "Fantastical Regions"), field(x1 + 370, top + 370, 322, "Map size", "Standard · 80×52"),
+    field(x1 + 28, top + 370, 320, "Map type", "Patchwork Provinces"), field(x1 + 370, top + 370, 322, "Map size", "Standard · 80×52"),
     field(x1 + 28, top + 458, 664, "Seed", "readme-world-031"),
     workflowRow(x1 + 28, top + 548, 664, "World shape", "East / west wrap · 48% water · Standard geometry", "1"),
     workflowRow(x1 + 28, top + 632, 664, "Climate and terrain", "Temperate · Normal rainfall · Lawless climate logic", "2"),

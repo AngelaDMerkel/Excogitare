@@ -34,7 +34,7 @@ This checklist records the architecture proposed and approved during the Eccentr
 - [x] Drainage accumulation prefers polygon boundaries for major rivers and subregion boundaries for tributaries while retaining the shared continuous mountain-to-water river encoder.
 - [x] Bays, capes, straits, archipelagos, forest realms, wastes and river basins are retained as geographic objects.
 - [x] Water percentage is exact and mountain barriers cannot isolate otherwise passable land.
-- [x] Living World, Tectonic Continents, Great Watersheds, Shattered Basins, Mythic Regions, Encircling Lands, Astral Pangaea, Riftworld, Lonely Oceans, Peninsula Realm and Shattered Archipelago are separate presets.
+- [x] Ecological Transect, Plate-Built Continents, Great Watersheds, Inland Sea Crossroads, Wonder Heartlands, Encircled Seas, Scarred Pangaea, Rift Lattice, Lonely Oceans, Great Peninsulas and Broken Island Chains are separate presets.
 
 The implementation is independent. It does not copy Fantastical's Lua, tables, authored names or random sequence. Its retained generic names are structural identifiers, not an imitation of Fantastical's vocabulary.
 
@@ -52,7 +52,7 @@ The implementation is independent. It does not copy Fantastical's Lua, tables, a
 - [x] Windward precipitation, leeward rain shadows, evaporation demand, cold retention and maritime influence feed biome selection.
 - [x] Priority-flood drainage accumulates runoff toward real ocean or lake outlets and guides the shared legal river encoder.
 - [x] Waterless maps report zero outlet basins and do not invent rivers that terminate in imaginary seas.
-- [x] Dynamic Earth, Colliding Plates, Ancient Cratons, Island Arc Earth, Supercontinent Interior, Monsoon Continents and Icehouse Earth form a distinct preset family.
+- [x] Dynamic Earth, Colliding Plates, Ancient Continental Shields, Volcanic Island Arcs, Inland Supercontinent, Monsoon Continents and Glacial World form a distinct preset family.
 - [x] Physical output retains plates, continents, ocean basins, atmospheric cells, contiguous climate regions, rain shadows, glacial regions, watersheds, ranges and rivers.
 
 ## Shared generation and workflow

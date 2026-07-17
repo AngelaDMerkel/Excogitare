@@ -18,17 +18,17 @@ This document is the working plan and evidence map for the complete, independent
 
 | Preset | Required structural character |
 |---|---|
-| Living World | Several broad continents distributed across open basins with restrained climate logic. |
-| Tectonic Continents | Fewer continents, high boundary-range affinity and sheltered interiors. |
+| Ecological Transect | Several broad continents distributed across open basins with restrained climate logic. |
+| Plate-Built Continents | Fewer continents, high boundary-range affinity and sheltered interiors. |
 | Great Watersheds | Land-heavy basins, guaranteed inland waters and dense drainage. |
-| Shattered Basins | Multiple deep barriers, broken continents and mixed island populations. |
-| Mythic Regions | Dissonant climate collections divided by long interior ranges. |
-| Encircling Lands | Exterior land enclosing inland seas and lakes. |
-| Astral Pangaea | One dominant continent cut by protected Astronomy scars. |
-| Riftworld | Habitable land allocated independently inside several navigation basins. |
+| Inland Sea Crossroads | Multiple deep barriers, broken continents and mixed island populations. |
+| Wonder Heartlands | Dissonant climate collections divided by long interior ranges. |
+| Encircled Seas | Exterior land enclosing inland seas and lakes. |
+| Scarred Pangaea | One dominant continent cut by protected Astronomy scars. |
+| Rift Lattice | Habitable land allocated independently inside several navigation basins. |
 | Lonely Oceans | Sparse islands and archipelagos separated by extensive open water. |
-| Peninsula Realm | Non-wrapping edge-anchored land invaded by gulfs, channels and capes. |
-| Shattered Archipelago | Major islands, minor islands and tiny subregion islets in distinct chains. |
+| Great Peninsulas | Non-wrapping edge-anchored land invaded by gulfs, channels and capes. |
+| Broken Island Chains | Major islands, minor islands and tiny subregion islets in distinct chains. |
 
 ## Failure and relaxation policy
 

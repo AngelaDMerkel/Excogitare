@@ -21,7 +21,7 @@
 | START-07 | Repair claims match export capability. | Parsed slot metadata and round-trip assertions. | Verified |
 | START-08 | Every generated Colossal map either contains the requested legal major starts or explicitly reduces an impossible request; zero major starts is never a successful generation. | All-engine Colossal regression with ordinary player counts. | Verified |
 | START-09 | Repair can select and apply missing-start reconstruction to generated and geography-only maps, while imported maps with existing slotless scenario data remain immutable. | Geography-only Repair/export regression plus existing-scenario zero-slot negative case. | Verified |
-| START-10 | Exporting a generated map writes major and city-state scenario slots and coordinates so the exported file retains the generated start layout when reopened or loaded by Civ V. | Generate/export/reparse regression using Colossal and the attached Peninsula Realm failure case. | Verified |
+| START-10 | Exporting a generated map writes major and city-state scenario slots and coordinates so the exported file retains the generated start layout when reopened or loaded by Civ V. | Generate/export/reparse regression using Colossal and the attached Great Peninsulas failure case. | Verified |
 | START-11 | Every generated and repaired major/city-state pair remains at least five hexes apart, including after binary export and reimport. | Pairwise major/minor spacing assertions before and after export. | Verified |
 | START-12 | Fresh and repaired exports use Civ V's WorldBuilder scenario/version marker rather than a parser-only synthetic marker; geography-only exports do not falsely declare scenario content. | Raw header assertions for `0x8C` scenario and `0x0C` geography-only exports, plus comparison with installed Firaxis/WorldBuilder version 11 and 12 files. | Verified |
 
@@ -51,7 +51,7 @@
 - Engine tests cover Excogitare, Eccentric, Physical and Polis, including sparse geography and stored actual population counts.
 - Export/reimport tests verify generated and reconstructed scenario starts survive the `.Civ5Map` binary round trip.
 - The attached `peninsula-realm-1t4c9pc-18g28ve.Civ5Map` was reproduced as a geography-only 137×137 export with six header players and zero scenario slots; Repair now proposes and round-trips six legal major plus six city-state records.
-- The invalid repaired sample declared scenario/version byte `0x1C`. Installed Firaxis and WorldBuilder files use `0x8C` for version 12 scenario maps (`0x8B` for version 11), while the working geography-only Peninsula Realm source uses `0x0C`. Repair now identifies the malformed marker as a Safe structural correction and the writer derives the marker from the actual presence of scenario data.
+- The invalid repaired sample declared scenario/version byte `0x1C`. Installed Firaxis and WorldBuilder files use `0x8C` for version 12 scenario maps (`0x8B` for version 11), while the working geography-only Great Peninsulas source uses `0x0C`. Repair now identifies the malformed marker as a Safe structural correction and the writer derives the marker from the actual presence of scenario data.
 - `tsc --noEmit`, ESLint, the production Vinext build, the GitHub Pages build/verification and rendered-interface tests pass.
 - The Node 24 Alpine image rebuilt and serves HTTP 200 from the replacement container on port 3001.
 - The complete application regression run passes 76 of 76 tests, including all-engine Colossal placement, generated-scenario export, geography-only headers, and malformed-marker Repair.

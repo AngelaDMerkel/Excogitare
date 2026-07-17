@@ -20,11 +20,11 @@ This is the working plan for expanding Physical with a deliberately comprehensib
 |---|---|
 | Dynamic Earth | Balanced plates, seasons, maritime influence and circulation. |
 | Colliding Plates | Young high ranges, strong uplift, wet windward slopes and hard rain shadows. |
-| Ancient Cratons | Quiet old relief, mature drainage and broad continental climates. |
-| Island Arc Earth | Oceanic plate boundaries, maritime climates, wet volcanic arcs and small watersheds. |
-| Supercontinent Interior | Low sea share, severe continentality, dry interiors and long outlet paths. |
+| Ancient Continental Shields | Quiet old relief, mature drainage and broad continental climates. |
+| Volcanic Island Arcs | Oceanic plate boundaries, maritime climates, wet volcanic arcs and small watersheds. |
+| Inland Supercontinent | Low sea share, severe continentality, dry interiors and long outlet paths. |
 | Monsoon Continents | Strong seasonality, warm coastal moisture and wet subtropical margins. |
-| Icehouse Earth | Cool mean climate, strong seasonal range, expanded tundra and glacial regions. |
+| Glacial World | Cool mean climate, strong seasonal range, expanded tundra and glacial regions. |
 
 ## Controls
 

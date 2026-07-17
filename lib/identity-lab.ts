@@ -31,11 +31,11 @@ export const IDENTITY_LAB_PROTOTYPES = [
   },
   {
     preset: "SHATTERED_ARCHIPELAGO",
-    label: "Shattered Archipelago",
+    label: "Broken Island Chains",
     engine: "ECCENTRIC",
     dimension: "Correlated island-chain geometry",
     premise: "Several long island chains, broken crescents and branching arcs structure a densely maritime world.",
-    guideAnchor: "Shattered Archipelago",
+    guideAnchor: "Broken Island Chains",
   },
   {
     preset: "GREAT_WATERSHEDS",
@@ -47,11 +47,11 @@ export const IDENTITY_LAB_PROTOTYPES = [
   },
   {
     preset: "ICEHOUSE_EARTH",
-    label: "Icehouse Earth",
+    label: "Glacial World",
     engine: "PHYSICAL",
     dimension: "Planetary cold and glaciation",
     premise: "A cold, strongly seasonal planet is organized by continental ice, glaciated uplands, tundra margins and restricted temperate refuges.",
-    guideAnchor: "Icehouse Earth",
+    guideAnchor: "Glacial World",
   },
 ] as const satisfies ReadonlyArray<{ preset: MapPresetId; label: string; engine: GenerationEngine; dimension: string; premise: string; guideAnchor: string }>;
 

@@ -58,4 +58,4 @@
 - The complete suite passes 66/66 tests after a clean ESLint run and TypeScript production compilation.
 - Vinext production and GitHub Pages static builds pass; the Pages verifier finds 4 public files and 24 JavaScript bundles.
 - The Node 24 Alpine image rebuilt successfully. The replacement `excogitare:0.4.8` container serves the app on port 3001.
-- Live browser verification selected Eccentric, found all eleven presets and advanced controls, generated a Standard 80×52 Mythic Regions map, rendered its canvas, and found no visible legacy engine name.
+- Live browser verification selected Eccentric, found all eleven presets and advanced controls, generated a Standard 80×52 Wonder Heartlands map, rendered its canvas, and found no visible legacy engine name.
