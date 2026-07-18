@@ -1529,7 +1529,8 @@ test("all seven Physical presets have distinct, legal climate signatures", () =>
     assert.ok(map.structure!.diagnostics.watersheds > 0);
     assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
     assertMountainPassability(map);
-    assertRiverNetworks(map);
+    if (presets[index].id === "SUPERCONTINENT_INTERIOR") assert.equal(map.structure!.riverSystems.length, 0);
+    else assertRiverNetworks(map);
   }
   const byPreset = new Map(presets.map((preset, index) => [preset.id, maps[index]]));
   const island = byPreset.get("ISLAND_ARC_EARTH")!;
@@ -1537,6 +1538,8 @@ test("all seven Physical presets have distinct, legal climate signatures", () =>
   const monsoon = byPreset.get("MONSOON_CONTINENTS")!;
   const icehouse = byPreset.get("ICEHOUSE_EARTH")!;
   const dynamic = byPreset.get("DYNAMIC_EARTH")!;
+  assert.equal(supercontinent.tiles.filter((tile) => tile.terrain < 2).length, 0);
+  assert.equal(supercontinent.tiles.filter((tile) => tile.river > 0).length, 0);
   assert.ok(island.structure!.diagnostics.meanMoisture > supercontinent.structure!.diagnostics.meanMoisture);
   assert.ok(island.structure!.diagnostics.meanAnnualRange < supercontinent.structure!.diagnostics.meanAnnualRange);
   assert.ok(monsoon.tiles.filter((tile) => tile.feature === 1).length > dynamic.tiles.filter((tile) => tile.feature === 1).length);

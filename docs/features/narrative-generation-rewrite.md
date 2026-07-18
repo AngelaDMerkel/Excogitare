@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-- **Status:** In progress; Phase 1 generation substrate is verified, while the five-stage Create shell, Archetype repaint, Match Intent authoring, protected regeneration and project-file boundary have partial runtime implementations. Narrative compilation, scale realization, continuous Lab, complete semantic policies and Scenario remain open.
+- **Status:** In progress; Phases 1–5 are verified, including the generation substrate, five-stage Create shell, Scale/Archetype systems and all twenty-six non-Polis narrative compilers. Match Intent-aware Polis, continuous Lab, complete semantic policies and Scenario remain open; protected regeneration and the project-file boundary have partial runtime implementations.
 - **Purpose:** Coordinate the Narrative Map Type implementation, generation-model expansion and Create/Lab workflow changes as one deliberate rewrite rather than a sequence of controls attached to incompatible assumptions.
 - **Current limitation:** This document is a plan. Except where it explicitly describes the present baseline, none of the proposed models or workflows should be described as implemented.
 - **Primary references:** [`map-type-narrative-identities.md`](map-type-narrative-identities.md), [`world-character.md`](world-character.md), [`workspace-navigation.md`](workspace-navigation.md), [`identity-lab.md`](identity-lab.md), the current generator and retained-structure modules, and the Civ V legality/Repair rules.
@@ -1049,13 +1049,17 @@ Phase 3 is verified. Global, Continental, Regional, Provincial and Local are ind
 - [x] Build Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World first.
 - [x] Add Narrative Assessment, Review presentation and deterministic fixtures.
 
-Phase 4 is verified. All thirty current and three approved future identities have authoritative profiles with unique verbs, motifs, anti-motifs, parameter envelopes and nearest confusions. The four benchmark types compile retained structural skeletons before starts/content/legality, survive representative Scale and World Character matrices, disclose weakened explicit-control combinations and retain Review evidence through workers, history and project files. The remaining twenty-six current Map Types remain honestly Profile-only and move to Phase 5; the three future Polis types remain Phase 6 work.
+Phase 4 is verified. All thirty current and three approved future identities have authoritative profiles with unique verbs, motifs, anti-motifs, parameter envelopes and nearest confusions. The four benchmark types compile retained structural skeletons before starts/content/legality, survive representative Scale and World Character matrices, disclose weakened explicit-control combinations and retain Review evidence through workers, history and project files. At that gate, the remaining twenty-two non-Polis current Map Types moved to Phase 5; the four current and three future Polis types remained Phase 6 work.
 
 ## Phase 5 — Complete Narrative Map Types
 
-- Complete Excogitare, Eccentric and Physical waves.
-- Remove topology aliases and generic fallback behavior that violates an accepted identity.
-- Run each type through scale, character, archetype, explicit-control and nearest-confusion matrices.
+- [x] Complete the eight Excogitare, eight remaining Eccentric and six remaining Physical identities.
+- [x] Remove topology aliases and generic fallback behavior that violates an accepted identity.
+- [x] Run each type through deterministic defaults and representative scale, character, archetype, explicit-control and nearest-confusion matrices.
+
+Phase 5 deliberately excludes Polis. Its four current identities and three approved additions depend on Human/AI and victory geography and therefore remain Phase 6 work.
+
+Phase 5 is verified. Every non-Polis identity now emits its own retained regions, relationships, effects and targets before starts and content. The shared realizer is integrated into Excogitare, Eccentric and Physical while preserving the owning engine's geographic objects, physical climates, explicit terrain controls, exact water target and accessible mountain contract. Final-map assessments score actual component, path, relief, drainage, ecology and value evidence; all twenty-two additions pass deterministic A/B recognition and Repair-clean default fixtures. Representative Regional Scale, alternate Character and Archetype cases also remain recognizable and legal. The reviewed baseline changes deliberately where formerly Profile-only characterization and Scenario cases now receive real terrain compilation and scores; hard dimensions, requested water, population, export and validation boundaries remain intact.
 
 ## Phase 6 — Match Intent and complete Polis
 

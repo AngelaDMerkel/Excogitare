@@ -42,7 +42,8 @@ export type NarrativeProfile = {
 
 export type NarrativeSkeletonRegion = {
   id: string;
-  role: "REALM" | "CHAIN" | "ANCHOR" | "BASIN" | "HEADWATER" | "OUTLET" | "ICE_SHEET" | "REFUGE" | "GENERIC";
+  role: string;
+  effect?: "LAND" | "WATER" | "RIDGE" | "LOWLAND" | "WET" | "DRY" | "COLD" | "HOT" | "VALUE" | "BARREN" | "VOLCANIC";
   x: number;
   y: number;
   radius: number;
@@ -52,7 +53,8 @@ export type NarrativeSkeletonRegion = {
 
 export type NarrativeSkeletonRelationship = {
   id: string;
-  kind: "ISOLATED_FROM" | "BELONGS_TO" | "FLOWS_TO" | "FOLLOWS_ARC" | "BORDERS" | "SUPPLIES";
+  kind: string;
+  effect?: "LAND_PATH" | "WATER_PATH" | "RIDGE_PATH" | "RIVER_PATH" | "TRANSITION";
   from: string;
   to: string;
   points: Array<{ x: number; y: number }>;

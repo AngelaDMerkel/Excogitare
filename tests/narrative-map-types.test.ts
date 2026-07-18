@@ -9,8 +9,9 @@ import { compileNarrativeSkeleton, NARRATIVE_PROFILES, narrativeProfile } from "
 
 const FUTURE_POLIS = ["THREE_REALMS", "THALASSIC_LEAGUE", "UNEQUAL_REALMS"] as const;
 const BENCHMARKS = ["LONELY_OCEANS", "SHATTERED_ARCHIPELAGO", "GREAT_WATERSHEDS", "ICEHOUSE_EARTH"] as const;
+const PHASE_FIVE = MAP_PRESETS.filter((preset) => preset.engine !== "POLIS").map((preset) => preset.id);
 
-function benchmarkOptions(id: typeof BENCHMARKS[number], seed = `narrative-${id.toLowerCase()}`): MapGenerationOptions {
+function benchmarkOptions(id: MapPresetId, seed = `narrative-${id.toLowerCase()}`): MapGenerationOptions {
   const preset = MAP_PRESETS.find((item) => item.id === id)!;
   return {
     ...DEFAULT_GENERATION_OPTIONS,
@@ -40,7 +41,8 @@ test("the narrative catalogue is exhaustive, distinctive and honest about implem
   assert.equal(Object.keys(NARRATIVE_PROFILES).length, MAP_PRESETS.length + FUTURE_POLIS.length);
   assert.deepEqual(new Set(Object.keys(NARRATIVE_PROFILES)), new Set([...MAP_PRESETS.map((preset) => preset.id), ...FUTURE_POLIS]));
   assert.equal(new Set(Object.values(NARRATIVE_PROFILES).map((profile) => profile.verb)).size, Object.keys(NARRATIVE_PROFILES).length);
-  assert.deepEqual(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation === "BENCHMARK").map((profile) => profile.id).sort(), [...BENCHMARKS].sort());
+  assert.deepEqual(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation === "BENCHMARK").map((profile) => profile.id).sort(), [...PHASE_FIVE].sort());
+  assert.deepEqual(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation === "PROFILE_ONLY").map((profile) => profile.id).sort(), MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => preset.id).sort());
   for (const profile of Object.values(NARRATIVE_PROFILES)) {
     assert.ok(profile.premise.length > 35, `${profile.id} lacks a concrete premise`);
     assert.ok(profile.requiredMotifs.length > 0, `${profile.id} lacks required motifs`);
@@ -51,8 +53,8 @@ test("the narrative catalogue is exhaustive, distinctive and honest about implem
   for (const id of FUTURE_POLIS) assert.equal(narrativeProfile(id).implementation, "FUTURE_RUNTIME");
 });
 
-test("benchmark skeletons are deterministic and disclose conflicting explicit controls", () => {
-  for (const id of BENCHMARKS) {
+test("compiled narrative skeletons are deterministic and disclose conflicting explicit controls", () => {
+  for (const id of PHASE_FIVE) {
     const options = benchmarkOptions(id);
     const recipe = generationRecipeFromOptions(options);
     const dimensions = resolveMapDimensions(options.size, options.geometry);
@@ -133,6 +135,44 @@ test("four benchmark identities survive generation, legality and retained assess
   assert.ok(glacial.structure!.objects.some((object) => object.kind === "REFUGE"));
 });
 
+test("the twenty-two Phase 5 identities compile into recognizable legal final maps", () => {
+  const phaseFiveAdditions = PHASE_FIVE.filter((id) => !BENCHMARKS.includes(id as typeof BENCHMARKS[number]));
+  assert.equal(phaseFiveAdditions.length, 22);
+  for (const id of phaseFiveAdditions) {
+    const options = benchmarkOptions(id, `phase-five-${id.toLowerCase()}`);
+    options.size = "DUEL";
+    options.players = 2;
+    options.cityStates = 1;
+    const first = generateMap(options);
+    const second = generateMap(options);
+    assert.deepEqual(first.tiles, second.tiles, `${id} final tiles are not deterministic`);
+    assert.deepEqual(first.structure?.narrativeSkeleton, second.structure?.narrativeSkeleton, `${id} skeleton is not deterministic`);
+    assert.ok((first.structure?.narrativeSkeleton?.regions.length ?? 0) > 1, `${id} fell through to a generic region`);
+    assert.ok((first.structure?.narrativeSkeleton?.relationships.length ?? 0) > 0, `${id} lacks retained geographic relationships`);
+    assert.ok(["A", "B"].includes(first.structure?.narrativeAssessment?.grade ?? ""), `${id} fell below its retained recognition benchmark (${first.structure?.narrativeAssessment?.score})`);
+    assert.equal(first.structure?.narrativeAssessment?.parameterDeviations.length, 0);
+    assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), [], `${id} should not require Repair after Create`);
+  }
+});
+
+test("representative Phase 5 identities survive Scale, Character, and Archetype reinterpretation", () => {
+  const cases = ["CONTINENTS", "INLAND_SEAS", "LIVING_WORLD", "MYTHIC_REGIONS", "ANCIENT_CRATONS", "ISLAND_ARC_EARTH"] as const;
+  for (const id of cases) {
+    const options = benchmarkOptions(id, `phase-five-matrix-${id.toLowerCase()}`);
+    options.size = "DUEL";
+    options.players = 2;
+    options.cityStates = 1;
+    options.style = narrativeProfile(id).engine === "PHYSICAL" ? "REALISTIC" : "FANTASTICAL";
+    const recipe = generationRecipeFromOptions(options);
+    recipe.scale = "REGIONAL";
+    recipe.archetype = "TEMPERATE";
+    const map = generateMapFromRecipe(recipe);
+    assert.ok(["A", "B"].includes(map.structure?.narrativeAssessment?.grade ?? ""), `${id} lost recognition after reinterpretation`);
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * options.waterPercent / 100));
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+  }
+});
+
 test("benchmark identities survive representative Scale and World Character reinterpretations", () => {
   for (const id of BENCHMARKS) {
     const preset = MAP_PRESETS.find((item) => item.id === id)!;
@@ -157,9 +197,9 @@ test("benchmark identities survive representative Scale and World Character rein
   }
 });
 
-test("profile-only Map Types retain intent without claiming a completed specialized compiler", () => {
-  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "CONTINENTS", engine: "EXCOGITARE", size: "DUEL", players: 2, cityStates: 1, seed: "profile-only-honesty" });
-  assert.equal(map.structure?.narrativeSkeleton?.profileId, "CONTINENTS");
+test("Phase 6 Polis Map Types retain intent without claiming a completed specialized compiler", () => {
+  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "IMPERIAL_RING", engine: "POLIS", size: "DUEL", players: 2, cityStates: 1, seed: "profile-only-honesty" });
+  assert.equal(map.structure?.narrativeSkeleton?.profileId, "IMPERIAL_RING");
   assert.equal(map.structure?.narrativeAssessment?.grade, "UNASSESSED");
   assert.equal(map.structure?.narrativeAssessment?.implementation, "PROFILE_ONLY");
   assert.ok(map.structure?.narrativeAssessment?.motifs.every((finding) => finding.status === "UNAVAILABLE"));

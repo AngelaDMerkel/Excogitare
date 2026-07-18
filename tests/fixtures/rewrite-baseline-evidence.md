@@ -59,6 +59,12 @@ The four Improvement cases now use their approved narrative defaults instead of 
 
 Review found exact water targets, zero validation errors and retained narrative scores of 98, 88, 100 and 96 respectively. Lonely Oceans contains eight isolated continents for eight major starts and deliberately reduces city states to zero. Broken Island Chains retains seven parent paths and its anchor regions. Great Watersheds retains twelve trunk/tributary paths, 98 river tiles and 17 water basins. Glacial World retains two ice sheets, six refuges and valuable cold-region resources. Characterization cases retain identical tile and Civ5Map digests; their structure digests alone change because Profile-only skeletons and honest `UNASSESSED` assessments are now retained. The Scenario fixture changes only in retained structure for the same reason.
 
+## Phase 5 reviewed fixture update
+
+The Excogitare, Eccentric and Physical characterization cases and the Pangaea Scenario case deliberately change because those formerly Profile-only Map Types now compile authoritative narrative terrain before starts and content. Their tile, structure and serialized Civ5Map digests therefore change together. The Polis characterization remains Profile-only; its structure changes only through the shared exact-mountain and protected-route accessibility pass. The four Phase 4 Improvement cases retain their approved identities and exact water levels, while some structure digests change because the shared realizer now preserves the owning engine's complete geographic-object catalogue.
+
+Review confirmed that all nine cases retain exact dimensions, requested water, requested major and city-state counts except Lonely Oceans' intentional zero city states, parse/serialize start records and zero validation errors. The three newly compiled characterization cases score 86, 96 and 98; the Scenario Pangaea scores 98. Existing benchmark scores remain 98, 88, 100 and 96. This is a deliberate identity improvement, not a hash-only refresh.
+
 ## Review rule
 
 Run `node --experimental-strip-types scripts/print-rewrite-baseline.ts` to inspect a candidate baseline. Updating the committed fixture with `--write` is permitted only after reviewing which invariant, characterization or improvement changed and recording the reason in the active feature record. A changed hash alone is neither a failure nor an improvement; the associated structural and validation evidence determines that.

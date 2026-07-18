@@ -188,7 +188,7 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "COLLIDING_PLATES", label: "Colliding Plates", description: "Young, active continents dominated by collision belts, high ranges, rain shadows, and difficult interiors.", water: 54, mountains: 23, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "LIGHT", worldAge: "YOUNG" },
   { id: "ANCIENT_CRATONS", label: "Ancient Continental Shields", description: "Old eroded shields, ghost ranges, mature rivers, fertile basins, and exposed mineral cores record deep time.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", rainfall: "WET" },
   { id: "ISLAND_ARC_EARTH", label: "Volcanic Island Arcs", description: "Rugged strings of volcanic pearls curve around sheltered seas and age toward eroded anchors and drowned atolls.", water: 74, mountains: 18, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "MODERATE", worldAge: "YOUNG", rainfall: "WET", physicalOceanInfluence: "STRONG" },
-  { id: "SUPERCONTINENT_INTERIOR", label: "Inland Supercontinent", description: "A landbound world drains toward a remote continental heart behind dry interiors and peripheral highlands.", water: 36, mountains: 14, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", rainfall: "ARID", physicalOceanInfluence: "WEAK" },
+  { id: "SUPERCONTINENT_INTERIOR", label: "Inland Supercontinent", description: "An oceanless continental world drains inward from peripheral highlands toward a remote, occasionally lacustrine heart.", water: 0, mountains: 14, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", rainfall: "ARID", physicalOceanInfluence: "WEAK" },
   { id: "MONSOON_CONTINENTS", label: "Monsoon Continents", description: "Seasonal thermal contrast draws ocean moisture across warm coasts and into rain-shadowed continental interiors.", water: 57, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", climate: "HOT", rainfall: "WET", physicalSeasonality: "EXTREME", physicalOceanInfluence: "STRONG" },
   { id: "ICEHOUSE_EARTH", label: "Glacial World", description: "Ice consumes most of the world while valuable frozen frontiers compel expansion beyond a few temperate refuges.", water: 40, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", climate: "COOL", physicalSeasonality: "EXTREME" },
   { id: "IMPERIAL_RING", label: "Imperial Ring", description: "Civilizations surround a contested interior with neighboring fronts, radial approaches, and deliberately shared objectives.", water: 34, mountains: 16, engine: "POLIS", climateRealism: false },
@@ -798,11 +798,11 @@ function passableLandIsConnectedWithinLandmasses(landMask: boolean[], elevations
   return true;
 }
 
-function restoreAccessibleMountainTarget(landMask: boolean[], elevations: number[], relief: number[], percent: number, width: number, height: number, wraps: boolean) {
+function restoreAccessibleMountainTarget(landMask: boolean[], elevations: number[], relief: number[], percent: number, width: number, height: number, wraps: boolean, protectedTiles = new Set<number>()) {
   const desired = Math.round(landMask.filter(Boolean).length * clamp(percent / 100, 0, 0.42));
   let current = elevations.filter((elevation, index) => landMask[index] && elevation === 2).length;
   if (current >= desired) return;
-  const candidates = relief.flatMap((value, index) => landMask[index] && elevations[index] !== 2 ? [{ index, value }] : []).sort((one, two) => two.value - one.value || one.index - two.index);
+  const candidates = relief.flatMap((value, index) => landMask[index] && elevations[index] !== 2 && !protectedTiles.has(index) ? [{ index, value }] : []).sort((one, two) => two.value - one.value || one.index - two.index);
   for (const candidate of candidates) {
     if (current >= desired) break;
     const previous = elevations[candidate.index];
@@ -1149,8 +1149,10 @@ function placeStartLocations(
     }
   }
   if (!candidates.length) return [];
+  const fallbackMinimumRegionSize = minimumRegionSize;
+  const viableCandidates = candidates.filter((candidate) => candidate.regionSize >= fallbackMinimumRegionSize);
   const preferredCandidates = candidates.filter((candidate) => candidate.workable >= 4 && candidate.regionSize >= minimumRegionSize);
-  let candidatePool = preferredCandidates.length >= count ? preferredCandidates : candidates;
+  let candidatePool = preferredCandidates.length >= count ? preferredCandidates : viableCandidates;
   let qualities = candidatePool.map((candidate) => candidate.quality).sort((one, two) => one - two);
   let targetQuality = qualities[Math.floor(qualities.length / 2)];
   const trialOriginsForPool = () => [...candidatePool]
@@ -1196,8 +1198,8 @@ function placeStartLocations(
     return minimumDistance(two) - minimumDistance(one) || qualitySpread(one) - qualitySpread(two);
   });
   sortLayouts();
-  if ((layouts[0]?.length ?? 0) < count && candidatePool !== candidates) {
-    candidatePool = candidates;
+  if ((layouts[0]?.length ?? 0) < count && candidatePool !== viableCandidates) {
+    candidatePool = viableCandidates;
     qualities = candidatePool.map((candidate) => candidate.quality).sort((one, two) => one - two);
     targetQuality = qualities[Math.floor(qualities.length / 2)];
     layouts.push(...trialOriginsForPool().map(buildLayout));
@@ -1699,7 +1701,16 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     riverGuidance?: number[];
   }, description: string) => {
     onProgress?.("Opening mountain passes");
+    const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
+      ? Math.max(22, resolved.mountainPercent)
+      : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : Math.max(character.mountainFloor, clamp(resolved.mountainPercent, 0, 38));
     carveAccessiblePasses(geography.landMask, geography.elevations, width, height, wraps);
+    const protectedStarts = new Set([
+      ...(geography.startLocations ?? []).map((start) => start.y * width + start.x),
+      ...(geography.structure.strategicGraph?.protectedTileIndices ?? []),
+    ]);
+    for (const index of protectedStarts) geography.elevations[index] = 0;
+    restoreAccessibleMountainTarget(geography.landMask, geography.elevations, geography.reliefValues, effectiveMountainPercent, width, height, wraps, protectedStarts);
     const tiles = geography.tiles.map((tile, index) => ({ ...tile, elevation: geography.elevations[index] }));
     const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
     const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
@@ -1732,9 +1743,6 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
     const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
     const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
-    const effectiveMountainPercent = resolved.modifier === "STRATEGIC_DEPTH"
-      ? Math.max(22, resolved.mountainPercent)
-      : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : Math.max(character.mountainFloor, clamp(resolved.mountainPercent, 0, 38));
     const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
     const riverTiles = tiles.flatMap((tile, index) => tile.river > 0 ? [index] : []);
     const majorRiverTiles = riverTiles.filter((index) => (scaleRiverGuidance?.[index] ?? 0) >= 0.85).length;
@@ -1819,7 +1827,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const centers = createCenters(centerCount, random, centerRadius, !wraps);
   const plateCenters = createCenters(Math.max(3, Math.round(baseCenterCount * 0.7 * scaleProfile.excogitare.plateFrequency)), random, [0.09 * radiusExpansion, Math.min(0.42, 0.19 * radiusExpansion)], !wraps);
   if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
-  const landMask = new Array<boolean>(width * height);
+  let landMask = new Array<boolean>(width * height);
   let fieldValues = new Array<number>(width * height);
   const warpStrength = character.excogitare.warpStrength
     + (resolved.modifier === "FRACTURED" ? 0.07 : resolved.modifier === "STRATEGIC_DEPTH" ? 0.035 : 0);
@@ -1858,7 +1866,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const reliefBaseline = Number.isFinite(landThreshold) ? landThreshold : quantile(fieldValues, 0.15);
   for (let index = 0; index < landMask.length; index += 1) landMask[index] = waterPercent === 0 || fieldValues[index] > landThreshold;
 
-  const tiles: Civ5Tile[] = [];
+  let tiles: Civ5Tile[] = [];
   let reliefValues = new Array<number>(width * height);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -1902,12 +1910,12 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const hillThreshold = quantile(landRelief, 1 - clamp(mountainSelectionPercent + hillPercent, 0, 72) / 100);
   const rainShift = resolved.rainfall === "WET" ? -0.1 : resolved.rainfall === "ARID" ? 0.12 : 0;
   const tempShift = resolved.climate === "HOT" ? 0.16 : resolved.climate === "COOL" ? -0.16 : 0;
-  const elevations = landMask.map((land, index) => land ? (reliefValues[index] >= mountainThreshold ? 2 : reliefValues[index] >= hillThreshold ? 1 : 0) : 0);
+  let elevations = landMask.map((land, index) => land ? (reliefValues[index] >= mountainThreshold ? 2 : reliefValues[index] >= hillThreshold ? 1 : 0) : 0);
   carveAccessiblePasses(landMask, elevations, width, height, wraps);
   restoreAccessibleMountainTarget(landMask, elevations, reliefValues, effectiveMountainPercent, width, height, wraps);
   const dominantTerrains = Array.isArray(resolved.dominantTerrains) ? resolved.dominantTerrains : [];
-  const temperatures = new Array<number>(width * height);
-  const moistures = new Array<number>(width * height);
+  let temperatures = new Array<number>(width * height);
+  let moistures = new Array<number>(width * height);
   onProgress?.("Resolving climate and rain shadows");
 
   for (let y = 0; y < height; y += 1) {
@@ -1977,6 +1985,34 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     }
   }
 
+  const initialContinents = connectedTileObjects("CONTINENT", landMask, width, height, wraps, "Continent");
+  const initialBasins = connectedTileObjects("OCEAN_BASIN", landMask.map((land) => !land), width, height, wraps, "Ocean Basin");
+  const narrativeGeography = realizeNarrativeGeography({
+    landMask,
+    reliefValues,
+    temperatures,
+    moistures,
+    elevations,
+    tiles,
+    structure: {
+      engine: "EXCOGITARE",
+      objects: [...initialContinents, ...initialBasins],
+      mountainRanges: [],
+      riverSystems: [],
+      diagnostics: { continents: initialContinents.length, oceanBasins: initialBasins.length },
+    },
+  }, narrativeSkeleton, resolved, width, height, wraps, seed);
+  landMask = narrativeGeography.landMask;
+  reliefValues = narrativeGeography.reliefValues;
+  temperatures = narrativeGeography.temperatures ?? temperatures;
+  moistures = narrativeGeography.moistures;
+  elevations = narrativeGeography.elevations;
+  tiles = narrativeGeography.tiles;
+  const narrativeStructure = narrativeGeography.structure;
+  carveAccessiblePasses(landMask, elevations, width, height, wraps);
+  restoreAccessibleMountainTarget(landMask, elevations, reliefValues, effectiveMountainPercent, width, height, wraps);
+  tiles = tiles.map((tile, index) => ({ ...tile, elevation: elevations[index] }));
+
   const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
   const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
   onProgress?.("Placing players and city states");
@@ -2002,11 +2038,12 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const basins = connectedTileObjects("OCEAN_BASIN", landMask.map((land) => !land), width, height, wraps, "Ocean Basin");
   const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
   const structure: GenerationStructure = {
+    ...narrativeStructure,
     engine: "EXCOGITARE",
-    objects: [...continents, ...basins],
+    objects: narrativeStructure.objects,
     mountainRanges,
     riverSystems: [],
-    diagnostics: { continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length, scaleOrdinal: scaleProfile.ordinal, scaleMajorSystemFrequency: Math.round(scaleProfile.majorSystemFrequency * 100), scaleLocalDetail: Math.round(scaleProfile.localDetail * 100), scaleDrainageHierarchy: Math.round(scaleProfile.drainageHierarchy * 100), scaleExcogitareCenters: centerCount, scaleExcogitarePlateFields: plateCenters.length },
+    diagnostics: { ...narrativeStructure.diagnostics, continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length, scaleOrdinal: scaleProfile.ordinal, scaleMajorSystemFrequency: Math.round(scaleProfile.majorSystemFrequency * 100), scaleLocalDetail: Math.round(scaleProfile.localDetail * 100), scaleDrainageHierarchy: Math.round(scaleProfile.drainageHierarchy * 100), scaleExcogitareCenters: centerCount, scaleExcogitarePlateFields: plateCenters.length },
   };
   const legal = enforceGeneratedPlacementLegality({
     name: `${presetName} — ${resolved.seed}`,
