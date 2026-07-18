@@ -1,8 +1,9 @@
 import type { Civ5Tile } from "./civ5-map.ts";
-import { poleProximity } from "./climate-projection.ts";
 import { connectedLinearFeatures, connectedTileObjects, objectsFromAssignments, type GenerationStructure, type GeographicObject } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
+import type { WorldScale } from "./generation-recipe.ts";
 import { worldCharacterProfile } from "./world-character.ts";
+import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
 
 type Point = { x: number; y: number };
 type Plate = Point & { vx: number; vy: number; continental: boolean };
@@ -147,10 +148,10 @@ function blurField(values: number[], width: number, height: number, wraps: boole
   return current;
 }
 
-function climateFrame(x: number, y: number, width: number, height: number, options: MapGenerationOptions): ClimateFrame {
+function climateFrame(x: number, y: number, width: number, height: number, options: MapGenerationOptions, scale: WorldScale, seed: number): ClimateFrame {
   const normalizedX = width <= 1 ? 0.5 : x / (width - 1);
   const normalizedY = height <= 1 ? 0.5 : y / (height - 1);
-  const latitude = poleProximity(x, y, width, height, options.projectionType);
+  const latitude = scaledPoleProximity(x, y, width, height, options.projectionType, scale, seed + 43);
   if (options.projectionType === "POLAR_CENTERED") {
     const dx = normalizedX - 0.5;
     const dy = normalizedY - 0.5;
@@ -237,6 +238,7 @@ function simulateMoisture(
   height: number,
   wraps: boolean,
   seed: number,
+  scale: WorldScale,
 ) {
   const character = worldCharacterProfile(options.style).physical;
   const oceanInfluence = (options.physicalOceanInfluence === "STRONG" ? 1.28 : options.physicalOceanInfluence === "WEAK" ? 0.68 : 1) * character.oceanModeration;
@@ -246,7 +248,7 @@ function simulateMoisture(
   const seasonality = options.physicalSeasonality === "EXTREME" ? 1 : options.physicalSeasonality === "MILD" ? 0.2 : 0.58;
   if (profile.monsoon > 0 || seasonality > 0.8) {
     for (let index = 0; index < landMask.length; index += 1) {
-      if (!landMask[index] || towardWater[index] < 0 || poleProximity(index % width, Math.floor(index / width), width, height, options.projectionType) > 0.62) continue;
+      if (!landMask[index] || towardWater[index] < 0 || scaledPoleProximity(index % width, Math.floor(index / width), width, height, options.projectionType, scale, seed + 43) > 0.62) continue;
       const towardSea = vectorBetween(index, towardWater[index], width, wraps);
       const monsoon = clamp((profile.monsoon + seasonality * 0.22) * (1 - continentality[index] * 0.6));
       const x = mix(effectiveWindX[index], -towardSea.x, monsoon);
@@ -394,11 +396,15 @@ function contiguousClimateObjects(assignments: Int32Array, labels: string[], wid
   return result;
 }
 
-export function generatePhysicalGeography(options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number, random: () => number): PhysicalGeography {
+export function generatePhysicalGeography(options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number, random: () => number, scale: WorldScale = "GLOBAL"): PhysicalGeography {
   const area = width * height;
   const profile = physicalProfile(options);
   const character = worldCharacterProfile(options.style);
-  const plateCount = Math.max(6, Math.min(28, Math.round(Math.sqrt(area) / 4.4) + profile.plateShift));
+  const scaleProfile = worldScaleProfile(scale);
+  // Scale owns how many tectonic systems the map represents. Map Size adds
+  // samples inside those systems rather than silently turning a Local view
+  // into a many-plate planet.
+  const plateCount = Math.max(3, Math.min(24, Math.round((7 + profile.plateShift) * scaleProfile.physical.plateFrequency)));
   const plates = createPlates(plateCount, profile.continentalShare, width, height, wraps, random);
   const { owners, second, boundary } = assignPlates(plates, width, height, wraps);
   const activity = (options.plateActivity === "VIOLENT" ? 1.18 : options.plateActivity === "QUIET" ? 0.55 : 0.82) * profile.activity * character.physical.activity;
@@ -419,8 +425,8 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     convergence[index] = boundary[index] * Math.max(0, relative) * activity;
     divergence[index] = boundary[index] * Math.max(0, -relative) * activity;
     const crust = one.continental ? 0.63 : 0.3;
-    const continentalNoise = valueNoise(x + 101, y + 211, 18, seed + 101) * 0.22 * character.physical.continentalNoise;
-    const regionalNoise = valueNoise(x + 307, y + 83, 7, seed + 211) * 0.12 * character.physical.continentalNoise;
+    const continentalNoise = valueNoise(x + 101, y + 211, 18 * scaleProfile.physical.reliefSpan, seed + 101) * 0.22 * character.physical.continentalNoise;
+    const regionalNoise = valueNoise(x + 307, y + 83, 7 * scaleProfile.physical.reliefSpan, seed + 211) * 0.12 * character.physical.continentalNoise;
     hypsometry[index] = crust + continentalNoise + regionalNoise + convergence[index] * 0.42 * character.physical.convergenceRelief - divergence[index] * 0.31 * character.physical.divergenceRelief;
   }
 
@@ -428,7 +434,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   const landMask = exactTopMask(hypsometry.map((value, index) => value + hashNoise(index % width, Math.floor(index / width), seed + 313) * 0.00001), landCount);
   let reliefValues = hypsometry.map((value, index) => value + convergence[index] * 0.58 * character.physical.convergenceRelief - divergence[index] * 0.16 * character.physical.divergenceRelief);
   const baseErosionPasses = options.erosionStrength === "STRONG" ? 4 : options.erosionStrength === "LIGHT" ? 1 : 2;
-  const erosionPasses = Math.max(1, baseErosionPasses + profile.erosionShift + character.physical.erosionPassDelta);
+  const erosionPasses = Math.max(1, Math.round((baseErosionPasses + profile.erosionShift + character.physical.erosionPassDelta) * scaleProfile.physical.erosionDetail));
   const erosionStrength = (options.erosionStrength === "STRONG" ? 0.24 : options.erosionStrength === "LIGHT" ? 0.09 : 0.16) * character.physical.erosionStrength;
   for (let pass = 0; pass < erosionPasses; pass += 1) {
     const next = [...reliefValues];
@@ -468,7 +474,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   for (let index = 0; index < area; index += 1) {
     const x = index % width;
     const y = Math.floor(index / width);
-    const frame = climateFrame(x, y, width, height, options);
+    const frame = climateFrame(x, y, width, height, options, scale, seed);
     const insolation = Math.pow(Math.cos(frame.latitude * Math.PI / 2), 0.72);
     const inland = continentality[index];
     const maritimeWeight = landMask[index] ? Math.exp(-waterDistance.distances[index] / Math.max(1.5, 4.2 * oceanModeration)) : 1;
@@ -485,7 +491,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     convergenceAir[index] = Math.exp(-Math.pow(frame.latitude / 0.11, 2)) * 0.7 + Math.exp(-Math.pow((frame.latitude - 0.65) / 0.1, 2)) * 0.55 - Math.exp(-Math.pow((frame.latitude - 0.33) / 0.085, 2)) * 0.48;
   }
   const smoothedTemperatures = blurField(temperatures, width, height, wraps, 0.18, 2);
-  const atmosphere = simulateMoisture(options, profile, landMask, normalizedRelief, smoothedTemperatures, continentality, windX, windY, convergenceAir, waterDistance.towardWater, width, height, wraps, seed);
+  const atmosphere = simulateMoisture(options, profile, landMask, normalizedRelief, smoothedTemperatures, continentality, windX, windY, convergenceAir, waterDistance.towardWater, width, height, wraps, seed, scale);
   const moistures = atmosphere.moistures;
 
   const continents = connectedTileObjects("CONTINENT", landMask, width, height, wraps, "Continent");

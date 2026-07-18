@@ -82,6 +82,7 @@ export function createExcogitareProject(input: {
       generatorVersion: input.map.structure.generatorVersion,
       passVersions: Object.fromEntries((input.map.structure.provenance ?? []).map((entry) => [entry.passId, entry.passVersion])),
       structure: cloneGenerationStructure(input.map.structure),
+      narrative: cloneGenerationStructure(input.map.structure)?.narrativeAssessment,
     } : undefined,
   } satisfies Omit<ExcogitareProject, "manifest">;
   return {

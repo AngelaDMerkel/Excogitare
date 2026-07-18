@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-- **Status:** In progress; the substrate, five-stage Create shell, Archetype repaint, Match Intent authoring, protected regeneration and project-file boundary now have partial runtime implementations. Narrative compilation, scale realization, continuous Lab, complete semantic policies and Scenario remain open.
+- **Status:** In progress; Phase 1 generation substrate is verified, while the five-stage Create shell, Archetype repaint, Match Intent authoring, protected regeneration and project-file boundary have partial runtime implementations. Narrative compilation, scale realization, continuous Lab, complete semantic policies and Scenario remain open.
 - **Purpose:** Coordinate the Narrative Map Type implementation, generation-model expansion and Create/Lab workflow changes as one deliberate rewrite rather than a sequence of controls attached to incompatible assumptions.
 - **Current limitation:** This document is a plan. Except where it explicitly describes the present baseline, none of the proposed models or workflows should be described as implemented.
 - **Primary references:** [`map-type-narrative-identities.md`](map-type-narrative-identities.md), [`world-character.md`](world-character.md), [`workspace-navigation.md`](workspace-navigation.md), [`identity-lab.md`](identity-lab.md), the current generator and retained-structure modules, and the Civ V legality/Repair rules.
@@ -1018,30 +1018,38 @@ Phase 0 is complete. This advances the programme to an implementation-ready spec
 
 ## Phase 1 — Generation substrate
 
-- Add versioned recipe, Scale, Archetype, Match Intent, Narrative Profile, semantic identity, Scenario draft, project manifest and provenance types.
-- Add normalization/migration for current recipes.
-- Introduce deterministic pass IDs, sub-seeds, dependency declarations, progress and cancellation.
-- Extend retained `GenerationStructure` without breaking imported maps.
+- [x] Add versioned recipe, Scale, Archetype, Match Intent, Narrative Profile, semantic identity, Scenario draft, project manifest and provenance types.
+- [x] Add normalization/migration for current recipes.
+- [x] Introduce deterministic pass IDs, sub-seeds, dependency declarations, progress and cancellation.
+- [x] Extend retained `GenerationStructure` without breaking imported maps.
+
+Phase 1 is verified. The pipeline now distinguishes Topology, Relief, Climate, Accessibility, Starts, Content, Hydrology, Legality and Semantic Identity; edits invalidate only dependent evidence, candidate search streams its fixed budget, oversized Exhaustive recipes disclose estimated working memory, and Review explains stale evidence rather than presenting it as current.
 
 ## Phase 2 — Five-stage Create workflow
 
-- Add Refine between Design and Iterate.
-- Move existing sections 2, 3 and 4 without losing their controls.
-- Add stage-local state and remove every operation-driven stage switch.
-- Fix repeated history browsing and add direct regression coverage.
+- [x] Add Refine between Design and Iterate.
+- [x] Move existing sections 2, 3 and 4 without losing their controls.
+- [x] Add stage-local state and remove every operation-driven stage switch.
+- [x] Fix repeated history browsing and add direct regression coverage.
+
+Phase 2 is verified. Create now uses focused workflow components over one authoritative state boundary; history records branch provenance and only an explicit recipe action returns to Design. Refine, Edit and Review state, expanded disclosures, per-stage sidebar scroll, canvas view and branch history survive stage/workspace changes and downloaded-project round trips. Failures and cancellation remain atomic. Keyboard navigation, rendered-shell regressions, TypeScript, ESLint, production and Pages builds, and the Node 24 Alpine runtime pass. The separate Scale, narrative, Polis, Lab, semantic-protection and Scenario claims remain governed by their later phases.
 
 ## Phase 3 — Scale and Archetype
 
-- Implement scale-aware boundary conditions and feature-frequency profiles in every engine.
-- Add initial Archetype registry and topography-preserving Surface pass.
-- Make Refine work on imports, history entries and generated maps.
-- Add Difference preview and conflict disclosure.
+- [x] Implement scale-aware boundary conditions and feature-frequency profiles in every engine.
+- [x] Add the complete initial Archetype registry and topography-preserving Surface pass.
+- [x] Make Refine work on imports, history entries and generated maps.
+- [x] Add Difference preview, intensity, content ecology and conflict disclosure.
+
+Phase 3 is verified. Global, Continental, Regional, Provincial and Local are independent of Map Size and materially affect all four engine architectures. The two pass-through modes and thirteen authored Archetypes now provide deterministic coherent-region coats, compatible Randomise, profile-directed Transformative content, protected imported-map candidates and explicit Original / Preview / Difference confirmation. The full test, production, Pages and Alpine runtime matrices pass. Narrative Map Type-specific Scale reinterpretation remains governed by Phases 4 and 5 rather than being smuggled into this completion claim.
 
 ## Phase 4 — Narrative compiler and benchmark identities
 
-- Implement the exhaustive profile registry and narrative skeleton interface.
-- Build Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World first.
-- Add Narrative Assessment, Review presentation and deterministic fixtures.
+- [x] Implement the exhaustive profile registry and narrative skeleton interface.
+- [x] Build Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World first.
+- [x] Add Narrative Assessment, Review presentation and deterministic fixtures.
+
+Phase 4 is verified. All thirty current and three approved future identities have authoritative profiles with unique verbs, motifs, anti-motifs, parameter envelopes and nearest confusions. The four benchmark types compile retained structural skeletons before starts/content/legality, survive representative Scale and World Character matrices, disclose weakened explicit-control combinations and retain Review evidence through workers, history and project files. The remaining twenty-six current Map Types remain honestly Profile-only and move to Phase 5; the three future Polis types remain Phase 6 work.
 
 ## Phase 5 — Complete Narrative Map Types
 
@@ -1222,17 +1230,17 @@ All product decisions previously listed as open are resolved, schema ownership/n
 # Completion gates
 
 - [x] Plan reviewed and scope approved, including semantic protection as required implementation work.
-- [ ] Authoritative versioned recipe, Scale, Archetype, Match Intent, Narrative Profile, tile/semantic protection, Scenario and project/provenance models implemented.
-- [ ] Deterministic pass graph, progress, cancellation, effort levels and migration implemented.
-- [ ] Design → Refine → Iterate → Edit → Review workflow implemented without operation-driven navigation.
-- [ ] Scale materially affects every engine without becoming a Map Size alias.
-- [ ] Archetype can repaint generated and imported topography while preserving structural layers by default.
+- [x] Authoritative versioned recipe, Scale, Archetype, Match Intent, Narrative Profile, tile/semantic protection, Scenario and project/provenance models implemented.
+- [x] Deterministic pass graph, progress, cancellation, effort levels and migration implemented.
+- [x] Design → Refine → Iterate → Edit → Review workflow implemented without operation-driven navigation.
+- [x] Scale materially affects every engine without becoming a Map Size alias.
+- [x] Archetype can repaint generated and imported topography while preserving structural layers by default.
 - [ ] All thirty-three accepted Narrative Map Types have runtime profiles, genuine domain behavior, diagnostics and nearest-confusion evidence.
 - [ ] Polis consumes Human/AI and victory intent in topology and all engines report Match Intent feasibility.
 - [ ] Three Realms, Thalassic League and Unequal Realms are exposed and complete.
 - [ ] Drag to Preserve supports channel masks, undo/history, selective regeneration and blocking conflict reports.
 - [ ] Semantic protection supports stable lineage, Exact/Shape/Function/Relationship policies and **Preserve this watershed** across all applicable engines.
-- [ ] Iterate history remains continuous and branch-aware.
+- [x] Iterate history remains continuous and branch-aware.
 - [ ] Continuous four-choice Lab and schema v2 implemented with v1 compatibility.
 - [ ] Downloaded `.excogitare` project files round-trip the complete authoring state in a later clean session through safe versioned bundles and transactional migration, without relying on application-managed persistence.
 - [ ] Scenario workspace implements Setup, Factions, World, Objectives and Validate with capability-labelled Civ5Map support and project-only disclosure.

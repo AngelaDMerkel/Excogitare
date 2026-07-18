@@ -4,8 +4,13 @@ import { cloneGenerationRecipe } from "./generation-recipe.ts";
 
 export const MAX_GENERATION_HISTORY = 30;
 
+export type GenerationHistoryOperation = "GENERATE" | "RANDOMISE" | "SELECTIVE_WORLD" | "SELECTIVE_CLIMATE" | "SELECTIVE_RIVERS" | "SELECTIVE_CONTENT" | "SELECTIVE_STARTS" | "BATCH_SELECTION" | "PROJECT_IMPORT";
+
 export type GenerationHistoryEntry = {
   id: number;
+  parentId?: number;
+  operation: GenerationHistoryOperation;
+  createdAt: string;
   map: Civ5Map;
 };
 
@@ -21,8 +26,8 @@ function snapshotMap(map: Civ5Map): Civ5Map {
   };
 }
 
-export function addGenerationToHistory(history: GenerationHistoryEntry[], map: Civ5Map, id: number) {
-  return [{ id, map: snapshotMap(map) }, ...history].slice(0, MAX_GENERATION_HISTORY);
+export function addGenerationToHistory(history: GenerationHistoryEntry[], map: Civ5Map, id: number, metadata: { parentId?: number; operation?: GenerationHistoryOperation; createdAt?: string } = {}) {
+  return [{ id, parentId: metadata.parentId, operation: metadata.operation ?? "GENERATE", createdAt: metadata.createdAt ?? new Date().toISOString(), map: snapshotMap(map) }, ...history].slice(0, MAX_GENERATION_HISTORY);
 }
 
 export function restoreGeneration(entry: GenerationHistoryEntry) {

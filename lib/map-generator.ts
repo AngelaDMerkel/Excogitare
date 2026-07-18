@@ -1,5 +1,5 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
-import { poleProximity, type ClimateProjection } from "./climate-projection.ts";
+import type { ClimateProjection } from "./climate-projection.ts";
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
 import { attachRiverSystems, attachSemanticIdentities, connectedLinearFeatures, connectedTileObjects, markGenerationStructureStale, type GenerationStructure } from "./generation-structure.ts";
 import { generatePhysicalGeography } from "./physical-generator.ts";
@@ -8,9 +8,11 @@ import { generateEccentricGeography } from "./eccentric-generator.ts";
 import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 import { worldCharacterProfile } from "./world-character.ts";
-import { applyWorldArchetype } from "./world-archetype.ts";
-import { generationOptionsFromRecipe, generationRecipeFromOptions, type GenerationRecipe } from "./generation-recipe.ts";
+import { applyArchetypeContentEcology, applyWorldArchetype, randomCompatibleArchetype } from "./world-archetype.ts";
+import { generationOptionsFromRecipe, generationRecipeFromOptions, type GenerationRecipe, type WorldScale } from "./generation-recipe.ts";
+import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
 import { GENERATION_PASS_DEFINITIONS, GenerationPassSession, effortCandidateCount, generationPassEvidence, type GenerationControl, type GenerationProgressListener } from "./generation-pass-graph.ts";
+import { applyNarrativeContent, attachNarrativeAssessment, compileNarrativeSkeleton, narrativeCandidateScore, narrativeProfile, realizeNarrativeGeography } from "./narrative-map-types.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 2, gameBreaking: false },
@@ -162,7 +164,7 @@ export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: stri
   { id: "TUNDRA", label: "Tundra" },
 ];
 
-export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number; engine: GenerationEngine; climateRealism?: boolean; plateActivity?: PlateActivity; erosionStrength?: ErosionStrength; worldAge?: WorldAgeSetting; climate?: ClimateSetting; rainfall?: RainfallSetting; physicalRotation?: PhysicalRotation; physicalSeasonality?: PhysicalSeasonality; physicalOceanInfluence?: PhysicalOceanInfluence }> = [
+export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; description: string; water: number; mountains: number; engine: GenerationEngine; climateRealism?: boolean; riverDensity?: RiverDensity; plateActivity?: PlateActivity; erosionStrength?: ErosionStrength; worldAge?: WorldAgeSetting; climate?: ClimateSetting; rainfall?: RainfallSetting; physicalRotation?: PhysicalRotation; physicalSeasonality?: PhysicalSeasonality; physicalOceanInfluence?: PhysicalOceanInfluence }> = [
   { id: "CONTINENTS", label: "Crooked Continents", description: "Asymmetric continents whose fjords, inland seas, hooks, and difficult interiors make exploration unpredictable.", water: 58, mountains: 12, engine: "EXCOGITARE" },
   { id: "PANGAEA", label: "Broken Pangaea", description: "One dominant landmass cleaved by gulfs, rifts, and difficult interiors.", water: 46, mountains: 14, engine: "EXCOGITARE" },
   { id: "ARCHIPELAGO", label: "Drowned Shelves", description: "Compact island mosaics preserve the shallow-water outlines, uplands, and ridges of recently submerged continents.", water: 72, mountains: 9, engine: "EXCOGITARE" },
@@ -173,22 +175,22 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "WILD_REGIONS", label: "Patchwork Provinces", description: "Contrasting provinces obey different composed geographic, ecological, and economic rules.", water: 55, mountains: 16, engine: "EXCOGITARE" },
   { id: "LIVING_WORLD", label: "Ecological Transect", description: "One connected landscape tells a causal environmental story through broad, realistic transitions.", water: 58, mountains: 14, engine: "ECCENTRIC", climateRealism: true },
   { id: "TECTONIC_CONTINENTS", label: "Plate-Built Continents", description: "Each continent records a different authored geological history in its margins, ranges, rifts, and interior.", water: 56, mountains: 19, engine: "ECCENTRIC", climateRealism: true },
-  { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "ECCENTRIC", climateRealism: true },
+  { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "ECCENTRIC", climateRealism: true, riverDensity: "DENSE" },
   { id: "SHATTERED_BASINS", label: "Inland Sea Crossroads", description: "Great inland seas crowd scarce land against the margins while narrow straits and canal isthmuses control movement.", water: 66, mountains: 13, engine: "ECCENTRIC", climateRealism: true },
   { id: "MYTHIC_REGIONS", label: "Wonder Heartlands", description: "A few monumental regions concentrate wonders, valuable resources, and fertile country inside poor or difficult marches.", water: 52, mountains: 17, engine: "ECCENTRIC", climateRealism: false },
   { id: "ENCIRCLING_LANDS", label: "Encircled Seas", description: "A continuous outer land journey surrounds hierarchical inland seas, islands, and inward-facing water kingdoms.", water: 22, mountains: 15, engine: "ECCENTRIC", climateRealism: false },
   { id: "ASTRAL_PANGAEA", label: "Scarred Pangaea", description: "One immense continent is reorganized by branching alien scars, incompatible marches, and broad surviving sutures.", water: 43, mountains: 18, engine: "ECCENTRIC", climateRealism: false },
   { id: "RIFTWORLD", label: "Rift Lattice", description: "A hierarchical network of authoritative deep-water fractures defines unequal cells containing viable local worlds.", water: 61, mountains: 16, engine: "ECCENTRIC", climateRealism: false },
-  { id: "LONELY_OCEANS", label: "Lonely Oceans", description: "Vast separate oceans hold scattered island realms, remote archipelagos, and dangerous open-water passages.", water: 76, mountains: 12, engine: "ECCENTRIC", climateRealism: false },
+  { id: "LONELY_OCEANS", label: "Lonely Oceans", description: "Vast empty oceans isolate scarce but viable island realms until Astronomy changes the political world.", water: 89, mountains: 7, engine: "ECCENTRIC", climateRealism: false },
   { id: "PENINSULA_REALM", label: "Great Peninsulas", description: "Complete Florida- and Italy-like provinces project from one bounded continental framework between deep gulfs and estuaries.", water: 39, mountains: 17, engine: "ECCENTRIC", climateRealism: false },
-  { id: "SHATTERED_ARCHIPELAGO", label: "Broken Island Chains", description: "Directional necklaces, crescents, branches, and parallel arcs preserve visible ancestry among anchor islands and satellites.", water: 71, mountains: 13, engine: "ECCENTRIC", climateRealism: false },
+  { id: "SHATTERED_ARCHIPELAGO", label: "Broken Island Chains", description: "Directional necklaces, crescents, branches, and parallel arcs preserve visible ancestry among anchor islands and satellites.", water: 78, mountains: 16, engine: "ECCENTRIC", climateRealism: false },
   { id: "DYNAMIC_EARTH", label: "Dynamic Earth", description: "Moving plates, mixed continental crust, convergent ranges, rifts, erosion, and coupled climate.", water: 62, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL" },
   { id: "COLLIDING_PLATES", label: "Colliding Plates", description: "Young, active continents dominated by collision belts, high ranges, rain shadows, and difficult interiors.", water: 54, mountains: 23, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "LIGHT", worldAge: "YOUNG" },
   { id: "ANCIENT_CRATONS", label: "Ancient Continental Shields", description: "Old eroded shields, ghost ranges, mature rivers, fertile basins, and exposed mineral cores record deep time.", water: 48, mountains: 8, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", rainfall: "WET" },
   { id: "ISLAND_ARC_EARTH", label: "Volcanic Island Arcs", description: "Rugged strings of volcanic pearls curve around sheltered seas and age toward eroded anchors and drowned atolls.", water: 74, mountains: 18, engine: "PHYSICAL", climateRealism: true, plateActivity: "VIOLENT", erosionStrength: "MODERATE", worldAge: "YOUNG", rainfall: "WET", physicalOceanInfluence: "STRONG" },
   { id: "SUPERCONTINENT_INTERIOR", label: "Inland Supercontinent", description: "A landbound world drains toward a remote continental heart behind dry interiors and peripheral highlands.", water: 36, mountains: 14, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", rainfall: "ARID", physicalOceanInfluence: "WEAK" },
   { id: "MONSOON_CONTINENTS", label: "Monsoon Continents", description: "Seasonal thermal contrast draws ocean moisture across warm coasts and into rain-shadowed continental interiors.", water: 57, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "NORMAL", erosionStrength: "MODERATE", worldAge: "NORMAL", climate: "HOT", rainfall: "WET", physicalSeasonality: "EXTREME", physicalOceanInfluence: "STRONG" },
-  { id: "ICEHOUSE_EARTH", label: "Glacial World", description: "Ice consumes most of the world while valuable frozen frontiers compel expansion beyond a few temperate refuges.", water: 58, mountains: 12, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", climate: "COOL", physicalSeasonality: "EXTREME" },
+  { id: "ICEHOUSE_EARTH", label: "Glacial World", description: "Ice consumes most of the world while valuable frozen frontiers compel expansion beyond a few temperate refuges.", water: 40, mountains: 15, engine: "PHYSICAL", climateRealism: true, plateActivity: "QUIET", erosionStrength: "STRONG", worldAge: "OLD", climate: "COOL", physicalSeasonality: "EXTREME" },
   { id: "IMPERIAL_RING", label: "Imperial Ring", description: "Civilizations surround a contested interior with neighboring fronts, radial approaches, and deliberately shared objectives.", water: 34, mountains: 16, engine: "POLIS", climateRealism: false },
   { id: "OPPOSING_FRONTS", label: "Opposing Fronts", description: "Players or teams occupy defended sides of the world, separated by several readable invasion corridors.", water: 28, mountains: 20, engine: "POLIS", climateRealism: false },
   { id: "CONTESTED_HEARTLAND", label: "Contested Heartland", description: "Safe starting territories open toward a valuable central crossroads with multiple flanking routes.", water: 22, mountains: 18, engine: "POLIS", climateRealism: false },
@@ -357,6 +359,11 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
   const size = sizeConfig.id;
   const modifier = randomItem(WORLD_MODIFIERS, random).id;
   const minimumMountains = modifier === "STRATEGIC_DEPTH" ? 22 : modifier === "DOOMSDAY" ? 18 : worldCharacterProfile(style).mountainFloor;
+  const narrative = narrativeProfile(preset);
+  const waterMinimum = Math.min(90, narrative.parameterEnvelope.water[0]);
+  const waterMaximum = Math.min(90, narrative.parameterEnvelope.water[1]);
+  const mountainMinimum = Math.max(minimumMountains, narrative.parameterEnvelope.mountains[0]);
+  const mountainMaximum = Math.max(mountainMinimum, narrative.parameterEnvelope.mountains[1]);
   const dominantTerrains = DOMINANT_TERRAINS.filter(() => random() < 0.36).map((terrain) => terrain.id);
   const seedPart = () => Math.floor(random() * 0x100000000).toString(36).padStart(7, "0");
   const playerMaximum = Math.min(22, sizeConfig.recommendedPlayers + 2);
@@ -372,8 +379,8 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     engine: presetConfig.engine,
     wrapType: randomItem(["PRESET", "EAST_WEST", "NONE"] as const, random),
     geometry: randomItem(includeGameBreakingOptions ? [...SAFE_MAP_GEOMETRIES, ...GAME_BREAKING_GEOMETRIES] : SAFE_MAP_GEOMETRIES, random),
-    waterPercent: Math.floor(random() * 91),
-    mountainPercent: minimumMountains + Math.floor(random() * (39 - minimumMountains)),
+    waterPercent: waterMinimum + Math.floor(random() * (waterMaximum - waterMinimum + 1)),
+    mountainPercent: mountainMinimum + Math.floor(random() * (mountainMaximum - mountainMinimum + 1)),
     dominantTerrains,
     players,
     cityStates,
@@ -411,7 +418,7 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     regionClimateLogic: randomItem(["LAWLESS", "INFLUENCED", "ORDERED"] as const, random),
     eccentricExtreme: presetConfig.engine === "ECCENTRIC" && random() < 0.28 ? randomItem(["SNOWBALL", "JURASSIC", "ARRAKIS", "ARBOREA"] as const, random) : "NONE",
     coastalRangePercent: Math.round(random() * 100),
-    riverDensity: randomItem(["SPARSE", "NORMAL", "DENSE"] as const, random),
+    riverDensity: narrative.parameterEnvelope.preferredRiverDensity ?? randomItem(["SPARSE", "NORMAL", "DENSE"] as const, random),
     plateActivity: presetConfig.plateActivity ?? randomItem(["QUIET", "NORMAL", "VIOLENT"] as const, random),
     erosionStrength: presetConfig.erosionStrength ?? randomItem(["LIGHT", "MODERATE", "STRONG"] as const, random),
     physicalRotation: presetConfig.physicalRotation ?? randomItem(["PROGRADE", "RETROGRADE"] as const, random),
@@ -430,7 +437,12 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
 }
 
 export function randomGenerationRecipe(random: () => number = Math.random, includeGameBreakingOptions = false) {
-  return generationRecipeFromOptions(randomGenerationOptions(random, includeGameBreakingOptions));
+  const options = randomGenerationOptions(random, includeGameBreakingOptions);
+  const recipe = generationRecipeFromOptions(options);
+  recipe.scale = randomItem(["GLOBAL", "CONTINENTAL", "REGIONAL", "PROVINCIAL", "LOCAL"] as const, random);
+  recipe.archetype = randomCompatibleArchetype(options, random);
+  recipe.archetypeIntensity = randomItem(["HINT", "STRONG"] as const, random);
+  return recipe;
 }
 
 const TERRAINS = [
@@ -756,6 +768,47 @@ function carveAccessiblePasses(
       accessible = passableReach(passableOrigin, landMask, elevations, width, height, wraps);
       target = landmass.find((index) => elevations[index] !== 2 && !accessible.has(index));
     }
+  }
+}
+
+function passableLandIsConnectedWithinLandmasses(landMask: boolean[], elevations: number[], width: number, height: number, wraps: boolean) {
+  const assigned = new Set<number>();
+  for (let origin = 0; origin < landMask.length; origin += 1) {
+    if (!landMask[origin] || assigned.has(origin)) continue;
+    const landmass: number[] = [];
+    const queue = [origin];
+    assigned.add(origin);
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor];
+      landmass.push(index);
+      const x = index % width;
+      const y = Math.floor(index / width);
+      for (const [nx, ny] of neighbors(x, y, width, height, wraps)) {
+        const next = ny * width + nx;
+        if (!landMask[next] || assigned.has(next)) continue;
+        assigned.add(next);
+        queue.push(next);
+      }
+    }
+    const passable = landmass.filter((index) => elevations[index] !== 2);
+    if (!passable.length) return false;
+    const reached = passableReach(passable[0], landMask, elevations, width, height, wraps);
+    if (passable.some((index) => !reached.has(index))) return false;
+  }
+  return true;
+}
+
+function restoreAccessibleMountainTarget(landMask: boolean[], elevations: number[], relief: number[], percent: number, width: number, height: number, wraps: boolean) {
+  const desired = Math.round(landMask.filter(Boolean).length * clamp(percent / 100, 0, 0.42));
+  let current = elevations.filter((elevation, index) => landMask[index] && elevation === 2).length;
+  if (current >= desired) return;
+  const candidates = relief.flatMap((value, index) => landMask[index] && elevations[index] !== 2 ? [{ index, value }] : []).sort((one, two) => two.value - one.value || one.index - two.index);
+  for (const candidate of candidates) {
+    if (current >= desired) break;
+    const previous = elevations[candidate.index];
+    elevations[candidate.index] = 2;
+    if (passableLandIsConnectedWithinLandmasses(landMask, elevations, width, height, wraps)) current += 1;
+    else elevations[candidate.index] = previous;
   }
 }
 
@@ -1617,7 +1670,7 @@ export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions
   return enforceGeneratedPlacementLegality(draft);
 }
 
-function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage: string) => void): Civ5Map {
+function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage: string) => void, scale: WorldScale = "GLOBAL", sourceRecipe?: GenerationRecipe): Civ5Map {
   const requestedEngine = String(options.engine);
   const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : requestedEngine === "REGION_GRAPH" ? "ECCENTRIC" : options.engine };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
@@ -1626,10 +1679,15 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
   const geometrySeed = resolved.geometry === "STANDARD" ? "" : `:${resolved.geometry}`;
   const projectionSeed = resolved.projectionType === "NORTH_SOUTH" ? "" : `:${resolved.projectionType}`;
-  const seed = seedHash(`${resolved.seed}:${resolved.engine}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}${projectionSeed}`);
+  const scaleProfile = worldScaleProfile(scale);
+  const seed = seedHash(`${resolved.seed}:${resolved.engine}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}${projectionSeed}:${scale}`);
   const random = randomFactory(seed);
   const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
   const wraps = resolved.wrapType === "PRESET" ? presetWraps : resolved.wrapType === "EAST_WEST";
+  const narrativeRecipe = sourceRecipe
+    ? { ...sourceRecipe, settings: { ...sourceRecipe.settings, seed: resolved.seed } }
+    : { ...generationRecipeFromOptions(resolved), scale };
+  const narrativeSkeleton = compileNarrativeSkeleton(resolved, narrativeRecipe, width, height, wraps);
   const finishStructuredGeography = (geography: {
     landMask: boolean[];
     reliefValues: number[];
@@ -1666,9 +1724,11 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
       .flatMap((object) => object.tileIndices);
     applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random, contestedTiles, safeTiles);
     placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
+    applyNarrativeContent(tiles, [...RESOURCES], narrativeSkeleton, width, height);
     if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
     onProgress?.("Resolving drainage and rivers");
-    const riverNetwork = generateRiverNetwork(tiles, geography.reliefValues, geography.moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity, geography.riverGuidance);
+    const scaleRiverGuidance = geography.riverGuidance?.map((value) => clamp(value * scaleProfile.drainageHierarchy));
+    const riverNetwork = generateRiverNetwork(tiles, geography.reliefValues, geography.moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity, scaleRiverGuidance);
     for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
     const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
     const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
@@ -1677,15 +1737,15 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
       : resolved.modifier === "DOOMSDAY" ? Math.max(18, resolved.mountainPercent) : Math.max(character.mountainFloor, clamp(resolved.mountainPercent, 0, 38));
     const mountainRanges = connectedLinearFeatures(tiles.map((tile) => tile.terrain >= 2 && tile.elevation === 2), width, height, wraps, "Mountain Range");
     const riverTiles = tiles.flatMap((tile, index) => tile.river > 0 ? [index] : []);
-    const majorRiverTiles = riverTiles.filter((index) => (geography.riverGuidance?.[index] ?? 0) >= 0.85).length;
+    const majorRiverTiles = riverTiles.filter((index) => (scaleRiverGuidance?.[index] ?? 0) >= 0.85).length;
     const minorRiverTiles = riverTiles.filter((index) => {
-      const guidance = geography.riverGuidance?.[index] ?? 0;
+      const guidance = scaleRiverGuidance?.[index] ?? 0;
       return guidance >= 0.45 && guidance < 0.85;
     }).length;
-    const structure = { ...geography.structure, mountainRanges, diagnostics: { ...geography.structure.diagnostics, mountainRanges: mountainRanges.length, majorRiverTiles, minorRiverTiles, localRiverTiles: riverTiles.length - majorRiverTiles - minorRiverTiles } };
+    const structure = { ...geography.structure, mountainRanges, diagnostics: { ...geography.structure.diagnostics, scaleOrdinal: scaleProfile.ordinal, scaleMajorSystemFrequency: Math.round(scaleProfile.majorSystemFrequency * 100), scaleLocalDetail: Math.round(scaleProfile.localDetail * 100), scaleDrainageHierarchy: Math.round(scaleProfile.drainageHierarchy * 100), mountainRanges: mountainRanges.length, majorRiverTiles, minorRiverTiles, localRiverTiles: riverTiles.length - majorRiverTiles - minorRiverTiles } };
     const legal = enforceGeneratedPlacementLegality({
       name: `${presetName} — ${resolved.seed}`,
-      description: `${description}${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}.`,
+      description: `${description} at ${scaleProfile.label.toLowerCase()} scale${modifierName && modifierName !== "None" ? ` with ${modifierName}` : ""}.`,
       worldSize: size.id,
       version: 12,
       width,
@@ -1706,17 +1766,17 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   };
   if (resolved.engine === "ECCENTRIC") {
     onProgress?.("Compiling dense subregions and world grammars");
-    const geography = generateEccentricGeography(resolved, width, height, wraps, seed, random);
+    const geography = realizeNarrativeGeography(generateEccentricGeography(resolved, width, height, wraps, seed, random, scale), narrativeSkeleton, resolved, width, height, wraps, seed);
     return finishStructuredGeography(geography, `A seeded ${resolved.fantasticality.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "eccentric"} map compiled by the Eccentric engine in ${geography.diagnostics.passes} geographic passes from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.climatePalettes} biome palettes, ${geography.diagnostics.astronomyBasins} astronomy basins, and ${geography.diagnostics.continents} continents`);
   }
   if (resolved.engine === "PHYSICAL") {
     onProgress?.("Simulating plates, circulation, climate, and watersheds");
-    const geography = generatePhysicalGeography(resolved, width, height, wraps, seed, random);
+    const geography = realizeNarrativeGeography(generatePhysicalGeography(resolved, width, height, wraps, seed, random, scale), narrativeSkeleton, resolved, width, height, wraps, seed);
     return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} Physical world compiled in ${geography.structure.diagnostics.passes} passes from ${geography.structure.diagnostics.plates} moving plates, ${geography.structure.diagnostics.continents} continents, ${geography.structure.diagnostics.atmosphericCells} atmospheric cells, ${geography.structure.diagnostics.rainShadows} rain shadows, and ${geography.structure.diagnostics.watersheds} outlet-directed watersheds`);
   }
   if (resolved.engine === "POLIS") {
     onProgress?.("Compiling strategic graph and protected routes");
-    const geography = generatePolisGeography(resolved, width, height, wraps, seed, random);
+    const geography = realizeNarrativeGeography(generatePolisGeography(resolved, width, height, wraps, seed, random, scale), narrativeSkeleton, resolved, width, height, wraps, seed);
     return finishStructuredGeography(geography, `A seeded gameplay-first world compiled by Polis from ${geography.diagnostics.strategicRegions} strategic regions, ${geography.diagnostics.fronts} fronts, ${geography.diagnostics.contestedRegions} contested objectives, and protected routes between every major start`);
   }
   const centerConfig: Record<MapPresetId, [number, [number, number]]> = {
@@ -1751,10 +1811,13 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     CONTESTED_HEARTLAND: [7, [0.09, 0.2]],
     RIVAL_CONTINENTS: [4, [0.18, 0.32]],
   };
-  const [centerCount, centerRadius] = centerConfig[resolved.preset];
+  const [baseCenterCount, baseCenterRadius] = centerConfig[resolved.preset];
+  const centerCount = Math.max(1, Math.round(baseCenterCount * scaleProfile.excogitare.centerFrequency));
+  const radiusExpansion = Math.sqrt(1 / Math.max(0.2, scaleProfile.excogitare.centerFrequency));
+  const centerRadius: [number, number] = [Math.min(0.7, baseCenterRadius[0] * radiusExpansion), Math.min(0.82, baseCenterRadius[1] * radiusExpansion)];
   onProgress?.("Forming Excogitare terrain fields");
   const centers = createCenters(centerCount, random, centerRadius, !wraps);
-  const plateCenters = createCenters(Math.max(6, Math.round(centerCount * 0.7)), random, [0.09, 0.19], !wraps);
+  const plateCenters = createCenters(Math.max(3, Math.round(baseCenterCount * 0.7 * scaleProfile.excogitare.plateFrequency)), random, [0.09 * radiusExpansion, Math.min(0.42, 0.19 * radiusExpansion)], !wraps);
   if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
   const landMask = new Array<boolean>(width * height);
   let fieldValues = new Array<number>(width * height);
@@ -1766,12 +1829,14 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
       const warped = warpedCoordinates(x, y, width, height, seed, warpStrength);
       const nx = wraps ? ((warped.x % 1) + 1) % 1 : clamp(warped.x, -0.1, 1.1);
       const ny = clamp(warped.y, -0.08, 1.08);
-      const noise = fractalNoise(x, y, seed);
-      const fineDetail = valueNoise(x + 701, y + 311, character.excogitare.fineDetailScale, seed + 9001) - 0.5;
+      const sampledX = x / scaleProfile.excogitare.fieldSpan;
+      const sampledY = y / scaleProfile.excogitare.fieldSpan;
+      const noise = fractalNoise(sampledX, sampledY, seed);
+      const fineDetail = valueNoise(sampledX + 701, sampledY + 311, character.excogitare.fineDetailScale, seed + 9001) - 0.5;
       let field = presetField(resolved.preset, nx, ny, noise, centers, wraps);
       field += fineDetail * character.excogitare.fineDetailAmplitude;
       if (resolved.modifier === "FRACTURED") field += (valueNoise(x, y, 2.1, seed + 1171) - 0.5) * 0.28;
-      const polarPenalty = wraps ? Math.max(0, poleProximity(x, y, width, height, resolved.projectionType) - 0.86) * character.excogitare.polarPenalty : 0;
+      const polarPenalty = wraps ? Math.max(0, scaledPoleProximity(x, y, width, height, resolved.projectionType, scale, seed + 31) - 0.86) * character.excogitare.polarPenalty : 0;
       if (!wraps) {
         const edge = Math.min(x / width, 1 - x / width, y / height, 1 - y / height);
         if (edge < 0.055) field -= (0.055 - edge) * 3.5;
@@ -1839,6 +1904,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const tempShift = resolved.climate === "HOT" ? 0.16 : resolved.climate === "COOL" ? -0.16 : 0;
   const elevations = landMask.map((land, index) => land ? (reliefValues[index] >= mountainThreshold ? 2 : reliefValues[index] >= hillThreshold ? 1 : 0) : 0);
   carveAccessiblePasses(landMask, elevations, width, height, wraps);
+  restoreAccessibleMountainTarget(landMask, elevations, reliefValues, effectiveMountainPercent, width, height, wraps);
   const dominantTerrains = Array.isArray(resolved.dominantTerrains) ? resolved.dominantTerrains : [];
   const temperatures = new Array<number>(width * height);
   const moistures = new Array<number>(width * height);
@@ -1849,7 +1915,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     let upwindRelief = reliefValues[y * width];
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      const latitude = poleProximity(x, y, width, height, resolved.projectionType);
+      const latitude = scaledPoleProximity(x, y, width, height, resolved.projectionType, scale, seed + 31);
       const regionalTemperature = (valueNoise(x + 311, y + 907, 11, seed + 2711) - 0.5)
         * character.excogitare.regionalTemperature;
       const localTemperature = (fractalNoise(x + 389, y + 127, seed + 2203) - 0.5)
@@ -1880,7 +1946,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
       const index = y * width + x;
       const land = landMask[index];
       const adjacentLand = neighbors(x, y, width, height, wraps).some(([nx, ny]) => landMask[ny * width + nx]);
-      const latitude = poleProximity(x, y, width, height, resolved.projectionType);
+      const latitude = scaledPoleProximity(x, y, width, height, resolved.projectionType, scale, seed + 31);
       const climateValue = temperatures[index];
       const moisture = moistures[index];
       const biomeVariation = valueNoise(x + 733, y + 419, 6.5, seed + 3511) - 0.5;
@@ -1924,6 +1990,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   onProgress?.("Placing resources and wonders");
   applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random);
   placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
+  applyNarrativeContent(tiles, [...RESOURCES], narrativeSkeleton, width, height);
   if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
   onProgress?.("Resolving drainage and rivers");
   const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random);
@@ -1939,7 +2006,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     objects: [...continents, ...basins],
     mountainRanges,
     riverSystems: [],
-    diagnostics: { continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length },
+    diagnostics: { continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length, scaleOrdinal: scaleProfile.ordinal, scaleMajorSystemFrequency: Math.round(scaleProfile.majorSystemFrequency * 100), scaleLocalDetail: Math.round(scaleProfile.localDetail * 100), scaleDrainageHierarchy: Math.round(scaleProfile.drainageHierarchy * 100), scaleExcogitareCenters: centerCount, scaleExcogitarePlateFields: plateCenters.length },
   };
   const legal = enforceGeneratedPlacementLegality({
     name: `${presetName} — ${resolved.seed}`,
@@ -1958,12 +2025,12 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     startLocations,
     source: "generated",
     generation: { ...resolved, players: actualPlayerCount, cityStates: cityStates.length, waterPercent, mountainPercent: effectiveMountainPercent },
-    structure,
+    structure: { ...structure, narrativeSkeleton },
   });
-  return { ...legal, structure: attachRiverSystems(legal, structure) };
+  return { ...legal, structure: attachRiverSystems(legal, { ...structure, narrativeSkeleton }) };
 }
 
-export const GENERATION_PIPELINE_VERSION = "1";
+export const GENERATION_PIPELINE_VERSION = "3";
 
 function passForStage(stage: string) {
   if (stage.includes("players") || stage.includes("city states")) return "STARTS";
@@ -2009,19 +2076,21 @@ function generateMapWithRecipe(recipe: GenerationRecipe, onProgress?: Generation
       ensurePassDependencies(passId);
       if (completed().has(passId)) return;
       session.progress(passId, stage);
-    });
+    }, recipe.scale, recipe);
   } else {
     let selected: { map: Civ5Map; score: number; candidate: number } | undefined;
     for (let candidate = 1; candidate <= session.candidateCount; candidate += 1) {
       session.progress("TOPOLOGY", `Building deterministic candidate ${candidate} of ${session.candidateCount}`, candidate);
-      const candidateMap = generateMapInternal({ ...options, seed: `${options.seed}:candidate-${candidate}` });
+      const candidateMap = generateMapInternal({ ...options, seed: `${options.seed}:candidate-${candidate}` }, undefined, recipe.scale, recipe);
       session.checkCancelled();
       const starts = candidateMap.startLocations.filter((start) => !start.cityState).length;
       const water = candidateMap.tiles.filter((tile) => tile.terrain < 2).length / Math.max(1, candidateMap.tiles.length) * 100;
       const passable = candidateMap.tiles.filter((tile) => tile.terrain >= 2 && tile.elevation < 2).length;
+      const candidateAssessment = attachNarrativeAssessment(candidateMap, { ...recipe, settings: { ...recipe.settings, seed: `${options.seed}:candidate-${candidate}` } }).structure?.narrativeAssessment;
       const score = (starts === Math.max(2, Math.min(22, options.players)) ? 10000 : starts * 100)
         - Math.abs(water - options.waterPercent) * 5
-        + passable / Math.max(1, candidateMap.tiles.length) * 100;
+        + passable / Math.max(1, candidateMap.tiles.length) * 100
+        + (candidateAssessment ? narrativeCandidateScore(candidateAssessment) * 2 : 0);
       if (!selected || score > selected.score || (score === selected.score && candidate < selected.candidate)) selected = { map: candidateMap, score, candidate };
     }
     if (!selected) throw new Error("Generation did not produce a candidate map.");
@@ -2029,7 +2098,8 @@ function generateMapWithRecipe(recipe: GenerationRecipe, onProgress?: Generation
     generated = { ...selected.map, generation: { ...options, dominantTerrains: [...options.dominantTerrains] } };
     session.complete("TOPOLOGY", [`Selected deterministic candidate ${selectedCandidate} of ${session.candidateCount}.`], selectedCandidate);
   }
-  const map = enforceGeneratedPlacementLegality(applyWorldArchetype(generated, recipe.archetype));
+  const surfaced = applyWorldArchetype(generated, recipe.archetype, recipe.archetypeIntensity);
+  const map = attachNarrativeAssessment(enforceGeneratedPlacementLegality(recipe.archetypeIntensity === "TRANSFORMATIVE" ? applyArchetypeContentEcology(surfaced, recipe.archetype) : surfaced), recipe);
   if (!completed().has("TOPOLOGY")) session.complete("TOPOLOGY", [], selectedCandidate);
   for (const passId of ["RELIEF", "CLIMATE", "ACCESSIBILITY", "STARTS", "CONTENT", "HYDROLOGY"] as const) {
     if (!completed().has(passId)) {

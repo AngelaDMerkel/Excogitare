@@ -2,10 +2,10 @@
 
 ## Contract
 
-- Status: Specified
+- Status: Partial — Phase 4 is verified; exhaustive profiles and four benchmark compilers work, while the remaining twenty-six current identities and three future Polis identities do not yet have specialized runtime compilers.
 - User outcome: A generated map should communicate its selected Map Type through composition and relationships between features. If the Map Type label is hidden, a knowledgeable user should usually be able to recognize the premise from the map.
 - Scope: Narrative definitions for every Map Type currently exposed by Excogitare, including primary motifs, character interpretations and failure conditions. The definitions guide later generation, interface, diagnostics and testing work.
-- Current limitation: This document is a specification. Existing generators implement these identities unevenly. Nothing below should be described as implemented merely because a preset, description or approximate parameter already exists.
+- Current limitation: Every identity now has an authoritative runtime profile and retained skeleton, but only Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World have specialized engine realization and scored component assessment. Profile-only output is explicitly unassessed.
 - Failure behavior: Hard Civ V legality, accessibility, exact tile budgets and requested explicit settings take precedence over narrative goals. When an explicit combination makes a strong identity infeasible, generation should preserve legality, report the weakened premise and avoid pretending that the identity passed.
 - Exclusions: Map Type does not replace Generation Engine, World Character, World Modifier, map size, geometry, projection, water, mountains, climate, rainfall, players or placement controls.
 
@@ -990,16 +990,40 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 6. Reconcile Excogitare types and remove reliance on a changed seed as evidence of identity.
 7. Add Randomise, selective-regeneration, history, export, validation, README, Pages and Alpine runtime coverage before claiming implementation.
 
+## Phase 4 implementation plan
+
+1. Translate all thirty current and three approved future identities into one type-exhaustive application-owned registry containing premise, verb, scale and parameter envelopes, motifs, anti-motifs, topology program, gameplay contract, diagnostics, nearest confusions and blind-recognition text. Profiles without an engine-specific compiler remain explicitly Profile-only.
+2. Compile a deterministic retained narrative skeleton before engine realization. The shared skeleton represents regions, paths, relationships, targets, control conflicts and relaxations; engine code consumes it without silently rewriting explicit water, mountain, Scale, geometry or Character choices.
+3. Implement four structurally different benchmark programs: player-count island realms and negative space for Lonely Oceans; parent arcs, anchors and rhythmic gaps for Broken Island Chains; mountain-headwater basin/trunk/tributary systems for Great Watersheds; and lobe-shaped ice sheets, glacial margins and temperate refuges for Glacial World.
+4. Realize the Eccentric and Physical benchmark skeletons before starts/content/legality. Rebuild affected retained geography, bias legal river hierarchy and floodplains, invert Glacial frontier value, and retain the narrative structures alongside the ordinary engine graph.
+5. Attach a versioned Narrative Assessment measuring required motifs, anti-motifs, parameter conflicts, nearest-confusion risk, weakened statements and legality/accessibility relaxations. Candidate effort ranks benchmark candidates partly by this component evidence without replacing legality-first selection.
+6. Present the selected profile in Design and component assessment in Review. Stale structure evidence remains visibly stale; imported or Profile-only maps receive an honest unavailable/profile-only state rather than invented scores.
+7. Add deterministic benchmark fixtures across representative Scales, Characters and explicit conflicts; verify Randomise, worker/history/project/Civ5Map consequences, Repair cleanliness, complete regressions, README, production/Pages builds and Alpine runtime.
+
 ## Completion gates
 
 - [x] All thirty current Map Types and three approved Polis additions are catalogued.
 - [x] Narrative premises, recognizable geography, character interpretations and failure conditions are specified.
 - [x] Engine, Character, Modifier and explicit-control responsibilities are separated conceptually.
-- [ ] Authoritative runtime narrative profiles implemented.
+- [x] Authoritative runtime narrative profiles implemented.
 - [ ] Engine-specific narrative passes implemented.
-- [ ] Identity diagnostics and weakened-premise reporting implemented.
-- [ ] Interface presentation implemented without recluttering Create.
-- [ ] Randomise, workers, history and selective regeneration verified.
-- [ ] Validation, Repair and export consequences verified.
-- [ ] Deterministic identity tests and complete regressions pass.
-- [ ] README, Pages and Alpine runtime reconciled.
+- [x] Identity diagnostics and weakened-premise reporting implemented for the four benchmarks; Profile-only types remain visibly unassessed.
+- [x] Interface presentation implemented without recluttering Create.
+- [x] Randomise, workers, history and selective regeneration verified for the retained Phase 4 substrate.
+- [x] Validation, Repair and export consequences verified for the four benchmarks.
+- [x] Deterministic identity tests and complete regressions pass.
+- [x] README, Pages and Alpine runtime reconciled.
+
+## Phase 4 implementation evidence
+
+- `lib/narrative-map-types.ts` is the exhaustive, type-checked registry and deterministic skeleton compiler for all thirty selectable Map Types plus Three Realms, Thalassic League and Unequal Realms. All thirty-three verbs are unique; every profile has required motifs, anti-motifs, nearest confusions and a blind-recognition statement.
+- Lonely Oceans compiles one principal realm per supported major civilization, enforces exact requested water, withholds city states rather than sacrificing isolation, suppresses implausible deep-ocean fisheries and scores realm isolation, negative space and viable scarcity.
+- Broken Island Chains compiles four to seven parent systems with retained arcs, anchor islands, satellites and gaps. Its assessment measures parent systems, anchor rhythm and separation from random island scatter.
+- Great Watersheds compiles headwaters, trunk paths, tributary joins and outlets before the shared legal hydrology pass, strengthens downstream marsh/floodplain belts and defaults to Dense rivers.
+- Glacial World compiles irregular ice sheets, lobes and temperate refuges, repaints the coupled Physical temperature field and deliberately moves useful resources into frozen frontier provinces.
+- Explicit water, mountain and Scale conflicts remain legal inputs and are retained as parameter deviations. The generator does not silently force an identity's preferred envelope. Ordinary Map Type selection and Randomise use the approved envelopes.
+- Design explains whether the selected identity has an active recognition benchmark or only a retained profile. Review shows component evidence, weakened conditions and nearest-confusion risk. Profile-only maps receive `UNASSESSED`, not an invented grade.
+- Narrative skeletons and assessments survive worker structured cloning, generation history and checksummed `.excogitare` download/reimport. `.Civ5Map` export intentionally omits Excogitare-only evidence because Civ V has no supported section for it.
+- The deliberately reviewed Standard baseline scores are Lonely Oceans 98, Broken Island Chains 88, Great Watersheds 100 and Glacial World 96, all with zero validation errors. The complete automated evidence is recorded after the final Phase 4 build and runtime pass below.
+- Final verification passes 110 domain tests and 20 rendered-shell tests. TypeScript `--noEmit`, ESLint, `git diff --check`, the vinext production build, the Next.js GitHub Pages build and static-export verifier all pass. The final `node:24-alpine` image is running as `excogitare:1.3.0` at `http://localhost:3001` and returns HTTP 200.
+- No new manual Civ V load was performed in Phase 4. The Civ5Map writer was not extended to carry private narrative data; generated benchmark files pass the existing parse/serialize, validation and Repair suites, while Civ V remains the final runtime authority.

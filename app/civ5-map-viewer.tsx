@@ -66,12 +66,12 @@ import {
   MAP_PRESETS,
   MAP_SIZES,
   polisPatternForPreset,
-  randomGenerationOptions,
+  randomGenerationRecipe,
   resolveMapDimensions,
   WORLD_MODIFIERS,
   type MapGenerationOptions,
 } from "@/lib/map-generator";
-import { generationOptionsFromRecipe, generationRecipeFromOptions, type GenerationEffort, type GenerationRecipe, type MatchIntent, type VictoryCondition, type WorldArchetype, type WorldScale } from "@/lib/generation-recipe";
+import { generationOptionsFromRecipe, generationRecipeFromOptions, normalizeGenerationRecipe, type ArchetypeIntensity, type GenerationEffort, type GenerationRecipe, type MatchIntent, type VictoryCondition, type WorldArchetype, type WorldScale } from "@/lib/generation-recipe";
 import {
   createLuaMapScript,
   createModInfo,
@@ -89,6 +89,10 @@ import { describeWorldCharacter, worldCharacterProfile } from "@/lib/world-chara
 import { createExcogitareProject, parseExcogitareProject, serializeExcogitareProject } from "@/lib/excogitare-project";
 import type { ProjectHistory, ProtectionChannel, ProtectionState } from "@/lib/authoring-schema";
 import { applyProtectionState, emptyProtectionState, PROTECTION_CHANNELS, protectSemanticObject, protectTiles } from "@/lib/map-protection";
+import { ARCHETYPE_PROFILES, describeArchetype } from "@/lib/world-archetype";
+import { WORLD_SCALE_PROFILES } from "@/lib/world-scale";
+import { describeNarrativeProfile, narrativeProfile } from "@/lib/narrative-map-types";
+import { CreateOperationStatus, CreateStagePanel, CreateStageTabs, GenerationHistoryCard, normalizeCreateStage, type CreateStage } from "./create-workspace";
 
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
@@ -107,6 +111,7 @@ type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
 type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
 type Projection = "FLAT" | "ISOMETRIC";
 type RepairView = "ORIGINAL" | "CORRECTED" | "DIFFERENCE";
+type ArchetypePreviewView = "ORIGINAL" | "PREVIEW" | "DIFFERENCE";
 type RepairStage = "INSPECT" | "CORRECT" | "VALIDATE";
 type LuaStage = "SCRIPT" | "GENERATE" | "DIAGNOSTICS";
 type LabStage = "REVIEW" | "RESULTS" | "GUIDE";
@@ -1005,13 +1010,16 @@ export function Civ5MapViewer() {
   const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
   const [generationScale, setGenerationScale] = useState<WorldScale>("GLOBAL");
   const [generationArchetype, setGenerationArchetype] = useState<WorldArchetype>("NARRATIVE_DEFAULT");
+  const [generationArchetypeIntensity, setGenerationArchetypeIntensity] = useState<ArchetypeIntensity>("STRONG");
   const [generationEffort, setGenerationEffort] = useState<GenerationEffort>("STANDARD");
   const [matchIntent, setMatchIntent] = useState<MatchIntent>(() => generationRecipeFromOptions(DEFAULT_GENERATION_OPTIONS).matchIntent);
   const [generationHistory, setGenerationHistory] = useState<GenerationHistoryEntry[]>([]);
   const [activeGenerationId, setActiveGenerationId] = useState<number | null>(null);
   const [generationRunning, setGenerationRunning] = useState(false);
   const [generationStage, setGenerationStage] = useState("");
-  const [createView, setCreateView] = useState<"GENERATE" | "REFINE" | "ITERATE" | "EDIT" | "ANALYZE">("GENERATE");
+  const [createOperationError, setCreateOperationError] = useState("");
+  const [createView, setCreateView] = useState<CreateStage>("GENERATE");
+  const [createDisclosureState, setCreateDisclosureState] = useState<Record<CreateStage, Record<string, boolean>>>({ GENERATE: {}, REFINE: {}, ITERATE: {}, EDIT: {}, ANALYZE: {} });
   const [brush, setBrush] = useState<Brush>({ terrain: 2, elevation: 0, feature: null, resource: null });
   const [editTool, setEditTool] = useState<"TILE" | "FILL" | "SELECT" | "START" | "STRUCTURE" | "PRESERVE">("TILE");
   const [brushSize, setBrushSize] = useState(1);
@@ -1034,6 +1042,8 @@ export function Civ5MapViewer() {
   const [comparisonView, setComparisonView] = useState<"CURRENT" | "CHECKPOINT" | "DIFFERENCE">("CURRENT");
   const [focusedStart, setFocusedStart] = useState<Civ5StartLocation | null>(null);
   const [showExportValidation, setShowExportValidation] = useState(false);
+  const [archetypePreviewMap, setArchetypePreviewMap] = useState<Civ5Map | null>(null);
+  const [archetypePreviewView, setArchetypePreviewView] = useState<ArchetypePreviewView>("DIFFERENCE");
   const [allowGameBreakingGeometry, setAllowGameBreakingGeometry] = useState(false);
   const [showGameBreakingGeometryConfirmation, setShowGameBreakingGeometryConfirmation] = useState(false);
   const [showLuaExperimentalWarning, setShowLuaExperimentalWarning] = useState(false);
@@ -1070,10 +1080,12 @@ export function Civ5MapViewer() {
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const renderCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const engineCarouselRef = useRef<HTMLDivElement>(null);
   const exportConfirmationCancelRef = useRef<HTMLButtonElement>(null);
+  const archetypePreviewCancelRef = useRef<HTMLButtonElement>(null);
   const gameBreakingGeometryCancelRef = useRef<HTMLButtonElement>(null);
   const luaExperimentalCancelRef = useRef<HTMLButtonElement>(null);
   const repairSourceMapRef = useRef<Civ5Map | null>(null);
@@ -1089,6 +1101,7 @@ export function Civ5MapViewer() {
   const regenerationIdRef = useRef(0);
   const checkpointIdRef = useRef(0);
   const mapRef = useRef(map);
+  const createScrollPositionsRef = useRef<Record<CreateStage, number>>({ GENERATE: 0, REFINE: 0, ITERATE: 0, EDIT: 0, ANALYZE: 0 });
   const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
 
   useLayoutEffect(() => {
@@ -1097,6 +1110,11 @@ export function Civ5MapViewer() {
     const activeCard = engineCarouselRef.current.children[index] as HTMLElement | undefined;
     engineCarouselRef.current.scrollTo({ left: activeCard?.offsetLeft ?? index * engineCarouselRef.current.clientWidth, behavior: "smooth" });
   }, [createView, generationOptions.engine, mode]);
+
+  useLayoutEffect(() => {
+    if (mode !== "CREATE" || !sidebarRef.current) return;
+    sidebarRef.current.scrollTop = createScrollPositionsRef.current[createView] ?? 0;
+  }, [createView, mode]);
 
   useEffect(() => {
     const tooltipTarget = (node: EventTarget | null) => node instanceof Element ? node.closest<HTMLElement>("[data-tooltip]") : null;
@@ -1251,6 +1269,7 @@ export function Civ5MapViewer() {
     generationRejectRef.current = null;
     setGenerationRunning(false);
     setGenerationStage("");
+    setCreateOperationError("");
     setMessage("Map generation cancelled");
   }, []);
 
@@ -1287,16 +1306,32 @@ export function Civ5MapViewer() {
   const repairPreviewIssues = useMemo(() => buildRepairIssues(repairPreviewMap), [repairPreviewMap]);
   const comparisonCheckpoint = useMemo(() => checkpoints.find((checkpoint) => checkpoint.id === comparisonCheckpointId) ?? null, [checkpoints, comparisonCheckpointId]);
   const mapComparison = useMemo(() => comparisonCheckpoint ? compareMaps(map, comparisonCheckpoint.map) : null, [map, comparisonCheckpoint]);
+  const archetypePreviewComparison = useMemo(() => archetypePreviewMap ? compareMaps(archetypePreviewMap, map) : null, [archetypePreviewMap, map]);
+  const archetypePreviewCounts = useMemo(() => {
+    if (!archetypePreviewMap || !archetypePreviewComparison?.dimensionsMatch) return { surface: 0, content: 0 };
+    let surface = 0;
+    let content = 0;
+    for (const index of archetypePreviewComparison.changedTiles) {
+      const before = map.tiles[index];
+      const after = archetypePreviewMap.tiles[index];
+      if (before.terrain !== after.terrain || before.feature !== after.feature) surface += 1;
+      if (before.resource !== after.resource || before.resourceAmount !== after.resourceAmount || before.wonder !== after.wonder) content += 1;
+    }
+    return { surface, content };
+  }, [archetypePreviewComparison, archetypePreviewMap, map]);
   const canvasMap = mode === "LAB" && labMap
     ? labMap
     : mode === "REPAIR" && repairBaseline
     ? repairView === "ORIGINAL" ? repairBaseline : repairPreviewMap
+    : mode === "CREATE" && archetypePreviewMap && archetypePreviewView !== "ORIGINAL" ? archetypePreviewMap
     : mode === "CREATE" && comparisonCheckpoint && comparisonView === "CHECKPOINT" ? comparisonCheckpoint.map : map;
   const repairHighlights = useMemo(() => mode === "REPAIR" && repairView === "DIFFERENCE"
     ? new Set(repairIssues.filter((issue) => repairSelected.has(issue.id) && issue.tileIndex !== undefined).map((issue) => issue.tileIndex!))
+    : mode === "CREATE" && archetypePreviewMap && archetypePreviewView === "DIFFERENCE" && archetypePreviewComparison?.dimensionsMatch
+      ? archetypePreviewComparison.changedTiles
     : mode === "CREATE" && comparisonView === "DIFFERENCE" && mapComparison?.dimensionsMatch
       ? mapComparison.changedTiles
-      : new Set<number>(), [mode, repairView, repairIssues, repairSelected, comparisonView, mapComparison]);
+      : new Set<number>(), [mode, repairView, repairIssues, repairSelected, archetypePreviewMap, archetypePreviewView, archetypePreviewComparison, comparisonView, mapComparison]);
   const politicalAvailable = hasPoliticalLayer(canvasMap);
   const strategyAvailable = Boolean(canvasMap.structure?.strategicGraph);
   const politicalOwnership = useMemo(() => buildPoliticalOwnership(canvasMap), [canvasMap]);
@@ -1361,6 +1396,22 @@ export function Civ5MapViewer() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [showExportValidation]);
+
+  useEffect(() => {
+    if (!archetypePreviewMap) return;
+    const frame = window.requestAnimationFrame(() => archetypePreviewCancelRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setArchetypePreviewMap(null);
+        setArchetypePreviewView("DIFFERENCE");
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [archetypePreviewMap]);
 
   useEffect(() => {
     if (!showGameBreakingGeometryConfirmation) return;
@@ -1454,11 +1505,13 @@ export function Civ5MapViewer() {
     const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
     const engineLabel = generationOptions.engine === "ECCENTRIC" ? "Eccentric" : generationOptions.engine === "PHYSICAL" ? "Physical" : generationOptions.engine === "POLIS" ? "Polis" : "Excogitare";
     const projectionLabel = CLIMATE_PROJECTIONS.find((item) => item.id === generationOptions.projectionType)?.label ?? generationOptions.projectionType;
-    return `${projectionLabel} · ${engineLabel} · ${styleLabel} · ${presetLabel} · ${generationScale.toLowerCase()} scale · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
-  }, [generationOptions, generationScale]);
+    const archetypeLabel = generationArchetype === "EXISTING" ? "Existing surface" : generationArchetype === "NARRATIVE_DEFAULT" ? "Narrative surface" : `${ARCHETYPE_PROFILES[generationArchetype].label} ${generationArchetypeIntensity.toLowerCase()}`;
+    return `${projectionLabel} · ${engineLabel} · ${styleLabel} · ${presetLabel} · ${generationScale.toLowerCase()} scale · ${archetypeLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
+  }, [generationArchetype, generationArchetypeIntensity, generationOptions, generationScale]);
   const generationResourceEstimate = useMemo(() => estimateGenerationResources(generationOptions, generationEffort), [generationOptions, generationEffort]);
   const validationIssues = useMemo(() => validateCiv5Map(map), [map]);
   const balanceReport = useMemo(() => analyzeMultiplayerBalance(map), [map]);
+  const narrativeAssessment = map.structure?.narrativeAssessment;
 
   const majorStartCount = canvasMap.startLocations.filter((start) => !start.cityState).length;
   const cityStateCount = canvasMap.startLocations.filter((start) => start.cityState).length;
@@ -1485,6 +1538,7 @@ export function Civ5MapViewer() {
         const parsed = parseCiv5Map(buffer, file.name);
         replaceMap(parsed, { fileName: file.name, buffer });
         setGenerationArchetype("EXISTING");
+        setGenerationArchetypeIntensity("STRONG");
         setMessage(`${file.name} · rendered locally`);
       }
       setShowEditPrompt(false);
@@ -1658,15 +1712,16 @@ export function Civ5MapViewer() {
   const activeRecipe = (options = generationOptions): GenerationRecipe => {
     const normalized = normalizeGenerationOptions(options, allowGameBreakingGeometry);
     const base = generationRecipeFromOptions(normalized);
-    return { ...base, scale: generationScale, archetype: generationArchetype, effort: generationEffort, matchIntent: { ...matchIntent, enabledVictories: [...matchIntent.enabledVictories], emphasizedVictories: [...matchIntent.emphasizedVictories], flexiblePlayers: Math.max(0, normalized.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: normalized.balance, teamSize: normalized.teamSize, teamLayout: normalized.teamLayout, strategicBalance: normalized.strategicBalance } };
+    return { ...base, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, enabledVictories: [...matchIntent.enabledVictories], emphasizedVictories: [...matchIntent.emphasizedVictories], flexiblePlayers: Math.max(0, normalized.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: normalized.balance, teamSize: normalized.teamSize, teamLayout: normalized.teamLayout, strategicBalance: normalized.strategicBalance } };
   };
 
   const exportProject = () => {
     try {
-      const recipe = map.recipe ?? activeRecipe();
-      const historyEntries = generationHistory.map((entry, index) => ({ id: String(entry.id), parentId: index + 1 < generationHistory.length ? String(generationHistory[index + 1].id) : undefined, operation: "generation", recipe: entry.map.recipe ?? recipe, map: entry.map, provenance: entry.map.structure?.provenance ?? [] }));
+      const recipe = map.recipe ? normalizeGenerationRecipe(map.recipe, DEFAULT_GENERATION_OPTIONS) : activeRecipe();
+      const historyEntries = generationHistory.map((entry) => ({ id: String(entry.id), parentId: entry.parentId === undefined ? undefined : String(entry.parentId), operation: entry.operation, createdAt: entry.createdAt, recipe: entry.map.recipe ?? recipe, map: entry.map, provenance: entry.map.structure?.provenance ?? [] }));
       const history: ProjectHistory = { schemaVersion: 1, activeEntryId: activeGenerationId === null ? undefined : String(activeGenerationId), entries: historyEntries };
-      const project = createExcogitareProject({ projectName: map.name, map, recipe, history, protection: protectionState, excogitareVersion: APP_VERSION, editorState: { schemaVersion: 1, workspace: mode, stage: mode === "CREATE" ? createView : undefined, view, expandedSections: [] } });
+      const expandedSections = Object.entries(createDisclosureState).flatMap(([stage, entries]) => Object.entries(entries).filter(([, open]) => open).map(([key]) => `${stage}:${key}`));
+      const project = createExcogitareProject({ projectName: map.name, map: { ...map, recipe }, recipe, history, protection: protectionState, excogitareVersion: APP_VERSION, editorState: { schemaVersion: 1, workspace: mode, stage: mode === "CREATE" ? createView : undefined, view, expandedSections, stageScrollPositions: { ...createScrollPositionsRef.current } } });
       const fileName = `${mapExportBaseName(map)}.excogitare`;
       download(serializeExcogitareProject(project), fileName, "application/vnd.excogitare.project+json");
       setMessage(`${fileName} · project downloaded for later reimport`);
@@ -1676,22 +1731,40 @@ export function Civ5MapViewer() {
   const importProject = async (file: File) => {
     try {
       const project = parseExcogitareProject(await file.text());
-      replaceMap(project.map);
-      setGenerationOptions(normalizeGenerationOptions(generationOptionsFromRecipe(project.recipe), allowGameBreakingGeometry));
-      setGenerationScale(project.recipe.scale);
-      setGenerationArchetype(project.recipe.archetype);
-      setGenerationEffort(project.recipe.effort);
-      setMatchIntent(project.recipe.matchIntent);
+      const projectRecipe = normalizeGenerationRecipe(project.recipe, DEFAULT_GENERATION_OPTIONS);
+      let fallbackHistoryId = generationIdRef.current;
+      const restoredHistory = project.history.entries.slice(0, MAX_GENERATION_HISTORY).map((entry) => {
+        const operation = (["GENERATE", "RANDOMISE", "SELECTIVE_WORLD", "SELECTIVE_CLIMATE", "SELECTIVE_RIVERS", "SELECTIVE_CONTENT", "SELECTIVE_STARTS", "BATCH_SELECTION", "PROJECT_IMPORT"].includes(entry.operation) ? entry.operation : "PROJECT_IMPORT") as GenerationHistoryEntry["operation"];
+        const parsedParentId = entry.parentId === undefined ? undefined : Number(entry.parentId);
+        const recipe = normalizeGenerationRecipe(entry.map.recipe ?? entry.recipe, DEFAULT_GENERATION_OPTIONS);
+        return { id: Number(entry.id) || ++fallbackHistoryId, parentId: parsedParentId !== undefined && Number.isFinite(parsedParentId) ? parsedParentId : undefined, operation, createdAt: entry.createdAt ?? project.manifest.updatedAt, map: { ...entry.map, recipe } };
+      });
+      const restoredMap = { ...project.map, recipe: normalizeGenerationRecipe(project.map.recipe ?? projectRecipe, DEFAULT_GENERATION_OPTIONS) };
+      const restoredStage = normalizeCreateStage(project.editorState?.stage);
+      const restoredDisclosureState: Record<CreateStage, Record<string, boolean>> = { GENERATE: {}, REFINE: {}, ITERATE: {}, EDIT: {}, ANALYZE: {} };
+      for (const stored of project.editorState?.expandedSections ?? []) {
+        const separator = stored.indexOf(":");
+        const normalized = normalizeCreateStage(stored.slice(0, separator));
+        if (separator > 0 && !normalized.recovered) restoredDisclosureState[normalized.stage][stored.slice(separator + 1)] = true;
+      }
+      replaceMap(restoredMap);
+      setGenerationOptions(normalizeGenerationOptions(generationOptionsFromRecipe(projectRecipe), allowGameBreakingGeometry));
+      setGenerationScale(projectRecipe.scale);
+      setGenerationArchetype(projectRecipe.archetype);
+      setGenerationArchetypeIntensity(projectRecipe.archetypeIntensity);
+      setGenerationEffort(projectRecipe.effort);
+      setMatchIntent(projectRecipe.matchIntent);
       setProtectionState(project.protection);
-      const restoredHistory = project.history.entries.slice(0, MAX_GENERATION_HISTORY).map((entry) => ({ id: Number(entry.id) || ++generationIdRef.current, map: entry.map }));
       setGenerationHistory(restoredHistory);
+      generationIdRef.current = Math.max(generationIdRef.current, ...restoredHistory.map((entry) => entry.id), 0);
       const activeId = project.history.activeEntryId ? Number(project.history.activeEntryId) : null;
-      setActiveGenerationId(Number.isFinite(activeId) ? activeId : null);
+      setActiveGenerationId(activeId !== null && Number.isFinite(activeId) && restoredHistory.some((entry) => entry.id === activeId) ? activeId : null);
       setMode("CREATE");
-      const restoredStage = project.editorState?.stage;
-      if (["GENERATE", "REFINE", "ITERATE", "EDIT", "ANALYZE"].includes(restoredStage ?? "")) setCreateView(restoredStage as typeof createView);
+      setCreateView(restoredStage.stage);
+      setCreateDisclosureState(restoredDisclosureState);
+      for (const stage of ["GENERATE", "REFINE", "ITERATE", "EDIT", "ANALYZE"] as const) createScrollPositionsRef.current[stage] = Math.max(0, Number(project.editorState?.stageScrollPositions?.[stage]) || 0);
       if (project.editorState?.view) setView(project.editorState.view);
-      setMessage(`${file.name} · project restored from downloaded file`);
+      setMessage(`${file.name} · project restored from downloaded file${restoredStage.recovered ? " · unknown Create stage recovered to Design" : ""}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "The project could not be opened. The active map was not replaced."); }
   };
 
@@ -1961,8 +2034,8 @@ export function Civ5MapViewer() {
     const definition = GENERATION_ENGINES.find((item) => item.id === engine)!;
     const preset = MAP_PRESETS.find((item) => item.id === definition.preset)!;
     setGenerationOptions((current) => {
-      if (engine === "ECCENTRIC") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, style: "FANTASTICAL", climateRealism: preset.climateRealism ?? false, fantasticality: fantasticalityForPreset(preset.id), regionClimateLogic: preset.climateRealism ? "ORDERED" : "LAWLESS", eccentricExtreme: "NONE" };
-      if (engine === "PHYSICAL") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: true, plateActivity: preset.plateActivity ?? DEFAULT_GENERATION_OPTIONS.plateActivity, erosionStrength: preset.erosionStrength ?? DEFAULT_GENERATION_OPTIONS.erosionStrength, worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge, climate: preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate, rainfall: preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall, physicalRotation: preset.physicalRotation ?? DEFAULT_GENERATION_OPTIONS.physicalRotation, physicalSeasonality: preset.physicalSeasonality ?? DEFAULT_GENERATION_OPTIONS.physicalSeasonality, physicalOceanInfluence: preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence };
+      if (engine === "ECCENTRIC") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, riverDensity: preset.riverDensity ?? current.riverDensity, style: "FANTASTICAL", climateRealism: preset.climateRealism ?? false, fantasticality: fantasticalityForPreset(preset.id), regionClimateLogic: preset.climateRealism ? "ORDERED" : "LAWLESS", eccentricExtreme: "NONE" };
+      if (engine === "PHYSICAL") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, riverDensity: preset.riverDensity ?? current.riverDensity, climateRealism: true, plateActivity: preset.plateActivity ?? DEFAULT_GENERATION_OPTIONS.plateActivity, erosionStrength: preset.erosionStrength ?? DEFAULT_GENERATION_OPTIONS.erosionStrength, worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge, climate: preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate, rainfall: preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall, physicalRotation: preset.physicalRotation ?? DEFAULT_GENERATION_OPTIONS.physicalRotation, physicalSeasonality: preset.physicalSeasonality ?? DEFAULT_GENERATION_OPTIONS.physicalSeasonality, physicalOceanInfluence: preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence };
       if (engine === "POLIS") return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains, climateRealism: false, polisConflictPattern: polisPatternForPreset(preset.id) };
       return { ...current, engine, preset: preset.id, waterPercent: preset.water, mountainPercent: preset.mountains };
     });
@@ -1976,59 +2049,109 @@ export function Civ5MapViewer() {
 
   const generateNewMap = async () => {
     setShowLegend(false);
+    setCreateOperationError("");
     const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
     if (options !== generationOptions) setGenerationOptions(options);
     try {
       const baseRecipe = generationRecipeFromOptions(options);
-      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, effort: generationEffort, matchIntent: { ...matchIntent, flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
+      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
       const generated = await generateMapAsync(options, recipe);
       replaceMap(generated);
       const id = ++generationIdRef.current;
-      setGenerationHistory((history) => addGenerationToHistory(history, generated, id));
+      setGenerationHistory((history) => addGenerationToHistory(history, generated, id, { parentId: activeGenerationId ?? undefined, operation: "GENERATE" }));
       setActiveGenerationId(id);
       setMode("CREATE");
       setMessage(`${generated.name} · generated from seed ${options.seed}`);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) setMessage(error instanceof Error ? error.message : "Map generation failed.");
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        const detail = error instanceof Error ? error.message : "Map generation failed.";
+        setCreateOperationError(detail);
+        setMessage(detail);
+      }
     }
   };
 
-  const randomiseWorld = async () => {
+  const randomiseWorld = async (mobileSafe = false) => {
     setShowLegend(false);
-    const options = randomGenerationOptions(Math.random, allowGameBreakingGeometry);
+    setCreateOperationError("");
+    const randomizedRecipe = randomGenerationRecipe(Math.random, mobileSafe ? false : allowGameBreakingGeometry);
+    const options = generationOptionsFromRecipe(randomizedRecipe);
     setGenerationOptions(options);
-    setGenerationScale("GLOBAL");
-    setGenerationArchetype("NARRATIVE_DEFAULT");
+    setGenerationScale(randomizedRecipe.scale);
+    setGenerationArchetype(randomizedRecipe.archetype);
+    setGenerationArchetypeIntensity(randomizedRecipe.archetypeIntensity);
     setGenerationEffort("STANDARD");
-    setMatchIntent(generationRecipeFromOptions(options).matchIntent);
+    setMatchIntent(randomizedRecipe.matchIntent);
     try {
-      const recipe = generationRecipeFromOptions(options);
-      const generated = await generateMapAsync(options, recipe);
+      const generated = await generateMapAsync(options, { ...randomizedRecipe, effort: "STANDARD" });
       replaceMap(generated);
       const id = ++generationIdRef.current;
-      setGenerationHistory((history) => addGenerationToHistory(history, generated, id));
+      setGenerationHistory((history) => addGenerationToHistory(history, generated, id, { operation: "RANDOMISE" }));
       setActiveGenerationId(id);
       setMessage(`${generated.name} · every generation option randomised`);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) setMessage(error instanceof Error ? error.message : "Random generation failed.");
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        const detail = error instanceof Error ? error.message : "Random generation failed.";
+        setCreateOperationError(detail);
+        setMessage(detail);
+      }
     }
   };
 
   const openGeneration = (entry: GenerationHistoryEntry) => {
-    setShowLegend(false);
-    const restored = restoreGeneration(entry);
-    replaceMap(restored);
-    setActiveGenerationId(entry.id);
+    setCreateOperationError("");
+    try {
+      const restored = restoreGeneration(entry);
+      setShowLegend(false);
+      replaceMap(restored);
+      setActiveGenerationId(entry.id);
+      if (restored.recipe) {
+        setGenerationOptions(normalizeGenerationOptions(generationOptionsFromRecipe(restored.recipe), allowGameBreakingGeometry));
+        setGenerationScale(restored.recipe.scale);
+        setGenerationArchetype(restored.recipe.archetype);
+        setGenerationArchetypeIntensity(restored.recipe.archetypeIntensity ?? "STRONG");
+        setGenerationEffort(restored.recipe.effort);
+        setMatchIntent(restored.recipe.matchIntent);
+      } else if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
+      setMode("CREATE");
+      setMessage(`${restored.name} · restored from generation history`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Generation history could not be restored.";
+      setCreateOperationError(detail);
+      setMessage(`${detail} · current map and Create stage retained`);
+    }
+  };
+
+  const loadGenerationDesignRecipe = (entry: GenerationHistoryEntry) => {
+    const restored = entry.map;
     if (restored.recipe) {
       setGenerationOptions(normalizeGenerationOptions(generationOptionsFromRecipe(restored.recipe), allowGameBreakingGeometry));
       setGenerationScale(restored.recipe.scale);
       setGenerationArchetype(restored.recipe.archetype);
+      setGenerationArchetypeIntensity(restored.recipe.archetypeIntensity ?? "STRONG");
       setGenerationEffort(restored.recipe.effort);
       setMatchIntent(restored.recipe.matchIntent);
-    } else if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
-    setMode("CREATE");
-    setMessage(`${restored.name} · restored from generation history`);
+    } else if (restored.generation) {
+      const normalized = normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry);
+      setGenerationOptions(normalized);
+      setGenerationScale("GLOBAL");
+      setGenerationArchetype("NARRATIVE_DEFAULT");
+      setGenerationArchetypeIntensity("STRONG");
+      setGenerationEffort("STANDARD");
+      setMatchIntent(generationRecipeFromOptions(normalized).matchIntent);
+    } else return;
+    setCreateView("GENERATE");
+    setMessage(`Generation ${entry.id} recipe loaded into Design · current map unchanged`);
   };
+
+  const selectCreateStage = (stage: CreateStage) => {
+    setCreateView(stage);
+    setCreateOperationError("");
+  };
+
+  const recordCreateDisclosure = useCallback((stage: CreateStage, key: string, open: boolean) => {
+    setCreateDisclosureState((current) => current[stage][key] === open ? current : { ...current, [stage]: { ...current[stage], [key]: open } });
+  }, []);
 
   const randomizeSeed = () => {
     const seed = Math.random().toString(36).slice(2, 10);
@@ -2036,28 +2159,66 @@ export function Civ5MapViewer() {
   };
 
   const runSelectivePass = async (stage: RegenerationStage) => {
+    setCreateOperationError("");
     const variation = ++regenerationIdRef.current;
     const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
     if (options !== generationOptions) setGenerationOptions(options);
     try {
       const baseRecipe = generationRecipeFromOptions(options);
-      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, effort: generationEffort, matchIntent: { ...matchIntent, flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
+      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
       const regenerated = await regenerateMapAsync(map, options, stage, variation, recipe);
       const protectedResult = applyProtectionState(map, regenerated, protectionState);
-      if (protectedResult.blocked) { setMessage(`Regeneration blocked · ${protectedResult.conflicts.join(" ")}`); return; }
+      if (protectedResult.blocked) {
+        const detail = `Regeneration blocked · ${protectedResult.conflicts.join(" ")}`;
+        setCreateOperationError(detail);
+        setMessage(`${detail} · current map and Create stage retained`);
+        return;
+      }
       const accepted = protectedResult.map;
+      if (stage === "CLIMATE") {
+        setArchetypePreviewMap(accepted);
+        setArchetypePreviewView("DIFFERENCE");
+        setMessage(`${generationArchetype === "EXISTING" ? "Existing surface retained" : `${generationArchetype.toLowerCase().replaceAll("_", " ")} candidate ready`} · review the Difference preview before applying`);
+        return;
+      }
       replaceMap(accepted);
       if (accepted.generation) setGenerationOptions(normalizeGenerationOptions(accepted.generation, allowGameBreakingGeometry));
       const id = ++generationIdRef.current;
-      setGenerationHistory((history) => addGenerationToHistory(history, accepted, id));
+      const operation = `SELECTIVE_${stage}` as const;
+      setGenerationHistory((history) => addGenerationToHistory(history, accepted, id, { parentId: activeGenerationId ?? undefined, operation }));
       setActiveGenerationId(id);
       setComparisonCheckpointId(null);
       setComparisonView("CURRENT");
       const labels: Record<RegenerationStage, string> = { WORLD: "world", CLIMATE: "climate and biomes", RIVERS: "river network", CONTENT: "resources and sites", STARTS: "players and starts" };
       setMessage(`${labels[stage]} regenerated${protectionState.tileMask || protectionState.semantic.length ? " · protected authoring data retained" : ""} · other compatible layers retained`);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) setMessage(error instanceof Error ? error.message : "Selective regeneration failed.");
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        const detail = error instanceof Error ? error.message : "Selective regeneration failed.";
+        setCreateOperationError(detail);
+        setMessage(detail);
+      }
     }
+  };
+
+  const cancelArchetypePreview = () => {
+    setArchetypePreviewMap(null);
+    setArchetypePreviewView("DIFFERENCE");
+    setMessage("Archetype preview discarded · current map unchanged");
+  };
+
+  const confirmArchetypePreview = () => {
+    if (!archetypePreviewMap) return;
+    const accepted = archetypePreviewMap;
+    replaceMap(accepted);
+    if (accepted.generation) setGenerationOptions(normalizeGenerationOptions(accepted.generation, allowGameBreakingGeometry));
+    const id = ++generationIdRef.current;
+    setGenerationHistory((history) => addGenerationToHistory(history, accepted, id, { parentId: activeGenerationId ?? undefined, operation: "SELECTIVE_CLIMATE" }));
+    setActiveGenerationId(id);
+    setComparisonCheckpointId(null);
+    setComparisonView("CURRENT");
+    setArchetypePreviewMap(null);
+    setArchetypePreviewView("DIFFERENCE");
+    setMessage(`${generationArchetype === "EXISTING" ? "Existing surface recipe retained" : `${generationArchetype.toLowerCase().replaceAll("_", " ")} applied`} · generation ${id} added to history`);
   };
 
   const generateBatch = async () => {
@@ -2065,6 +2226,7 @@ export function Civ5MapViewer() {
     setBatchRunning(true);
     setBatchCandidates([]);
     setBatchProgress(0);
+    setCreateOperationError("");
     const candidates: BatchCandidate[] = [];
     const options = normalizeGenerationOptions(generationOptions, allowGameBreakingGeometry);
     if (options !== generationOptions) setGenerationOptions(options);
@@ -2080,7 +2242,11 @@ export function Civ5MapViewer() {
       setMessage(`${batchCount} candidates generated and ranked · best score ${candidates[0]?.score ?? 0}`);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") setMessage(`Batch stopped after ${candidates.length} candidate${candidates.length === 1 ? "" : "s"}.`);
-      else setMessage(error instanceof Error ? error.message : "Batch generation failed.");
+      else {
+        const detail = error instanceof Error ? error.message : "Batch generation failed.";
+        setCreateOperationError(detail);
+        setMessage(detail);
+      }
     } finally {
       setBatchRunning(false);
     }
@@ -2091,7 +2257,7 @@ export function Civ5MapViewer() {
     replaceMap(restored);
     if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
     const id = ++generationIdRef.current;
-    setGenerationHistory((history) => addGenerationToHistory(history, restored, id));
+    setGenerationHistory((history) => addGenerationToHistory(history, restored, id, { parentId: activeGenerationId ?? undefined, operation: "BATCH_SELECTION" }));
     setActiveGenerationId(id);
     setMessage(`${candidate.seed} · selected from batch with score ${candidate.score}`);
   };
@@ -2105,12 +2271,19 @@ export function Civ5MapViewer() {
   };
 
   const restoreCheckpoint = (checkpoint: MapCheckpoint) => {
-    const restored = restoreMapCheckpoint(checkpoint);
-    replaceMap(restored);
-    if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
-    setComparisonCheckpointId(null);
-    setComparisonView("CURRENT");
-    setMessage(`${checkpoint.name} · checkpoint restored`);
+    setCreateOperationError("");
+    try {
+      const restored = restoreMapCheckpoint(checkpoint);
+      replaceMap(restored);
+      if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
+      setComparisonCheckpointId(null);
+      setComparisonView("CURRENT");
+      setMessage(`${checkpoint.name} · checkpoint restored`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Checkpoint could not be restored.";
+      setCreateOperationError(detail);
+      setMessage(`${detail} · current map and Create stage retained`);
+    }
   };
 
   const compareCheckpoint = (checkpoint: MapCheckpoint) => {
@@ -2269,7 +2442,7 @@ export function Civ5MapViewer() {
           ? { stage: "Iterate", title: "Generation workshop", description: "Revisit candidates, compare checkpoints and rerun selected parts of the current world." }
           : createView === "EDIT"
             ? { stage: "Edit", title: "Map editor", description: "Paint tiles, reshape regions and relocate structures or starting positions directly." }
-            : { stage: "Review", title: "Balance and validation", description: "Judge multiplayer fairness, strategic structure and Civ V export readiness." }
+            : { stage: "Review", title: "Narrative, balance and validation", description: "Judge whether the intended Map Type is recognizable, then inspect multiplayer fairness and Civ V export readiness." }
       : mode === "REPAIR"
         ? repairStage === "INSPECT"
           ? { stage: "Inspect", title: "Map audit", description: "Read structural, terrain, river, scenario and start-location findings without mutation controls." }
@@ -2293,7 +2466,7 @@ export function Civ5MapViewer() {
       : createView === "REFINE" ? `${generationArchetype.replaceAll("_", " ").toLowerCase()} · ${generationOptions.style.toLowerCase()} character`
         : createView === "ITERATE" ? `${generationHistory.length} of ${MAX_GENERATION_HISTORY} generations retained`
         : createView === "EDIT" ? `${pastMaps.length ? "Edited" : "Unmodified"} · ${selection ? `${selection.maxX - selection.minX + 1}×${selection.maxY - selection.minY + 1} selected` : "No region selected"}`
-          : `${balanceReport.grade} balance · ${validationIssues.filter((issue) => issue.severity !== "INFO").length} validation findings`
+          : `${narrativeAssessment?.grade ?? "—"} narrative · ${balanceReport.grade} balance · ${validationIssues.filter((issue) => issue.severity !== "INFO").length} validation findings`
     : mode === "REPAIR"
       ? repairStage === "INSPECT" ? `${repairIssues.filter((issue) => issue.severity !== "INFO").length} findings`
         : repairStage === "CORRECT" ? `${repairSelected.size} corrections selected`
@@ -2418,13 +2591,7 @@ export function Civ5MapViewer() {
             <span><small>{workspacePresentation.label} workspace</small><strong>{workspaceTask.stage}</strong></span>
           </div>
           {mode === "CREATE" && (
-            <div id="create-workspace-navigation" className="workspace-stage-tabs" role="tablist" aria-label="Create workspace">
-              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Choose the world engine, shape, climate, content, players, and starting conditions." aria-selected={createView === "GENERATE"} className={createView === "GENERATE" ? "is-active" : ""} onClick={() => setCreateView("GENERATE")}>Design</button>
-              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Refine climate, environmental character, resources, players, starts, and match assumptions without rebuilding topography." aria-selected={createView === "REFINE"} className={createView === "REFINE" ? "is-active" : ""} onClick={() => setCreateView("REFINE")}>Refine</button>
-              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Reopen previous generations, rerun individual passes, rank candidate seeds, and compare checkpoints." aria-selected={createView === "ITERATE"} className={createView === "ITERATE" ? "is-active" : ""} onClick={() => setCreateView("ITERATE")}>Iterate</button>
-              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Paint individual tiles, flood-fill terrain, modify regions and world structure, or relocate starts." aria-selected={createView === "EDIT"} className={createView === "EDIT" ? "is-active" : ""} onClick={() => setCreateView("EDIT")}>Edit</button>
-              <button type="button" role="tab" aria-controls="create-workspace-panel" data-tooltip="Inspect multiplayer balance and Civ V validation findings without changing the map." aria-selected={createView === "ANALYZE"} className={createView === "ANALYZE" ? "is-active" : ""} onClick={() => setCreateView("ANALYZE")}>Review</button>
-            </div>
+            <CreateStageTabs active={createView} onChange={selectCreateStage} />
           )}
           {mode === "REPAIR" && (
             <div id="repair-workspace-navigation" className="workspace-stage-tabs" role="tablist" aria-label="Repair workspace">
@@ -2452,7 +2619,7 @@ export function Civ5MapViewer() {
       )}
 
       <section className="workspace">
-        <aside className="sidebar" aria-label="Map information and layers">
+        <aside ref={sidebarRef} className="sidebar" aria-label="Map information and layers" onScroll={(event) => { if (mode === "CREATE") createScrollPositionsRef.current[createView] = event.currentTarget.scrollTop; }}>
           <header className="workspace-masthead">
             <p><span aria-hidden="true">{workspacePresentation.symbol}</span>{workspacePresentation.label} / {workspaceTask.stage}</p>
             <h2>{workspaceTask.title}</h2>
@@ -2667,7 +2834,8 @@ export function Civ5MapViewer() {
           )}
 
           {mode === "CREATE" && (
-            <div id="create-workspace-panel" className="creator-panel">
+            <CreateStagePanel stage={createView} disclosureState={createDisclosureState[createView]} onDisclosureChange={recordCreateDisclosure}>
+              <CreateOperationStatus running={generationRunning} stage={generationStage} error={createOperationError} onCancel={cancelGeneration} />
               {createView === "GENERATE" || createView === "REFINE" || createView === "ITERATE" ? (
                 createView === "ITERATE" ? (
                   <div className="iteration-workspace">
@@ -2696,10 +2864,7 @@ export function Civ5MapViewer() {
                             const options = entry.map.generation;
                             const preset = options ? MAP_PRESETS.find((item) => item.id === options.preset)?.label ?? options.preset : "Generated map";
                             return (
-                              <button key={entry.id} type="button" className={activeGenerationId === entry.id ? "is-active" : ""} onClick={() => openGeneration(entry)}>
-                                <span><strong>Generation {entry.id}</strong><small>{options ? `${options.style.toLowerCase()} · ${preset}` : preset}</small></span>
-                                <span><em>{entry.map.width} × {entry.map.height}</em><code>{options?.seed ?? "unknown seed"}</code></span>
-                              </button>
+                              <GenerationHistoryCard key={entry.id} entry={entry} active={activeGenerationId === entry.id} preset={preset} onOpen={() => openGeneration(entry)} onUseRecipe={() => loadGenerationDesignRecipe(entry)} />
                             );
                           })}
                         </div>
@@ -2808,14 +2973,15 @@ export function Civ5MapViewer() {
                     <select value={generationOptions.preset} onChange={(event) => {
                       const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
                       if (!preset) return;
-                      setGenerationOptions((current) => ({ ...current, engine: preset.engine, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains, climateRealism: preset.climateRealism ?? current.climateRealism, climate: preset.engine === "PHYSICAL" ? preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate : current.climate, rainfall: preset.engine === "PHYSICAL" ? preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall : current.rainfall, fantasticality: preset.engine === "ECCENTRIC" ? fantasticalityForPreset(preset.id) : current.fantasticality, regionClimateLogic: preset.engine === "ECCENTRIC" ? preset.climateRealism ? "ORDERED" : "LAWLESS" : current.regionClimateLogic, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge, physicalRotation: preset.engine === "PHYSICAL" ? preset.physicalRotation ?? DEFAULT_GENERATION_OPTIONS.physicalRotation : current.physicalRotation, physicalSeasonality: preset.engine === "PHYSICAL" ? preset.physicalSeasonality ?? DEFAULT_GENERATION_OPTIONS.physicalSeasonality : current.physicalSeasonality, physicalOceanInfluence: preset.engine === "PHYSICAL" ? preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence : current.physicalOceanInfluence, polisConflictPattern: preset.engine === "POLIS" ? polisPatternForPreset(preset.id) : current.polisConflictPattern }));
+                      setGenerationOptions((current) => ({ ...current, engine: preset.engine, preset: preset.id, waterPercent: preset.water, mountainPercent: current.style === "BRUTAL" ? Math.max(18, preset.mountains) : preset.mountains, riverDensity: preset.riverDensity ?? current.riverDensity, climateRealism: preset.climateRealism ?? current.climateRealism, climate: preset.engine === "PHYSICAL" ? preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate : current.climate, rainfall: preset.engine === "PHYSICAL" ? preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall : current.rainfall, fantasticality: preset.engine === "ECCENTRIC" ? fantasticalityForPreset(preset.id) : current.fantasticality, regionClimateLogic: preset.engine === "ECCENTRIC" ? preset.climateRealism ? "ORDERED" : "LAWLESS" : current.regionClimateLogic, plateActivity: preset.plateActivity ?? current.plateActivity, erosionStrength: preset.erosionStrength ?? current.erosionStrength, worldAge: preset.worldAge ?? current.worldAge, physicalRotation: preset.engine === "PHYSICAL" ? preset.physicalRotation ?? DEFAULT_GENERATION_OPTIONS.physicalRotation : current.physicalRotation, physicalSeasonality: preset.engine === "PHYSICAL" ? preset.physicalSeasonality ?? DEFAULT_GENERATION_OPTIONS.physicalSeasonality : current.physicalSeasonality, physicalOceanInfluence: preset.engine === "PHYSICAL" ? preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence : current.physicalOceanInfluence, polisConflictPattern: preset.engine === "POLIS" ? polisPatternForPreset(preset.id) : current.polisConflictPattern }));
                     }}>
                       <optgroup label="Excogitare worlds">{MAP_PRESETS.filter((preset) => preset.engine === "EXCOGITARE").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Eccentric worlds">{MAP_PRESETS.filter((preset) => preset.engine === "ECCENTRIC").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Physical worlds">{MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Polis worlds">{MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                     </select>
-                    <small>{MAP_PRESETS.find((preset) => preset.id === generationOptions.preset)?.description}</small>
+                    <small>{describeNarrativeProfile(generationOptions.preset, generationOptions.style)}</small>
+                    <em className={`narrative-profile-state state-${narrativeProfile(generationOptions.preset).implementation.toLowerCase().replaceAll("_", "-")}`}>{narrativeProfile(generationOptions.preset).implementation === "BENCHMARK" ? "Recognition benchmark active" : "Narrative profile retained · specialized compiler pending"}</em>
                   </label>
                   <label className="control-field scale-control" data-tooltip="Scale describes how much of the imagined world is visible; it is independent of the tile budget.">
                     <span>Scale</span>
@@ -2826,6 +2992,7 @@ export function Civ5MapViewer() {
                       <option value="PROVINCIAL">Provincial · one subcontinental theatre</option>
                       <option value="LOCAL">Local · a detailed valley, island group, or scenario region</option>
                     </select>
+                    <small>{WORLD_SCALE_PROFILES[generationScale].subject} Map Size changes resolution, not this geographic category.</small>
                   </label>
                   <label className="control-field archetype-control" data-tooltip="Apply an environmental coat while preserving land, elevation, rivers, starts, and scenario data by default.">
                     <span>Archetype</span>
@@ -2836,7 +3003,17 @@ export function Civ5MapViewer() {
                       <option value="MONSOON">Monsoon</option><option value="MEDITERRANEAN">Mediterranean</option><option value="STEPPE">Steppe</option><option value="SAVANNA">Savanna</option>
                       <option value="MARSHLAND">Marshland</option><option value="VOLCANIC">Volcanic</option><option value="JURASSIC">Jurassic</option><option value="POST_COLLAPSE">Post-Collapse</option><option value="FALLOUT_WASTES">Fallout Wastes</option>
                     </select>
-                    <small>Existing and Narrative Default are pass-through modes; authored coats are recorded in the reproducible recipe.</small>
+                    <small>{describeArchetype(generationArchetype, generationArchetypeIntensity)}</small>
+                    {generationArchetype !== "EXISTING" && generationArchetype !== "NARRATIVE_DEFAULT" && !ARCHETYPE_PROFILES[generationArchetype].compatibleCharacters.includes(generationOptions.style) && <small className="archetype-conflict-warning">This coat contradicts the selected World Character. It remains explicit, but Review will treat the intended identity as weakened.</small>}
+                  </label>
+                  <label className="control-field archetype-intensity-control" data-tooltip="Hint repaints selected coherent regions, Strong makes the coat dominant, and Transformative additionally rebuilds compatible resources and wonders only after a Difference preview and confirmation.">
+                    <span>Archetype intensity</span>
+                    <select value={generationArchetypeIntensity} disabled={generationArchetype === "EXISTING" || generationArchetype === "NARRATIVE_DEFAULT"} onChange={(event) => setGenerationArchetypeIntensity(event.target.value as ArchetypeIntensity)}>
+                      <option value="HINT">Hint · restrained regional coat</option>
+                      <option value="STRONG">Strong · dominant surface coat</option>
+                      <option value="TRANSFORMATIVE">Transformative · surface and content ecology</option>
+                    </select>
+                    {generationArchetype !== "EXISTING" && generationArchetype !== "NARRATIVE_DEFAULT" && <small>{ARCHETYPE_PROFILES[generationArchetype].resourceEcology.join(" · ")} · favors {ARCHETYPE_PROFILES[generationArchetype].wonderTendencies.join(" and ")}.</small>}
                   </label>
                   <label className="control-field map-size-control" data-tooltip="Choose a tile budget. Non-stock community dimensions remain hidden until Game Breaking generation is enabled; recommended player and city-state counts update with the selection.">
                     <span>Map size</span>
@@ -3084,7 +3261,7 @@ export function Civ5MapViewer() {
                         <button type="button" disabled={generationRunning} onClick={() => void runSelectivePass("STARTS")}>Apply players &amp; starts</button>
                       </div>
                     ) : generationRunning
-                      ? <button className="generate-button generation-cancel" type="button" data-tooltip="Stop the active worker. The current map remains unchanged unless generation has already completed." onClick={cancelGeneration}>Cancel · {generationStage}</button>
+                      ? <button className="generate-button" type="button" disabled>Generation in progress</button>
                       : <button className="generate-button" type="button" data-tooltip="Build a deterministic map from the complete recipe shown above, then add it to generation history." onClick={() => void generateNewMap()}>Generate map</button>}
                     <div className="generation-readout"><span>Current map</span><strong>{generationMetrics.water}% water · {generationMetrics.mountains}% mountains</strong></div>
                   </div>
@@ -3150,6 +3327,19 @@ export function Civ5MapViewer() {
                       <button type="button" disabled={generationRunning} onClick={() => void generateNewMap()}>Regenerate map and evidence</button>
                     </section>
                   )}
+                  {narrativeAssessment && (
+                    <section className="narrative-assessment">
+                      <div className="analysis-summary">
+                        <span className={`analysis-grade grade-${narrativeAssessment.grade.toLowerCase()}`}>{narrativeAssessment.grade === "UNASSESSED" ? "—" : narrativeAssessment.grade}</span>
+                        <div><h3>{narrativeAssessment.label} recognition</h3><p>{narrativeAssessment.summary}</p></div>
+                      </div>
+                      <div className="narrative-finding-list">
+                        {narrativeAssessment.motifs.map((finding) => <div key={finding.id} className={`narrative-finding status-${finding.status.toLowerCase()}`}><span>{finding.status}</span><div><strong>{finding.label}</strong><small>{finding.evidence}</small></div><b>{finding.status === "UNAVAILABLE" ? "—" : `${finding.score}%`}</b></div>)}
+                      </div>
+                      {(narrativeAssessment.parameterDeviations.length > 0 || narrativeAssessment.weakened.length > 0) && <details className="narrative-disclosure"><summary>Weakened identity and control conflicts</summary><ul>{[...new Set([...narrativeAssessment.parameterDeviations, ...narrativeAssessment.weakened])].map((item) => <li key={item}>{item}</li>)}</ul></details>}
+                      {narrativeAssessment.nearestConfusions.length > 0 && <details className="narrative-disclosure"><summary>Nearest confusions</summary><ul>{narrativeAssessment.nearestConfusions.map((item) => <li key={item.profileId}><strong>{item.label} · {item.risk.toLowerCase()} risk</strong><span>{item.evidence}</span></li>)}</ul></details>}
+                    </section>
+                  )}
                   <div className="analysis-summary">
                     <span className={`analysis-grade grade-${balanceReport.grade.toLowerCase()}`}>{balanceReport.grade}</span>
                     <div><h3>Multiplayer balance</h3><p>{balanceReport.summary}</p></div>
@@ -3186,7 +3376,7 @@ export function Civ5MapViewer() {
                   </div>
                 </div>
               )}
-            </div>
+            </CreateStagePanel>
           )}
 
           {mode === "SCRIPT" && (
@@ -3394,7 +3584,7 @@ export function Civ5MapViewer() {
               type="button"
               disabled={generationRunning}
               aria-busy={generationRunning}
-              onClick={() => void randomiseWorld()}
+              onClick={() => void randomiseWorld(true)}
             >
               {generationRunning ? "Generating…" : "Randomise & Generate"}
             </button>
@@ -3592,6 +3782,27 @@ export function Civ5MapViewer() {
           style={{ left: uiTooltip.x, top: uiTooltip.y }}
         >
           {uiTooltip.text}
+        </div>
+      )}
+
+      {archetypePreviewMap && archetypePreviewComparison && (
+        <div className="export-confirmation-backdrop archetype-preview-backdrop">
+          <section className="export-confirmation-modal archetype-preview-modal" role="dialog" aria-modal="true" aria-labelledby="archetype-preview-title" aria-describedby="archetype-preview-summary">
+            <header>
+              <span>Refine · Difference preview</span>
+              <h2 id="archetype-preview-title">Apply {generationArchetype === "EXISTING" ? "the Existing surface" : generationArchetype === "NARRATIVE_DEFAULT" ? "the Narrative Default surface" : ARCHETYPE_PROFILES[generationArchetype].label}?</h2>
+            </header>
+            <p id="archetype-preview-summary">The candidate changes {archetypePreviewComparison.changedTiles.size.toLocaleString()} tiles: {archetypePreviewCounts.surface.toLocaleString()} surface changes and {archetypePreviewCounts.content.toLocaleString()} resource or wonder changes. Land, water, elevation, rivers, starts, cities and ownership remain fixed.</p>
+            {generationArchetypeIntensity === "TRANSFORMATIVE" && <p className="archetype-transformative-warning"><strong>Transformative consequence:</strong> compatible resources and wonders were regenerated against the new ecology. Improvements, routes and scenario ownership were preserved.</p>}
+            <div className="archetype-preview-tabs" role="tablist" aria-label="Archetype preview view">
+              {(["ORIGINAL", "PREVIEW", "DIFFERENCE"] as const).map((viewOption) => <button key={viewOption} type="button" role="tab" aria-selected={archetypePreviewView === viewOption} className={archetypePreviewView === viewOption ? "is-active" : ""} onClick={() => setArchetypePreviewView(viewOption)}>{viewOption.toLowerCase()}</button>)}
+            </div>
+            <small className="archetype-preview-help">Original shows the installed map. Preview shows the complete candidate. Difference highlights every changed tile while rendering the candidate underneath.</small>
+            <div className="export-confirmation-actions">
+              <button ref={archetypePreviewCancelRef} type="button" onClick={cancelArchetypePreview}>Discard preview</button>
+              <button className="confirm-export" type="button" onClick={confirmArchetypePreview}>{generationArchetypeIntensity === "TRANSFORMATIVE" ? "Confirm transformative repaint" : "Apply repaint"}</button>
+            </div>
+          </section>
         </div>
       )}
 

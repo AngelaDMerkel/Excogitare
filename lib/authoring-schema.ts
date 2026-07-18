@@ -2,6 +2,7 @@ import type { Civ5Map } from "./civ5-map.ts";
 import type { GeographicObjectKind, GenerationStructure } from "./generation-structure.ts";
 import type { GenerationRecipe } from "./generation-recipe.ts";
 import type { PassProvenance } from "./generation-pass-graph.ts";
+import type { NarrativeAssessment } from "./narrative-types.ts";
 
 export type ProtectionChannel = "TOPOLOGY" | "ELEVATION" | "CLIMATE" | "FEATURES" | "HYDROLOGY" | "CONTENT" | "STARTS" | "SCENARIO";
 export type SemanticProtectionPolicy = "EXACT" | "SHAPE" | "FUNCTION" | "RELATIONSHIP";
@@ -49,6 +50,7 @@ export type ProjectHistoryEntry = {
   id: string;
   parentId?: string;
   operation: string;
+  createdAt?: string;
   recipe: GenerationRecipe;
   map: Civ5Map;
   provenance: PassProvenance[];
@@ -66,9 +68,9 @@ export type ProjectEditorState = {
   stage?: string;
   view: { zoom: number; x: number; y: number };
   expandedSections: string[];
+  stageScrollPositions?: Record<string, number>;
 };
 
-export type NarrativeAssessment = { schemaVersion: 1; inputHash: string; findings: Array<{ id: string; passed: boolean; message: string }> };
 export type MatchFeasibilityReport = { schemaVersion: 1; inputHash: string; findings: Array<{ victory: string; feasible: boolean; message: string }> };
 export type ValidationReport = { schemaVersion: 1; inputHash: string; findings: Array<{ severity: string; message: string }> };
 export type ScenarioCompatibilityReport = { schemaVersion: 1; inputHash: string; capabilities: Record<string, "READ" | "EDIT" | "WRITE" | "GAME_VERIFIED"> };

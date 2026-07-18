@@ -129,6 +129,29 @@ test("phone-sized screens reduce the application to generation, map, and downloa
   assert.match(css, /\.mobile-map-actions \{[\s\S]{0,500}display: grid;/);
 });
 
+test("Create stages expose keyboard navigation, persistent stage context and branch provenance", async () => {
+  const [viewer, workflow, schema] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/create-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/authoring-schema.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(workflow, /role="tablist" aria-label="Create workspace"/);
+  assert.match(workflow, /role="tab"/);
+  assert.match(workflow, /ArrowRight/);
+  assert.match(workflow, /ArrowLeft/);
+  assert.match(workflow, /event\.key === "Home"/);
+  assert.match(workflow, /event\.key === "End"/);
+  assert.match(workflow, /role="tabpanel"/);
+  assert.match(workflow, /aria-live=\{error \? "assertive" : "polite"\}/);
+  assert.match(workflow, /Branched from/);
+  assert.match(workflow, /Use as Design recipe/);
+  assert.match(viewer, /createScrollPositionsRef/);
+  assert.match(viewer, /createDisclosureState/);
+  assert.match(viewer, /stageScrollPositions:/);
+  assert.match(viewer, /unknown Create stage recovered to Design/);
+  assert.match(schema, /stageScrollPositions\?: Record<string, number>/);
+});
+
 test("GitHub Pages has an independent static export and deployment workflow", async () => {
   const [nextConfig, packageJson, workflow, verifier] = await Promise.all([
     readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
@@ -148,8 +171,9 @@ test("GitHub Pages has an independent static export and deployment workflow", as
 });
 
 test("layer redraws preserve the existing canvas backing buffer", async () => {
-  const [source, climateProjection, generator] = await Promise.all([
+  const [source, workflow, climateProjection, generator] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/create-workspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/climate-projection.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/map-generator.ts", import.meta.url), "utf8"),
   ]);
@@ -174,7 +198,7 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Generation history/);
   assert.match(source, /MAX_GENERATION_HISTORY/);
   assert.match(source, /openGeneration/);
-  assert.match(source, /aria-label="Create workspace"/);
+  assert.match(workflow, /aria-label="Create workspace"/);
   assert.match(source, /World shape/);
   assert.match(source, /Climate and terrain/);
   assert.match(source, /Players and starts/);
@@ -224,7 +248,8 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Iteration tools/);
   assert.match(source, /map-generation\.worker/);
   assert.match(source, /kind: "REGENERATE"/);
-  assert.match(source, /Cancel · \{generationStage\}/);
+  assert.match(workflow, />Cancel<\/button>/);
+  assert.match(source, /<CreateOperationStatus running=\{generationRunning\} stage=\{generationStage\}/);
   assert.match(source, />Review</);
   assert.match(source, /Multiplayer balance/);
   assert.match(source, /Civ5 validation/);
@@ -276,12 +301,13 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
 });
 
 test("workspace navigation separates Create, Repair, Lab, and Lua stages", async () => {
-  const [source, css, readme] = await Promise.all([
+  const [source, workflow, css, readme] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/create-workspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
   ]);
-  assert.match(source, />Design<\/button>[\s\S]{0,700}>Refine<\/button>[\s\S]{0,700}>Iterate<\/button>[\s\S]{0,700}>Edit<\/button>[\s\S]{0,700}>Review<\/button>/);
+  assert.match(workflow, /label: "Design"[\s\S]{0,500}label: "Refine"[\s\S]{0,500}label: "Iterate"[\s\S]{0,500}label: "Edit"[\s\S]{0,500}label: "Review"/);
   assert.match(source, /aria-label="Workspaces"/);
   assert.match(source, /className="workspace-context-bar"/);
   assert.match(source, /className="workspace-context-identity"/);
@@ -297,7 +323,7 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
   assert.match(source, /const \[luaStage, setLuaStage\] = useState<LuaStage>\("SCRIPT"\)/);
   assert.match(source, /repairSourceMapRef\.current !== mapRef\.current/);
   assert.match(source, /Repair workspace restored · corrections and validation preserved/);
-  assert.match(source, /aria-controls="create-workspace-panel"/);
+  assert.match(workflow, /aria-controls="create-workspace-panel"/);
   assert.match(source, /aria-controls="repair-workspace-panel"/);
   assert.match(source, /aria-controls="lab-workspace-panel"/);
   assert.match(source, /aria-controls="lua-workspace-panel"/);
@@ -402,6 +428,14 @@ test("World Character explains its selected engine-specific consequences", async
   assert.match(css, /\.world-character-explanation \{/);
 });
 
+test("generation effort discloses memory cost and Review explains stale evidence", async () => {
+  const renderer = await readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8");
+  assert.match(renderer, /estimateGenerationResources/);
+  assert.match(renderer, /approximately \$\{generationResourceEstimate\.estimatedPeakMegabytes\} MB peak working memory/);
+  assert.match(renderer, /Generated evidence is out of date/);
+  assert.match(renderer, /Regenerate map and evidence/);
+});
+
 test("the map legend cannot capture Create controls", async () => {
   const [source, css] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
@@ -409,7 +443,7 @@ test("the map legend cannot capture Create controls", async () => {
   ]);
   assert.match(source, /const selectWorkspaceMode = \(nextMode: WorkspaceMode\) => \{\s*setShowLegend\(false\)/);
   assert.match(source, /const generateNewMap = async \(\) => \{\s*setShowLegend\(false\)/);
-  assert.match(source, /const randomiseWorld = async \(\) => \{\s*setShowLegend\(false\)/);
+  assert.match(source, /const randomiseWorld = async \(mobileSafe = false\) => \{\s*setShowLegend\(false\)/);
   assert.match(css, /\.sidebar \{\s*position: relative;\s*z-index: 2;/);
   assert.match(css, /\.canvas-shell \{[^}]*z-index: 1;[^}]*isolation: isolate;/);
 });
@@ -448,12 +482,57 @@ test("game-breaking geometry and tile budgets require one checkbox and second mo
   assert.match(source, /Colossal \(170×110 \/ 18,700 tiles\)/);
   assert.match(source, /I accept the crash risk/);
   assert.match(source, /gameBreakingGeometryCancelRef\.current\?\.focus\(\)/);
-  assert.match(source, /randomGenerationOptions\(Math\.random, allowGameBreakingGeometry\)/);
+  assert.match(source, /randomGenerationRecipe\(Math\.random, mobileSafe \? false : allowGameBreakingGeometry\)/);
+  assert.match(source, /randomiseWorld\(true\)/);
   assert.match(generator, /includeGameBreakingOptions \? \[\.\.\.SAFE_MAP_GEOMETRIES, \.\.\.GAME_BREAKING_GEOMETRIES\] : SAFE_MAP_GEOMETRIES/);
   assert.match(generator, /MAP_SIZES\.filter\(\(size\) => includeGameBreakingOptions \|\| !size\.gameBreaking\)/);
   assert.match(source, /size: isGameBreakingMapSize\(normalized\.size\) \? "HUGE" : normalized\.size/);
   assert.match(css, /\.game-breaking-geometry-toggle/);
   assert.match(css, /\.game-breaking-geometry-modal/);
+});
+
+test("Scale, Archetype intensity and Difference preview expose the Phase 3 workflow", async () => {
+  const [source, css, archetypes, scales] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/world-archetype.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/world-scale.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /<span>Scale<\/span>/);
+  assert.match(source, /Archetype intensity/);
+  assert.match(source, /<option value="HINT">Hint · restrained regional coat<\/option>/);
+  assert.match(source, /<option value="STRONG">Strong · dominant surface coat<\/option>/);
+  assert.match(source, /<option value="TRANSFORMATIVE">Transformative · surface and content ecology<\/option>/);
+  assert.match(source, /className="export-confirmation-modal archetype-preview-modal" role="dialog" aria-modal="true"/);
+  assert.match(source, /\["ORIGINAL", "PREVIEW", "DIFFERENCE"\]/);
+  assert.match(source, /Confirm transformative repaint/);
+  assert.match(source, /confirmArchetypePreview/);
+  assert.match(css, /\.archetype-preview-modal/);
+  assert.match(css, /\.archetype-preview-tabs/);
+  assert.match(archetypes, /compatibleCharacters/);
+  assert.match(archetypes, /resourceEcology/);
+  assert.match(archetypes, /wonderTendencies/);
+  assert.match(scales, /majorSystemFrequency/);
+  assert.match(scales, /strategicTravel/);
+});
+
+test("Map Type identity status and component recognition are visible without crowding Design", async () => {
+  const [source, css, narratives] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/narrative-map-types.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /Recognition benchmark active/);
+  assert.match(source, /Narrative profile retained · specialized compiler pending/);
+  assert.match(source, /narrativeAssessment\.motifs\.map/);
+  assert.match(source, /Weakened identity and control conflicts/);
+  assert.match(source, /Nearest confusions/);
+  assert.match(css, /\.narrative-profile-state\.state-benchmark/);
+  assert.match(css, /\.narrative-assessment/);
+  assert.match(narratives, /LONELY_OCEANS/);
+  assert.match(narratives, /SHATTERED_ARCHIPELAGO/);
+  assert.match(narratives, /GREAT_WATERSHEDS/);
+  assert.match(narratives, /ICEHOUSE_EARTH/);
 });
 
 test("Lua is visibly experimental and requires entry confirmation", async () => {

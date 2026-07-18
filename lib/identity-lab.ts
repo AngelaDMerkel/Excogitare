@@ -182,6 +182,7 @@ function optionsForCandidate(presetId: MapPresetId, configuration: IdentityLabCo
     climateRealism: preset.climateRealism ?? false,
     climate: preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate,
     rainfall: preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall,
+    riverDensity: preset.riverDensity ?? DEFAULT_GENERATION_OPTIONS.riverDensity,
     worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge,
     fantasticality: preset.engine === "ECCENTRIC" ? fantasticalityForPreset(preset.id) : DEFAULT_GENERATION_OPTIONS.fantasticality,
     regionClimateLogic: preset.engine === "ECCENTRIC" && preset.climateRealism ? "ORDERED" : "LAWLESS",

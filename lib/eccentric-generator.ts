@@ -2,7 +2,9 @@ import type { Civ5Tile } from "./civ5-map.ts";
 import { poleProximity } from "./climate-projection.ts";
 import { connectedLinearFeatures, connectedTileObjects, objectsFromAssignments, type GenerationStructure, type GeographicObject } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
+import type { WorldScale } from "./generation-recipe.ts";
 import { worldCharacterProfile } from "./world-character.ts";
+import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
 
 type Point = { x: number; y: number };
 type PolygonEdge = { one: number; two: number; coastal: boolean; contrast: number };
@@ -597,9 +599,9 @@ function applyEccentricExtreme(temperature: number, moisture: number, extreme: M
   return { temperature, moisture };
 }
 
-function createClimatePalette(region: number, center: Point, options: MapGenerationOptions, width: number, height: number, random: () => number, climateCells: ClimateCell[]) {
+function createClimatePalette(region: number, center: Point, options: MapGenerationOptions, width: number, height: number, random: () => number, climateCells: ClimateCell[], scale: WorldScale, seed: number) {
   const character = worldCharacterProfile(options.style).eccentric;
-  const latitude = poleProximity(center.x, center.y, width, height, options.projectionType);
+  const latitude = scaledPoleProximity(center.x, center.y, width, height, options.projectionType, scale, seed + 37);
   const orderedTemperature = 0.12 + Math.cos(latitude * Math.PI / 2) * 0.78;
   const orderedMoisture = 0.48 + Math.sin((latitude + 0.08) * Math.PI * 2) * 0.16;
   const logic = options.regionClimateLogic;
@@ -716,21 +718,26 @@ export function generateEccentricGeography(
   wraps: boolean,
   seed: number,
   random: () => number,
+  scale: WorldScale = "GLOBAL",
 ): EccentricGeography {
   const area = width * height;
   const character = worldCharacterProfile(options.style);
+  const scaleProfile = worldScaleProfile(scale);
   const baseTopology = topologyForPreset(options);
   const profile: TopologyProfile = {
     ...baseTopology,
-    islands: Math.max(0, Math.round(baseTopology.islands * character.eccentric.fragmentation)),
-    tinyIslands: Math.max(0, Math.round(baseTopology.tinyIslands * character.eccentric.fragmentation)),
-    lakes: Math.max(0, Math.round(baseTopology.lakes * (0.8 + character.eccentric.fragmentation * 0.2))),
+    majorContinents: Math.max(1, Math.round(baseTopology.majorContinents * scaleProfile.eccentric.majorSystemFrequency)),
+    islands: Math.max(0, Math.round(baseTopology.islands * character.eccentric.fragmentation * scaleProfile.eccentric.majorSystemFrequency)),
+    tinyIslands: Math.max(0, Math.round(baseTopology.tinyIslands * character.eccentric.fragmentation * scaleProfile.eccentric.majorSystemFrequency)),
+    astronomyBlobs: Math.max(1, Math.round(baseTopology.astronomyBlobs * scaleProfile.eccentric.majorSystemFrequency)),
+    inlandSeas: Math.max(0, Math.round(baseTopology.inlandSeas * scaleProfile.eccentric.majorSystemFrequency)),
+    lakes: Math.max(0, Math.round(baseTopology.lakes * (0.8 + character.eccentric.fragmentation * 0.2) * scaleProfile.eccentric.majorSystemFrequency)),
   };
   const organicity = clamp((options.fantasticality === "UNBOUND" ? 1 : options.fantasticality === "MYTHIC" ? 0.72 : 0.38) * character.eccentric.organicity, 0.18, 1.35);
   const polygonTargets = { LOW: 100, FAIR: 200, HIGH: 250, VERY_HIGH: 300 } as const;
-  const polygonCount = Math.max(18, Math.min(Math.floor(area / 3), polygonTargets[options.granularity]));
+  const polygonCount = Math.max(18, Math.min(Math.floor(area / 3), Math.round(polygonTargets[options.granularity] * scaleProfile.eccentric.polygonDetail)));
   const hexesPerSubregion = Math.max(1, 1.05292 * Math.log(area) - 5.74245);
-  const subregionCount = Math.max(polygonCount * 2, Math.min(area, Math.ceil(area / hexesPerSubregion)));
+  const subregionCount = Math.max(polygonCount * 2, Math.min(area, Math.ceil(area / hexesPerSubregion * scaleProfile.eccentric.subregionDetail)));
 
   // Pass 1: render a dense, deliberately uneven subpolygon world.
   let subregionCenters = scatteredPoints(subregionCount, width, height, random, options.fantasticality, character.eccentric.pointJitter);
@@ -797,7 +804,7 @@ export function generateEccentricGeography(
   const polygonRegions = graphPartition(polygonAdjacency, polygonCenters, desiredRegions, width, wraps, random, organicity, landPolygons);
   const regionCenters = aggregateCenters(polygonRegions, polygonCenters, desiredRegions, width, wraps);
   const climateCells = createClimateCells(Math.max(4, Math.min(18, Math.ceil(Math.sqrt(desiredRegions) * 2.2))), random);
-  const climatePalettes: ClimatePalette[] = regionCenters.map((center, region) => createClimatePalette(region, center, options, width, height, random, climateCells));
+  const climatePalettes: ClimatePalette[] = regionCenters.map((center, region) => createClimatePalette(region, center, options, width, height, random, climateCells, scale, seed));
   const collectionAssignments = new Int32Array(subregionCount);
   collectionAssignments.fill(-1);
   for (let region = 0; region < desiredRegions; region += 1) {
@@ -924,7 +931,7 @@ export function generateEccentricGeography(
     let feature = 255;
     const featureNoise = hashNoise(subregions[index], index, seed + 1201);
     const climateAnchor = tileClimateAnchors[index];
-    if (!land && poleProximity(x, y, width, height, options.projectionType) > 0.86 && featureNoise > 0.34) feature = 3;
+    if (!land && scaledPoleProximity(x, y, width, height, options.projectionType, scale, seed + 37) > 0.86 && featureNoise > 0.34) feature = 3;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && climateAnchor?.jungle && temperatures[index] > 0.66 && moistures[index] > 0.62 && featureNoise > 0.19) feature = 1;
     else if (land && elevations[index] === 0 && terrain === 2 && climateAnchor?.marsh && moistures[index] > 0.74 && featureNoise > 0.34) feature = 2;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && climateAnchor?.forest && moistures[index] > 0.48 && featureNoise > (options.eccentricExtreme === "ARBOREA" ? 0.06 : 0.3)) feature = 0;
@@ -1029,7 +1036,7 @@ export function generateEccentricGeography(
     objects: [...subregionObjects, ...polygonObjects, ...superpolygons, ...astronomyObjects, ...continents, ...basins, ...rifts, ...climateObjects, ...collectionObjects, ...identities],
     mountainRanges: ranges,
     riverSystems: [],
-    diagnostics: { ...diagnostics, superpolygons: superpolygons.length + astronomyObjects.length, inlandSeas: basins.filter((object) => object.kind === "INLAND_SEA").length, lakes: basins.filter((object) => object.kind === "LAKE").length, rifts: rifts.length },
+    diagnostics: { ...diagnostics, scaleEccentricPolygonTarget: polygonCount, scaleEccentricSubregionTarget: subregionCount, superpolygons: superpolygons.length + astronomyObjects.length, inlandSeas: basins.filter((object) => object.kind === "INLAND_SEA").length, lakes: basins.filter((object) => object.kind === "LAKE").length, rifts: rifts.length },
   };
 
   return { landMask, reliefValues, temperatures, moistures, elevations, riverGuidance, tiles, structure, diagnostics };

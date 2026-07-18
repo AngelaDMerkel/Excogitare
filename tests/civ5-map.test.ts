@@ -1613,11 +1613,15 @@ test("Eccentric presets remain valid through extreme Pin and String geometries",
 test("generation history retains the newest 30 exact map snapshots", () => {
   const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, style: "FANTASTICAL", seed: "history-source" });
   let history: GenerationHistoryEntry[] = [];
-  for (let id = 1; id <= 35; id += 1) history = addGenerationToHistory(history, generated, id);
+  for (let id = 1; id <= 35; id += 1) history = addGenerationToHistory(history, generated, id, { parentId: id === 1 ? undefined : id - 1, operation: id % 2 ? "GENERATE" : "SELECTIVE_CLIMATE", createdAt: `2026-07-17T00:00:${String(id).padStart(2, "0")}.000Z` });
 
   assert.equal(history.length, MAX_GENERATION_HISTORY);
   assert.equal(history[0].id, 35);
   assert.equal(history.at(-1)?.id, 6);
+  assert.equal(history[0].parentId, 34);
+  assert.equal(history[0].operation, "GENERATE");
+  assert.equal(history[1].operation, "SELECTIVE_CLIMATE");
+  assert.equal(history[0].createdAt, "2026-07-17T00:00:35.000Z");
   const restored = restoreGeneration(history[0]);
   restored.tiles[0].terrain = 99;
   restored.generation!.dominantTerrains.push("DESERT");

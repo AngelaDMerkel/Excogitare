@@ -1,9 +1,10 @@
 import type { Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
-import { poleProximity } from "./climate-projection.ts";
 import { connectedTileObjects, type GenerationStructure, type GeographicObject, type StrategicEdge, type StrategicNode } from "./generation-structure.ts";
 import type { MapGenerationOptions } from "./map-generator.ts";
+import type { WorldScale } from "./generation-recipe.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 import { worldCharacterProfile } from "./world-character.ts";
+import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
 
 export type PolisGeography = {
   landMask: boolean[];
@@ -284,8 +285,10 @@ export function generatePolisGeography(
   wraps: boolean,
   seed: number,
   random: () => number,
+  scale: WorldScale = "GLOBAL",
 ): PolisGeography {
   const character = worldCharacterProfile(options.style);
+  const scaleProfile = worldScaleProfile(scale);
   const requestedPlayerCount = Math.max(2, Math.min(22, Math.round(options.players)));
   const cityStateCount = Math.max(0, Math.min(41, Math.round(options.cityStates)));
   const anchors = buildMajorAnchors(options, width, height, wraps, requestedPlayerCount, random);
@@ -300,7 +303,7 @@ export function generatePolisGeography(
     playable: true,
     cityState: false,
   }));
-  const requestedSafeRadius = Math.max(2, Math.min(8, Math.round(options.polisSafeRadius)));
+  const requestedSafeRadius = Math.max(2, Math.min(8, Math.round(options.polisSafeRadius * scaleProfile.polis.safeRadius)));
   const maximumDistinctSafeRadius = Math.max(2, Math.floor((minimumStartDistance(anchors, width, wraps) - 1) / 2));
   const safeRadius = Math.min(requestedSafeRadius, maximumDistinctSafeRadius);
   const relaxations: string[] = [];
@@ -318,6 +321,7 @@ export function generatePolisGeography(
   const protectedTiles = new Set<number>();
   const safeTiles = new Set<number>();
   const corridorTiles = new Set<number>();
+  const hardRouteTiles = new Set<number>();
   const edgeRoutes: StrategicEdge[] = [];
   for (const anchor of anchors) {
     for (const point of pointsWithin(anchor, safeRadius, width, height, wraps)) {
@@ -326,12 +330,13 @@ export function generatePolisGeography(
     }
   }
 
-  const effectiveChokepointDensity = clamp(options.polisChokepointDensity + character.polis.chokepointShift, 0, 100);
+  const effectiveChokepointDensity = clamp(options.polisChokepointDensity + character.polis.chokepointShift + scaleProfile.polis.chokepointShift, 0, 100);
   const corridorRadius = effectiveChokepointDensity >= 72 ? 0 : effectiveChokepointDensity >= 38 ? 1 : 2;
   for (const [edgeIndex, [from, to, kind]] of edgePairs.entries()) {
-    const route = routeBetween(anchors[from], anchors[to], width, height, wraps, seed + edgeIndex * 97, character.polis.routeWander);
+    const route = routeBetween(anchors[from], anchors[to], width, height, wraps, seed + edgeIndex * 97, character.polis.routeWander * scaleProfile.polis.routeWander);
     const routeIndices = route.map((point) => indexOf(point, width));
     if (kind !== "NAVAL") {
+      for (const index of routeIndices) hardRouteTiles.add(index);
       for (const point of route) {
         for (const expanded of pointsWithin(point, corridorRadius, width, height, wraps)) {
           const index = indexOf(expanded, width);
@@ -368,6 +373,20 @@ export function generatePolisGeography(
     attributes: { role: index === 0 ? "OBJECTIVE" : "CONTESTED", priority: index + 1 },
   }));
 
+  const requestedLand = Math.round(width * height * (1 - clamp(options.waterPercent / 100, 0, 0.9)));
+  const hardProtectedTiles = new Set([...safeTiles, ...hardRouteTiles]);
+  if (protectedTiles.size > requestedLand && hardProtectedTiles.size <= requestedLand) {
+    const removable = [...protectedTiles].filter((index) => !hardProtectedTiles.has(index)).sort((one, two) => {
+      const oneHash = hashNoise(one % width, Math.floor(one / width), seed + 1193);
+      const twoHash = hashNoise(two % width, Math.floor(two / width), seed + 1193);
+      return oneHash - twoHash || one - two;
+    });
+    for (const index of removable) {
+      if (protectedTiles.size <= requestedLand) break;
+      protectedTiles.delete(index);
+    }
+    relaxations.push("Peripheral corridor width was narrowed to honor the requested land budget while preserving every strategic route.");
+  }
   const protectedArray = [...protectedTiles];
   const scores = new Array<number>(width * height);
   const expansionRadius = options.polisExpansionPressure === "RELAXED" ? 0.27 : options.polisExpansionPressure === "IMMEDIATE" ? 0.18 : 0.22;
@@ -393,7 +412,7 @@ export function generatePolisGeography(
       scores[y * width + x] = score;
     }
   }
-  const desiredLand = Math.max(protectedTiles.size, Math.round(width * height * (1 - clamp(options.waterPercent / 100, 0, 0.9))));
+  const desiredLand = Math.max(protectedTiles.size, requestedLand);
   const rankedLand = Array.from({ length: scores.length }, (_value, index) => index).sort((one, two) => scores[two] - scores[one] || one - two);
   const landMask = new Array<boolean>(scores.length).fill(false);
   for (const index of protectedTiles) landMask[index] = true;
@@ -434,7 +453,7 @@ export function generatePolisGeography(
       const lift = elevations[index] === 2 ? 0.2 : elevations[index] === 1 ? 0.06 : 0;
       moistures[index] = clamp(airborne + smoothNoise(x, y, seed + 5011, 7) * 0.28 * character.polis.climateVariance - 0.12 + lift);
       airborne = clamp(airborne - lift * 0.58 + (landMask[index] ? -0.006 : 0.02));
-      temperatures[index] = clamp(0.14 + Math.cos(poleProximity(x, y, width, height, options.projectionType) * Math.PI / 2) * 0.76 + temperatureShift - elevations[index] * 0.07 + (smoothNoise(x, y, seed + 5021, 10) - 0.5) * 0.16 * character.polis.climateVariance);
+      temperatures[index] = clamp(0.14 + Math.cos(scaledPoleProximity(x, y, width, height, options.projectionType, scale, seed + 53) * Math.PI / 2) * 0.76 + temperatureShift - elevations[index] * 0.07 + (smoothNoise(x, y, seed + 5021, 10 * scaleProfile.localDetail) - 0.5) * 0.16 * character.polis.climateVariance);
     }
   }
 
@@ -455,7 +474,7 @@ export function generatePolisGeography(
       else if (moistures[index] < 0.47) terrain = 3;
     }
     let feature = 255;
-    if (!land && poleProximity(x, y, width, height, options.projectionType) > 0.9 && hashNoise(x, y, seed + 6011) > 0.55) feature = 3;
+    if (!land && scaledPoleProximity(x, y, width, height, options.projectionType, scale, seed + 53) > 0.9 && hashNoise(x, y, seed + 6011) > 0.55) feature = 3;
     else if (land && elevations[index] < 2 && terrain === 2 && moistures[index] > 0.78) feature = temperatures[index] > 0.7 ? 1 : 2;
     else if (land && elevations[index] < 2 && terrain !== 4 && terrain !== 6 && moistures[index] > 0.57) feature = temperatures[index] > 0.72 ? 1 : 0;
     else if (land && elevations[index] === 0 && terrain === 4 && moistures[index] < 0.27 && hashNoise(x, y, seed + 6029) > 0.93) feature = 4;
@@ -491,6 +510,9 @@ export function generatePolisGeography(
     characterChokepointDensity: Math.round(effectiveChokepointDensity),
     characterRouteWander: Math.round(character.polis.routeWander * 100),
     characterBarrierPressure: Math.round(character.polis.corridorBarrier * 100),
+    scaleStrategicTravel: Math.round(scaleProfile.strategicTravel * 100),
+    scaleSafeRadius: Math.round(scaleProfile.polis.safeRadius * 100),
+    scaleRouteWander: Math.round(scaleProfile.polis.routeWander * 100),
     ...metrics,
   };
   const structure: GenerationStructure = {

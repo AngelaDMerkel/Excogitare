@@ -11,6 +11,7 @@ import type {
 export const GENERATION_RECIPE_SCHEMA_VERSION = 1 as const;
 
 export type WorldScale = "GLOBAL" | "CONTINENTAL" | "REGIONAL" | "PROVINCIAL" | "LOCAL";
+export type ArchetypeIntensity = "HINT" | "STRONG" | "TRANSFORMATIVE";
 export type WorldArchetype =
   | "EXISTING"
   | "NARRATIVE_DEFAULT"
@@ -74,6 +75,7 @@ export type GenerationRecipe = {
   scale: WorldScale;
   character: GenerationStyle;
   archetype: WorldArchetype;
+  archetypeIntensity: ArchetypeIntensity;
   modifier: WorldModifier;
   effort: GenerationEffort;
   cityStates: number;
@@ -127,6 +129,7 @@ export function generationRecipeFromOptions(options: MapGenerationOptions): Gene
     scale: "GLOBAL",
     character: style,
     archetype: "NARRATIVE_DEFAULT",
+    archetypeIntensity: "STRONG",
     modifier,
     effort: "STANDARD",
     cityStates,
@@ -193,6 +196,9 @@ export function normalizeGenerationRecipe(value: unknown, legacyDefaults: MapGen
   if (!enabled.length) throw new Error("A generation recipe must enable at least one victory condition.");
   const emphasized = [...new Set(value.matchIntent.emphasizedVictories.filter((victory) => enabled.includes(victory)))];
   const normalized = cloneGenerationRecipe(value)!;
+  normalized.scale = (["GLOBAL", "CONTINENTAL", "REGIONAL", "PROVINCIAL", "LOCAL"] as const).includes(normalized.scale) ? normalized.scale : "GLOBAL";
+  normalized.archetype = (["EXISTING", "NARRATIVE_DEFAULT", "TEMPERATE", "JUNGLE", "SUNSCOURGED", "WORLDFROST", "MONSOON", "MEDITERRANEAN", "STEPPE", "SAVANNA", "MARSHLAND", "VOLCANIC", "JURASSIC", "POST_COLLAPSE", "FALLOUT_WASTES"] as const).includes(normalized.archetype) ? normalized.archetype : "NARRATIVE_DEFAULT";
+  normalized.archetypeIntensity = (["HINT", "STRONG", "TRANSFORMATIVE"] as const).includes(normalized.archetypeIntensity) ? normalized.archetypeIntensity : "STRONG";
   normalized.matchIntent.enabledVictories = enabled;
   normalized.matchIntent.emphasizedVictories = emphasized;
   normalized.matchIntent.humanPlayers = Math.max(0, Math.round(normalized.matchIntent.humanPlayers));

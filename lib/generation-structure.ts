@@ -1,7 +1,8 @@
 import type { Civ5Map } from "./civ5-map.ts";
 import { GENERATION_PASS_DEFINITIONS, invalidatePassEvidence, type GenerationPassEvidence, type PassProvenance } from "./generation-pass-graph.ts";
+import type { NarrativeAssessment, NarrativeSkeleton } from "./narrative-types.ts";
 
-export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "BIOME_COLLECTION" | "TECTONIC_PLATE" | "ATMOSPHERIC_CELL" | "RAIN_SHADOW" | "GLACIAL_REGION" | "WATERSHED" | "STRATEGIC_REGION" | "BAY" | "CAPE" | "STRAIT" | "ARCHIPELAGO" | "FOREST_REALM" | "WASTE" | "RIVER_BASIN";
+export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "BIOME_COLLECTION" | "TECTONIC_PLATE" | "ATMOSPHERIC_CELL" | "RAIN_SHADOW" | "GLACIAL_REGION" | "WATERSHED" | "STRATEGIC_REGION" | "BAY" | "CAPE" | "STRAIT" | "ARCHIPELAGO" | "FOREST_REALM" | "WASTE" | "RIVER_BASIN" | "NARRATIVE_REGION" | "NARRATIVE_PATH" | "ICE_SHEET" | "REFUGE";
 
 export type GeographicObject = {
   id: string;
@@ -69,6 +70,8 @@ export type GenerationStructure = {
   riverSystems: LinearGeography[];
   diagnostics: Record<string, number>;
   strategicGraph?: StrategicGraph;
+  narrativeSkeleton?: NarrativeSkeleton;
+  narrativeAssessment?: NarrativeAssessment;
   semanticLineage?: SemanticLineage[];
   inputHash?: string;
   generatorVersion?: string;
@@ -285,6 +288,23 @@ export function cloneGenerationStructure(structure: GenerationStructure | undefi
       protectedTileIndices: [...structure.strategicGraph.protectedTileIndices],
       relaxations: [...structure.strategicGraph.relaxations],
       metrics: { ...structure.strategicGraph.metrics },
+    } : undefined,
+    narrativeSkeleton: structure.narrativeSkeleton ? {
+      ...structure.narrativeSkeleton,
+      regions: structure.narrativeSkeleton.regions.map((region) => ({ ...region })),
+      relationships: structure.narrativeSkeleton.relationships.map((relationship) => ({ ...relationship, points: relationship.points.map((point) => ({ ...point })) })),
+      targets: { ...structure.narrativeSkeleton.targets },
+      conflicts: [...structure.narrativeSkeleton.conflicts],
+      relaxations: [...structure.narrativeSkeleton.relaxations],
+    } : undefined,
+    narrativeAssessment: structure.narrativeAssessment ? {
+      ...structure.narrativeAssessment,
+      motifs: structure.narrativeAssessment.motifs.map((finding) => ({ ...finding })),
+      antiMotifs: structure.narrativeAssessment.antiMotifs.map((finding) => ({ ...finding })),
+      parameterDeviations: [...structure.narrativeAssessment.parameterDeviations],
+      weakened: [...structure.narrativeAssessment.weakened],
+      nearestConfusions: structure.narrativeAssessment.nearestConfusions.map((confusion) => ({ ...confusion })),
+      legalityRelaxations: [...structure.narrativeAssessment.legalityRelaxations],
     } : undefined,
   } satisfies GenerationStructure;
 }
