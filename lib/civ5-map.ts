@@ -57,6 +57,7 @@ export type Civ5Map = {
   cities?: Civ5City[];
   source: "demo" | "file" | "generated" | "script";
   generation?: import("./map-generator.ts").MapGenerationOptions;
+  recipe?: import("./generation-recipe.ts").GenerationRecipe;
   structure?: import("./generation-structure.ts").GenerationStructure;
 };
 

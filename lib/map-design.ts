@@ -1,5 +1,6 @@
 import type { Civ5Map, Civ5Tile } from "./civ5-map.ts";
-import { cloneGenerationStructure } from "./generation-structure.ts";
+import { cloneGenerationStructure, markGenerationStructureStale } from "./generation-structure.ts";
+import { cloneGenerationRecipe, generationRecipeFromOptions } from "./generation-recipe.ts";
 import { analyzeMultiplayerBalance, validateCiv5Map, type BalanceReport } from "./map-analysis.ts";
 import {
   balanceMapStarts,
@@ -39,6 +40,7 @@ function snapshotMap(map: Civ5Map): Civ5Map {
     startLocations: map.startLocations.map((start) => ({ ...start })),
     cities: map.cities?.map((city) => ({ ...city })),
     generation: map.generation ? { ...map.generation, dominantTerrains: [...map.generation.dominantTerrains] } : undefined,
+    recipe: cloneGenerationRecipe(map.recipe),
     structure: cloneGenerationStructure(map.structure),
   };
 }
@@ -111,7 +113,7 @@ export function regenerateMapStage(map: Civ5Map, options: MapGenerationOptions, 
     const source = climate.tiles[sourceY * climate.width + sourceX];
     return { ...tile, terrain: source.terrain >= 2 ? source.terrain : 2, feature: source.terrain >= 2 ? source.feature : 255 };
   });
-  return enforceGeneratedPlacementLegality({ ...map, tiles, generation: { ...passOptions, dominantTerrains: [...passOptions.dominantTerrains] } });
+  return enforceGeneratedPlacementLegality({ ...map, tiles, generation: { ...passOptions, dominantTerrains: [...passOptions.dominantTerrains] }, recipe: generationRecipeFromOptions(passOptions), structure: markGenerationStructureStale(map.structure, "Climate was selectively regenerated.", ["CLIMATE"]) });
 }
 
 function regionContains(region: MapRegion, x: number, y: number) {
@@ -145,7 +147,7 @@ export function applyStructureOperation(
       const y = Math.floor(index / map.width);
       return regionContains(region, x, y) ? { ...tile, river: drainage.tiles[index].river } : { ...tile };
     });
-    return { ...map, tiles };
+    return { ...map, tiles, structure: markGenerationStructureStale(map.structure, "A selected watershed was regenerated.", ["HYDROLOGY"]) };
   }
 
   const tiles = map.tiles.map((tile) => ({ ...tile }));
@@ -185,5 +187,6 @@ export function applyStructureOperation(
       }
     }
   }
-  return enforceGeneratedPlacementLegality({ ...map, tiles });
+  const changedPass = operation === "CLIMATE" ? "CLIMATE" : operation === "RIDGE" ? "RELIEF" : "TOPOLOGY";
+  return enforceGeneratedPlacementLegality({ ...map, tiles, structure: markGenerationStructureStale(map.structure, "The retained world structure was edited.", [changedPass]) });
 }

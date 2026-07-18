@@ -1,5 +1,6 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
-import { cloneGenerationStructure } from "./generation-structure.ts";
+import { cloneGenerationStructure, markGenerationStructureStale } from "./generation-structure.ts";
+import { cloneGenerationRecipe } from "./generation-recipe.ts";
 import { balanceMapStarts, DEFAULT_GENERATION_OPTIONS, generateRiverNetwork, MAP_SIZES } from "./map-generator.ts";
 import { RIVER_DATA_MASK, riverEdgeDefinitions } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
@@ -441,8 +442,10 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
 
 export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedIds: ReadonlySet<string>) {
   const result: Civ5Map = { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })) };
+  let changed = false;
   for (const issue of issues) {
     if (!selectedIds.has(issue.id) || !issue.mutation) continue;
+    changed = true;
     const mutation = issue.mutation;
     if (mutation.kind === "SET_TILE") Object.assign(result.tiles[mutation.index], mutation.changes);
     else if (mutation.kind === "MOVE_RESOURCE") {
@@ -475,9 +478,10 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
       result.scenarioMarker = mutation.marker;
     } else if (mutation.kind === "SET_PLAYERS") result.players = mutation.players;
   }
+  if (changed) result.structure = markGenerationStructureStale(map.structure, "Repair changed authored map data.");
   return result;
 }
 
 export function cloneMap(map: Civ5Map) {
-  return { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })), structure: cloneGenerationStructure(map.structure) };
+  return { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })), recipe: cloneGenerationRecipe(map.recipe), structure: cloneGenerationStructure(map.structure) };
 }

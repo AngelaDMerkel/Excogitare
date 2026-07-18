@@ -1,13 +1,16 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 import { poleProximity, type ClimateProjection } from "./climate-projection.ts";
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
-import { attachRiverSystems, connectedLinearFeatures, connectedTileObjects, type GenerationStructure } from "./generation-structure.ts";
+import { attachRiverSystems, attachSemanticIdentities, connectedLinearFeatures, connectedTileObjects, markGenerationStructureStale, type GenerationStructure } from "./generation-structure.ts";
 import { generatePhysicalGeography } from "./physical-generator.ts";
 import { generatePolisGeography } from "./polis-generator.ts";
 import { generateEccentricGeography } from "./eccentric-generator.ts";
 import { riverEdgeDefinitions, setRiverEdge, type RiverEdgeBit } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 import { worldCharacterProfile } from "./world-character.ts";
+import { applyWorldArchetype } from "./world-archetype.ts";
+import { generationOptionsFromRecipe, generationRecipeFromOptions, type GenerationRecipe } from "./generation-recipe.ts";
+import { GENERATION_PASS_DEFINITIONS, GenerationPassSession, effortCandidateCount, generationPassEvidence, type GenerationControl, type GenerationProgressListener } from "./generation-pass-graph.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 2, gameBreaking: false },
@@ -126,6 +129,30 @@ export function resolveMapDimensions(sizeId: MapSizeId, geometry: MapGeometry) {
   const width = Math.max(minimumDimension, Math.round(Math.sqrt(area * ratio)));
   const height = Math.max(minimumDimension, Math.round(area / width));
   return { width, height };
+}
+
+export function estimateGenerationResources(options: Pick<MapGenerationOptions, "size" | "geometry" | "engine">, effort: GenerationRecipe["effort"]) {
+  const dimensions = resolveMapDimensions(options.size, options.geometry);
+  const tileCount = dimensions.width * dimensions.height;
+  const candidates = effortCandidateCount(effort);
+  const engineWorkingBytesPerTile = options.engine === "PHYSICAL" ? 960 : options.engine === "ECCENTRIC" ? 820 : options.engine === "POLIS" ? 700 : 560;
+  // Candidate selection streams one complete candidate at a time. The estimate
+  // covers the active engine fields, one installed map and transient scoring
+  // data; it intentionally does not multiply retained maps by candidate count.
+  const estimatedPeakBytes = tileCount * (engineWorkingBytesPerTile + 520) + candidates * tileCount * 12;
+  const estimatedPeakMegabytes = Math.max(1, Math.ceil(estimatedPeakBytes / 1024 / 1024));
+  const risk = estimatedPeakMegabytes >= 192 ? "HIGH" : estimatedPeakMegabytes >= 96 ? "ELEVATED" : "NORMAL";
+  return {
+    dimensions,
+    tileCount,
+    candidates,
+    estimatedPeakBytes,
+    estimatedPeakMegabytes,
+    risk,
+    warning: (options.size === "COLOSSAL" || options.size === "EXTREME") && effort === "EXHAUSTIVE"
+      ? `Experimental ${dimensions.width}×${dimensions.height} generation evaluates ${candidates} candidates and may use roughly ${estimatedPeakMegabytes} MB while running.`
+      : undefined,
+  } as const;
 }
 
 export const DOMINANT_TERRAINS: ReadonlyArray<{ id: DominantTerrain; label: string }> = [
@@ -400,6 +427,10 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
     strategicBalance: false,
     seed: `${seedPart()}-${seedPart()}`,
   };
+}
+
+export function randomGenerationRecipe(random: () => number = Math.random, includeGameBreakingOptions = false) {
+  return generationRecipeFromOptions(randomGenerationOptions(random, includeGameBreakingOptions));
 }
 
 const TERRAINS = [
@@ -1544,7 +1575,7 @@ export function balanceMapStarts(map: Civ5Map, options: MapGenerationOptions) {
   }
   const cityStates = placeCityStateLocations(tiles, map.width, map.height, cityStateCount, majorStarts.length, map.wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
   const startLocations = [...majorStarts, ...cityStates];
-  return { ...map, tiles, players: majorStarts.length, startLocations };
+  return { ...map, tiles, players: majorStarts.length, startLocations, generation: { ...resolved, players: majorStarts.length, cityStates: cityStates.length, dominantTerrains: [...resolved.dominantTerrains] }, recipe: generationRecipeFromOptions({ ...resolved, players: majorStarts.length, cityStates: cityStates.length }), structure: markGenerationStructureStale(map.structure, "Start locations were rebalanced.", ["STARTS"]) };
 }
 
 export function regenerateMapRivers(map: Civ5Map, options: MapGenerationOptions, variation = 1) {
@@ -1564,8 +1595,8 @@ export function regenerateMapRivers(map: Civ5Map, options: MapGenerationOptions,
   const tiles = map.tiles.map((tile) => ({ ...tile, river: 0 }));
   const rivers = generateRiverNetwork(tiles, relief, moistures, map.width, map.height, map.wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity);
   for (let index = 0; index < tiles.length; index += 1) tiles[index].river = rivers[index];
-  const regenerated = { ...map, tiles, generation: { ...resolved, dominantTerrains: [...resolved.dominantTerrains] } };
-  return map.structure ? { ...regenerated, structure: attachRiverSystems(regenerated, map.structure) } : regenerated;
+  const regenerated = { ...map, tiles, generation: { ...resolved, dominantTerrains: [...resolved.dominantTerrains] }, recipe: generationRecipeFromOptions(resolved) };
+  return map.structure ? { ...regenerated, structure: markGenerationStructureStale(attachRiverSystems(regenerated, map.structure), "Hydrology was selectively regenerated.", ["HYDROLOGY"]) } : regenerated;
 }
 
 export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions, variation = 1) {
@@ -1579,14 +1610,14 @@ export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions
     improvement: undefined,
     route: undefined,
   }));
-  const draft = { ...map, tiles, generation: { ...resolved, dominantTerrains: [...resolved.dominantTerrains] } };
+  const draft = { ...map, tiles, generation: { ...resolved, dominantTerrains: [...resolved.dominantTerrains] }, recipe: generationRecipeFromOptions(resolved), structure: markGenerationStructureStale(map.structure, "Resources, wonders, and sites were selectively regenerated.", ["CONTENT"]) };
   applyResourceRules(tiles, draft.startLocations, map.width, map.height, map.wraps, resolved, random);
   placeWondersAndSites(tiles, draft.startLocations, map.width, map.height, map.wraps, resolved, random);
   if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, draft.startLocations, map.width, map.height, map.wraps, random);
   return enforceGeneratedPlacementLegality(draft);
 }
 
-export function generateMap(options: MapGenerationOptions, onProgress?: (stage: string) => void): Civ5Map {
+function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage: string) => void): Civ5Map {
   const requestedEngine = String(options.engine);
   const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : requestedEngine === "REGION_GRAPH" ? "ECCENTRIC" : options.engine };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
@@ -1930,4 +1961,101 @@ export function generateMap(options: MapGenerationOptions, onProgress?: (stage: 
     structure,
   });
   return { ...legal, structure: attachRiverSystems(legal, structure) };
+}
+
+export const GENERATION_PIPELINE_VERSION = "1";
+
+function passForStage(stage: string) {
+  if (stage.includes("players") || stage.includes("city states")) return "STARTS";
+  if (stage.includes("resources") || stage.includes("wonders")) return "CONTENT";
+  if (stage.includes("drainage") || stage.includes("rivers")) return "HYDROLOGY";
+  if (stage.includes("mountain passes")) return "ACCESSIBILITY";
+  if (stage.includes("climate") || stage.includes("rain shadows")) return "CLIMATE";
+  if (stage.includes("Refining") || stage.includes("relief")) return "RELIEF";
+  return "TOPOLOGY";
+}
+
+function generateMapWithRecipe(recipe: GenerationRecipe, onProgress?: GenerationProgressListener, control?: GenerationControl) {
+  const options = generationOptionsFromRecipe(recipe);
+  const session = new GenerationPassSession([...GENERATION_PASS_DEFINITIONS], options.seed, recipe, recipe.effort, onProgress, control);
+  session.complete("NORMALIZE");
+  session.progress("TOPOLOGY", "Preparing generation engine");
+  const completed = () => session.completed;
+  const byId = new Map(GENERATION_PASS_DEFINITIONS.map((definition) => [definition.id, definition]));
+  const passLabel = (passId: string) => passId === "TOPOLOGY" ? "Compiling world topology"
+    : passId === "RELIEF" ? "Resolving relief and elevation"
+      : passId === "CLIMATE" ? "Resolving climate and biomes"
+        : passId === "ACCESSIBILITY" ? "Opening mountain passes"
+          : passId === "STARTS" ? "Placing players and city states"
+            : passId === "CONTENT" ? "Placing resources and wonders"
+              : passId === "HYDROLOGY" ? "Resolving drainage and rivers"
+                : passId === "LEGALITY" ? "Validating generated map"
+                  : "Retaining semantic geography";
+  const ensurePassDependencies = (passId: string) => {
+    const definition = byId.get(passId);
+    if (!definition) throw new Error(`Unknown generation pass: ${passId}.`);
+    for (const dependency of definition.dependencies) {
+      if (completed().has(dependency)) continue;
+      ensurePassDependencies(dependency);
+      session.progress(dependency, passLabel(dependency), selectedCandidate);
+      session.complete(dependency, [], selectedCandidate);
+    }
+  };
+  let selectedCandidate = 1;
+  let generated: Civ5Map;
+  if (session.candidateCount === 1) {
+    generated = generateMapInternal(options, (stage) => {
+      const passId = passForStage(stage);
+      ensurePassDependencies(passId);
+      if (completed().has(passId)) return;
+      session.progress(passId, stage);
+    });
+  } else {
+    let selected: { map: Civ5Map; score: number; candidate: number } | undefined;
+    for (let candidate = 1; candidate <= session.candidateCount; candidate += 1) {
+      session.progress("TOPOLOGY", `Building deterministic candidate ${candidate} of ${session.candidateCount}`, candidate);
+      const candidateMap = generateMapInternal({ ...options, seed: `${options.seed}:candidate-${candidate}` });
+      session.checkCancelled();
+      const starts = candidateMap.startLocations.filter((start) => !start.cityState).length;
+      const water = candidateMap.tiles.filter((tile) => tile.terrain < 2).length / Math.max(1, candidateMap.tiles.length) * 100;
+      const passable = candidateMap.tiles.filter((tile) => tile.terrain >= 2 && tile.elevation < 2).length;
+      const score = (starts === Math.max(2, Math.min(22, options.players)) ? 10000 : starts * 100)
+        - Math.abs(water - options.waterPercent) * 5
+        + passable / Math.max(1, candidateMap.tiles.length) * 100;
+      if (!selected || score > selected.score || (score === selected.score && candidate < selected.candidate)) selected = { map: candidateMap, score, candidate };
+    }
+    if (!selected) throw new Error("Generation did not produce a candidate map.");
+    selectedCandidate = selected.candidate;
+    generated = { ...selected.map, generation: { ...options, dominantTerrains: [...options.dominantTerrains] } };
+    session.complete("TOPOLOGY", [`Selected deterministic candidate ${selectedCandidate} of ${session.candidateCount}.`], selectedCandidate);
+  }
+  const map = enforceGeneratedPlacementLegality(applyWorldArchetype(generated, recipe.archetype));
+  if (!completed().has("TOPOLOGY")) session.complete("TOPOLOGY", [], selectedCandidate);
+  for (const passId of ["RELIEF", "CLIMATE", "ACCESSIBILITY", "STARTS", "CONTENT", "HYDROLOGY"] as const) {
+    if (!completed().has(passId)) {
+      ensurePassDependencies(passId);
+      session.progress(passId, passLabel(passId), selectedCandidate);
+      session.complete(passId, [], selectedCandidate);
+    }
+  }
+  session.progress("LEGALITY", "Validating generated map");
+  session.complete("LEGALITY");
+  session.progress("SEMANTIC_IDENTITY", "Retaining semantic geography");
+  const structure = map.structure ? attachSemanticIdentities(map.structure, map.width, map.height) : undefined;
+  session.complete("SEMANTIC_IDENTITY");
+  const provenance = session.finish();
+  return {
+    ...map,
+    recipe,
+    structure: structure ? { ...structure, inputHash: session.inputHash, generatorVersion: GENERATION_PIPELINE_VERSION, provenance, passEvidence: generationPassEvidence(provenance, session.inputHash), evidenceState: "CURRENT" as const, staleReason: undefined } : undefined,
+  };
+}
+
+export function generateMapFromRecipe(recipe: GenerationRecipe, onProgress?: GenerationProgressListener, control?: GenerationControl): Civ5Map {
+  return generateMapWithRecipe(recipe, onProgress, control);
+}
+
+export function generateMap(options: MapGenerationOptions, onProgress?: GenerationProgressListener, control?: GenerationControl): Civ5Map {
+  const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
+  return generateMapWithRecipe(generationRecipeFromOptions(normalized), onProgress, control);
 }

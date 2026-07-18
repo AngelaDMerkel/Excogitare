@@ -2,7 +2,7 @@
 
 ## Contract
 
-- Status: Verified
+- Status: Partial. The original finite blind-review workflow is verified; the approved continuous four-choice v2 extension is specified and remains unimplemented.
 - User outcome: A reviewer can conduct a genuinely blind Map Type recognition session inside Excogitare, retain guesses and observations, reveal the intended identity only after submitting a review, revisit candidates, and export evidence that can guide later generator work.
 - Initial scope: Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World. These test isolation, correlated island chains, hierarchical hydrology and planetary climate respectively.
 - Workspace: A fifth top-level **Lab** workspace with a blue **Development** badge. Development means the evidence format and workflow may evolve; it must not imply that the four narrative identities are already implemented.
@@ -36,6 +36,14 @@ The intended identity is compared with `guessPrimary` for first-choice recogniti
 6. The same seed deck is imported and regenerated for comparison.
 7. Changes are accepted only when recognition improves without harming Civ V legality, accessibility, determinism or World Character variation.
 
+## Approved v2 extension
+
+The rewrite retains Blind Recognition and excludes Learning Mode. A session repeatedly generates one unlabeled target and exactly four deterministic choices: one correct Narrative Map Type and three plausible nearest confusions. Selecting an answer records it and automatically advances to an already prefetched candidate. Correctness is not revealed between trials because immediate teaching would contaminate later evidence.
+
+The session continues until **End and export**. Memory remains bounded to the current map, one prefetched map and compact prior trial records. Schema v2 records target, choices, position, answer, response time, exact recipe, diagnostics and aggregate confusion evidence. Schema v1 remains importable as an archived finite session; v1 judgments are never reinterpreted as v2 timing or four-choice evidence.
+
+Generation failure remains visible and retryable without losing the current trial. Invalid or future JSON rejects without replacing the session. Device-local session recovery may remain a convenience, but downloaded JSON is the durable evidence handoff.
+
 ## Completion gates
 
 - [x] Contract, initial types, failure behavior and exclusions recorded.
@@ -49,3 +57,10 @@ The intended identity is compared with `guessPrimary` for first-choice recogniti
 - [x] Feature tests, 83 regressions, lint, types, production and Pages builds pass.
 - [x] Node 24 Alpine image built; its production server and rendered Lab shell were verified locally.
 - [x] Register, feature record, README, request, diff and current code reconciled.
+- [ ] Schema v2 and safe schema v1 migration implemented.
+- [ ] Exactly four deterministic choices use one target and three nearest confusions.
+- [ ] Automatic next generation and bounded prefetch memory implemented.
+- [ ] Blind sessions continue indefinitely until End and export.
+- [ ] No correctness feedback or Learning Mode contaminates v2 evidence.
+- [ ] v2 export/import, summaries, failures, accessibility and regression coverage verified.
+- [ ] Updated README, Pages build and Alpine runtime reconciled before the expanded feature returns to Verified.

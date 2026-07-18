@@ -930,6 +930,12 @@ This register distinguishes the original concise specification from the detailed
 
 # Implementation guidance
 
+## Rewrite ownership
+
+This record is the authoritative implementation contract for the Narrative Map Type workstream in [`narrative-generation-rewrite.md`](narrative-generation-rewrite.md). The umbrella plan owns sequencing and shared schemas; this record owns the complete thirty-three-type catalogue, narrative verbs, motifs, anti-motifs, nearest confusions, engine realization requirements and identity evidence. [`generation-substrate.md`](generation-substrate.md) supplies the profile/pass machinery, while [`match-intent-and-polis.md`](match-intent-and-polis.md) supplies the strategic intent consumed by the seven Polis types.
+
+Implementation proceeds through the four recognition benchmarks and then the Excogitare, Eccentric, Physical and Polis waves. A runtime label, preset default or changed seed is not implementation evidence.
+
 ## Narrative profile model
 
 A later implementation should give each Map Type an authoritative profile containing at least:

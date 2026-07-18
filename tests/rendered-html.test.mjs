@@ -22,7 +22,7 @@ test("server-renders the Civ5 map viewer shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>Excogitare — Civ5 Map Viewer &amp; Editor<\/title>/i);
   assert.match(html, /Excogitare/);
-  assert.match(html, /v0\.4\.8/);
+  assert.match(html, /v1\.3\.0/);
   assert.match(html, /The Twin Continents/);
   assert.match(html, /Start locations/);
   assert.match(html, /4 positions/);
@@ -281,7 +281,7 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
   ]);
-  assert.match(source, />Design<\/button>[\s\S]{0,500}>Iterate<\/button>[\s\S]{0,500}>Edit<\/button>[\s\S]{0,500}>Review<\/button>/);
+  assert.match(source, />Design<\/button>[\s\S]{0,700}>Refine<\/button>[\s\S]{0,700}>Iterate<\/button>[\s\S]{0,700}>Edit<\/button>[\s\S]{0,700}>Review<\/button>/);
   assert.match(source, /aria-label="Workspaces"/);
   assert.match(source, /className="workspace-context-bar"/);
   assert.match(source, /className="workspace-context-identity"/);
@@ -302,7 +302,7 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
   assert.match(source, /aria-controls="lab-workspace-panel"/);
   assert.match(source, /aria-controls="lua-workspace-panel"/);
   assert.match(source, /createView === "ITERATE"[\s\S]{0,500}className="iteration-workspace"/);
-  assert.match(source, /<h3>World recipe<\/h3>/);
+  assert.match(source, /<h3>\{createView === "REFINE" \? "Refinement recipe" : "World recipe"\}<\/h3>/);
   assert.match(source, /className="engine-carousel-controls"/);
   assert.match(source, /className="engine-carousel" aria-label="Generation engines"/);
   assert.match(source, /aria-label="Previous generation engine"/);
