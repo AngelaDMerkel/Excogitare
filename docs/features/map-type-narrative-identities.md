@@ -356,19 +356,19 @@ This register distinguishes the original concise specification from the detailed
 
 **Design state:** Accepted after replacing the original open-ocean interpretation with a great-inland-seas model.
 
-**Narrative premise:** Deep oceans, broken shelves and rifts divide continental fragments into several distinct navigation basins.
+**Narrative premise:** A small number of colossal inland seas compress civilization into marginal shorelands and make the narrow passages between basins more important than the land area itself.
 
-**Recognizable geography:** Multiple separated deep-water domains; broken continental fragments; island chains along basin margins; rifts connecting or dividing seas; shelves with local coastal networks; ocean crossings whose destinations feel regionally distinct.
+**Recognizable geography:** Two to four Black Sea- or Caspian-scale interiors; scarce land pressed against the outer margins; Bosporus-like water straits; and Panama-like one-tile land isthmuses where a city could bridge two otherwise separate naval theatres. Peninsulas may articulate the shores, but islands are exceptional rather than a default population.
 
 **Character interpretations:** Realistic resembles a world of young ocean basins and fragmented continents. Fantastical exaggerates basin separation and shelf geometry. Mundane makes the basins broader and easier to read. Brutal limits crossings and turns shelf margins into contested gateways.
 
-**Failure conditions:** One undifferentiated ocean; ordinary archipelago distribution; many tiny basins with no scale hierarchy; land fragments unrelated to basin margins; deep-water bands that do not influence navigation.
+**Failure conditions:** One undifferentiated ocean; an ordinary archipelago; more than a few incidental islands; broad comfortable inland continents; roughly half-land composition; many tiny basins with no scale hierarchy; or passages that do not materially alter naval travel.
 
 **Narrative and gameplay:** Several enormous inland or semi-enclosed seas crowd civilizations onto narrow marginal lands. The seas are the principal sources of space, wealth and movement; local naval theatres connect through a few strategically dominant straits, while one- and two-tile isthmuses create land chokepoints and potential canal cities. Civilizations should appear arranged around important seas rather than comfortably occupying continents behind them.
 
-**Preferred parameter envelope:** Ordinary water should be approximately 60–78%, defaulting around 68–72%; mountains should be approximately 3–14%, defaulting around 8%; wrap should default to None. The low mountain range preserves scarce settlement land. Deliberately lower water exposes shelves and joins basins but weakens the naval premise; zero water removes it entirely.
+**Preferred parameter envelope:** Ordinary water should be approximately 68–82%, defaulting around 74%; mountains should be approximately 3–14%, defaulting around 8%; wrap should default to None. The low mountain range preserves scarce settlement land. Deliberately lower water exposes shelves and joins basins but weakens the naval premise; zero water removes it entirely.
 
-**Basin and margin architecture:** On a Standard map, construct roughly two to five unequal great seas occupying the interior. Connect selected seas through one- to three-tile naval straits; nearly connect others across one- or two-tile land isthmuses. Confine most viable land to thin irregular outer margins, peninsulas and limited regions between basins. Large maps may add secondary basins, elaborate peninsulas and very small near-shore islands; small maps retain the basic great-seas structure without mandatory island decoration.
+**Basin and margin architecture:** On a Standard map, construct roughly two to four unequal great seas occupying the interior. Connect selected seas through one- to three-tile naval straits; separate others with one- or two-tile land isthmuses. Confine nearly all viable land to a connected, thin and irregular outer margin plus a few attached peninsulas and basin dividers. Large maps may add one secondary basin and a handful of very small near-shore islands; small maps omit island decoration entirely.
 
 **Strategic sites:** Identify and protect one-tile canal isthmus sites: settleable non-mountain land adjacent to genuinely different basins, accessible from both land regions and normally unclaimed at game start. Verify narrow water straits as continuous legal routes with defensible shoreline sites and no accidental bypass. Do not place major starts or routine city states directly on the most powerful global chokepoints; these should be discovered and contested.
 
@@ -1058,3 +1058,12 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 - Every engine now retains five separate Match Intent findings. Polis evaluates its authored graph, route widths, cycles, roles and city-state placement. Excogitare, Eccentric and Physical report final-map starts, resource access, nearby production, city-state contestability and territorial capacity without falsely claiming a strategic compiler.
 - The strategic graph schema retains its Map Type, normalized intent summary, role groups, route metrics and victory evidence through workers, history and downloaded `.excogitare` files. Old graph records are migrated defensively during cloning. Civ5Map export remains game-only and does not claim to preserve this private evidence.
 - Default deterministic fixtures for all seven Polis types receive A or B narrative grades, obey five-hex start separation and return no Repair findings. The reviewed Phase 0 fixture changes only the intended Imperial Ring map/content digest and adds Match Intent evidence to every retained structure.
+
+## Inland Sea Crossroads refinement
+
+- The obsolete generic Rifted topology—six continent seeds, nine islands, twelve tiny islands and astronomy barriers—has been removed from this Map Type.
+- Its dedicated compiler now creates one connected marginal land system around two large final inland-sea components on the Standard four-basin plan. Alternating basin dividers form narrow water straits and one-tile land waists; the dividers meander through hex-contiguous paths rather than fragmenting into islands.
+- Default water is 74%, default mountains are 8%, the ordinary envelope is 68–82% water and 3–14% mountains, and the preset defaults to no wrapping. Explicit user overrides remain legal and are reported as weakened identity when outside that envelope.
+- Derived structure discards stale rifts, archipelagos and pre-narrative basin objects. It records final great seas, a bounded number of deliberate straits and settleable canal-isthmus sites instead.
+- Canal sites are reserved from major starts, city-state starts, wonders, barbarian camps and ruins. They remain non-mountain land so a player may contest and settle them during play.
+- Three deterministic Standard fixtures retain exactly 74% water, one land component, two great inland-sea components, one or more canal sites, no archipelago objects, A-grade final assessment, mountain accessibility and no Repair findings.

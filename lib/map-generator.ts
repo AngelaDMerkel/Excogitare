@@ -181,7 +181,7 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "LIVING_WORLD", label: "Ecological Transect", description: "One connected landscape tells a causal environmental story through broad, realistic transitions.", water: 58, mountains: 14, engine: "ECCENTRIC", climateRealism: true },
   { id: "TECTONIC_CONTINENTS", label: "Plate-Built Continents", description: "Each continent records a different authored geological history in its margins, ranges, rifts, and interior.", water: 56, mountains: 19, engine: "ECCENTRIC", climateRealism: true },
   { id: "GREAT_WATERSHEDS", label: "Great Watersheds", description: "Land-heavy river basins, inland lakes, wet lowlands, and mountain-fed drainage systems.", water: 35, mountains: 15, engine: "ECCENTRIC", climateRealism: true, riverDensity: "DENSE" },
-  { id: "SHATTERED_BASINS", label: "Inland Sea Crossroads", description: "Great inland seas crowd scarce land against the margins while narrow straits and canal isthmuses control movement.", water: 66, mountains: 13, engine: "ECCENTRIC", climateRealism: true },
+  { id: "SHATTERED_BASINS", label: "Inland Sea Crossroads", description: "Colossal inland seas crowd scarce land against the margins while Bosporus-like straits and one-tile canal isthmuses control movement.", water: 74, mountains: 8, engine: "ECCENTRIC", climateRealism: true },
   { id: "MYTHIC_REGIONS", label: "Wonder Heartlands", description: "A few monumental regions concentrate wonders, valuable resources, and fertile country inside poor or difficult marches.", water: 52, mountains: 17, engine: "ECCENTRIC", climateRealism: false },
   { id: "ENCIRCLING_LANDS", label: "Encircled Seas", description: "A continuous outer land journey surrounds hierarchical inland seas, islands, and inward-facing water kingdoms.", water: 22, mountains: 15, engine: "ECCENTRIC", climateRealism: false },
   { id: "ASTRAL_PANGAEA", label: "Scarred Pangaea", description: "One immense continent is reorganized by branching alien scars, incompatible marches, and broad surviving sutures.", water: 43, mountains: 18, engine: "ECCENTRIC", climateRealism: false },
@@ -1508,11 +1508,12 @@ function placeWondersAndSites(
   wraps: boolean,
   options: MapGenerationOptions,
   random: () => number,
+  blockedTiles = new Set<number>(),
 ) {
   const startPoints = starts.map((start) => [start.x, start.y] as [number, number]);
   const selectedWonders: Array<[number, number]> = [];
-  const landCandidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 ? [index] : []);
-  const waterCandidates = tiles.flatMap((tile, index) => tile.terrain < 2 ? [index] : []);
+  const landCandidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 && !blockedTiles.has(index) ? [index] : []);
+  const waterCandidates = tiles.flatMap((tile, index) => tile.terrain < 2 && !blockedTiles.has(index) ? [index] : []);
   const wonderCount = Math.max(0, Math.min(WONDERS.length, Math.round(options.wonderCount)));
   for (let wonderIndex = 0; wonderIndex < wonderCount; wonderIndex += 1) {
     const waterWonder = WONDERS[wonderIndex].includes("KRAKATOA") || WONDERS[wonderIndex].includes("BARRIER_REEF");
@@ -1710,7 +1711,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const scaleProfile = worldScaleProfile(scale);
   const seed = seedHash(`${resolved.seed}:${resolved.engine}:${resolved.preset}:${resolved.size}${geometrySeed}:${resolved.style}:${resolved.modifier}${projectionSeed}:${scale}`);
   const random = randomFactory(seed);
-  const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH";
+  const presetWraps = resolved.preset !== "INLAND_SEAS" && resolved.preset !== "LABYRINTH" && resolved.preset !== "SHATTERED_BASINS";
   const wraps = resolved.wrapType === "PRESET" ? presetWraps : resolved.wrapType === "EAST_WEST";
   const narrativeRecipe = sourceRecipe
     ? { ...sourceRecipe, settings: { ...sourceRecipe.settings, seed: resolved.seed } }
@@ -1749,19 +1750,20 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     for (const index of protectedStarts) geography.elevations[index] = 0;
     restoreAccessibleMountainTarget(geography.landMask, geography.elevations, geography.reliefValues, effectiveMountainPercent, width, height, wraps, protectedStarts);
     const tiles = geography.tiles.map((tile, index) => ({ ...tile, elevation: geography.elevations[index] }));
+    const reservedNarrativeSites = new Set(geography.structure.objects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS").flatMap((object) => object.tileIndices));
     const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
     const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
     onProgress?.("Placing players and city states");
     const majorStarts = geography.startLocations
       ? geography.startLocations.filter((start) => !start.cityState).map((start) => ({ ...start }))
-      : placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
+      : placeStartLocations(tiles, width, height, playerCount, wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random, reservedNarrativeSites);
     const actualPlayerCount = majorStarts.length;
     if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
       normalizeStarts(tiles, majorStarts, width, height, wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
     }
     const cityStates = geography.startLocations
       ? geography.startLocations.filter((start) => start.cityState).map((start) => ({ ...start }))
-      : placeCityStateLocations(tiles, width, height, cityStateCount, actualPlayerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+      : placeCityStateLocations(tiles, width, height, cityStateCount, actualPlayerCount, wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference, reservedNarrativeSites);
     const startLocations = [...majorStarts, ...cityStates];
     onProgress?.("Placing resources and wonders");
     const contestedTiles = geography.structure.objects
@@ -1771,7 +1773,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
       .filter((object) => object.kind === "STRATEGIC_REGION" && object.attributes?.role === "SAFE")
       .flatMap((object) => object.tileIndices);
     applyResourceRules(tiles, startLocations, width, height, wraps, resolved, random, contestedTiles, safeTiles);
-    placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random);
+    placeWondersAndSites(tiles, startLocations, width, height, wraps, resolved, random, reservedNarrativeSites);
     applyNarrativeContent(tiles, [...RESOURCES], narrativeSkeleton, width, height);
     if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
     onProgress?.("Resolving drainage and rivers");

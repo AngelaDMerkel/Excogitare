@@ -164,7 +164,7 @@ Map Type controls now begin at each identity's approved water and mountain defau
 | Eccentric | Ecological Transect | One connected landscape tells a causal environmental story through broad transitions. |
 | Eccentric | Plate-Built Continents | Every continent records a different authored geological history. |
 | Eccentric | Great Watersheds | Land-heavy river basins, inland lakes, wet lowlands and mountain drainage. |
-| Eccentric | Inland Sea Crossroads | Great seas crowd scarce marginal land while straits and canal isthmuses control movement. |
+| Eccentric | Inland Sea Crossroads | Two to four colossal inland seas crowd connected land against the margins; Bosporus-like straits and one-tile canal isthmuses replace island scatter. |
 | Eccentric | Wonder Heartlands | Monumental regions concentrate wonders and value behind poor or difficult marches. |
 | Eccentric | Encircled Seas | A meaningful continuous outer land journey surrounds hierarchical inner waters. |
 | Eccentric | Scarred Pangaea | One continent is reorganized by branching alien scars and broad surviving sutures. |

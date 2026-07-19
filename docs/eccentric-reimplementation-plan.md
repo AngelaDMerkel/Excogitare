@@ -21,7 +21,7 @@ This document is the working plan and evidence map for the complete, independent
 | Ecological Transect | Several broad continents distributed across open basins with restrained climate logic. |
 | Plate-Built Continents | Fewer continents, high boundary-range affinity and sheltered interiors. |
 | Great Watersheds | Land-heavy basins, guaranteed inland waters and dense drainage. |
-| Inland Sea Crossroads | Multiple deep barriers, broken continents and mixed island populations. |
+| Inland Sea Crossroads | Two to four colossal inland seas, connected marginal shorelands, narrow water straits and one-tile canal isthmuses; island scatter is explicitly suppressed. |
 | Wonder Heartlands | Dissonant climate collections divided by long interior ranges. |
 | Encircled Seas | Exterior land enclosing inland seas and lakes. |
 | Scarred Pangaea | One dominant continent cut by protected Astronomy scars. |

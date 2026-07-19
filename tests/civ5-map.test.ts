@@ -1736,7 +1736,32 @@ test("Eccentric presets remain valid through extreme Pin and String geometries",
   }
   const shattered = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "SHATTERED_BASINS", size: "STANDARD", players: 2, cityStates: 0, seed: "objects-SHATTERED_BASINS" });
   const kinds = new Set(shattered.structure?.objects.map((object) => object.kind));
-  for (const kind of (["SUBREGION", "POLYGON", "SUPERPOLYGON", "CONTINENT", "OCEAN_BASIN", "INLAND_SEA", "LAKE", "RIFT", "CLIMATE_REGION"] as const)) assert.ok(kinds.has(kind), `missing ${kind}`);
+  for (const kind of (["SUBREGION", "POLYGON", "CONTINENT", "INLAND_SEA", "STRAIT", "CLIMATE_REGION"] as const)) assert.ok(kinds.has(kind), `missing ${kind}`);
+  assert.ok(!kinds.has("ARCHIPELAGO"));
+});
+
+test("Inland Sea Crossroads suppresses archipelagos and organizes marginal land around straits and canal isthmuses", () => {
+  for (const seed of ["crossroads-bosporus", "crossroads-caspian", "crossroads-panama"]) {
+    const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "SHATTERED_BASINS", size: "STANDARD", players: 8, cityStates: 4, waterPercent: 74, mountainPercent: 8, wrapType: "PRESET", seed });
+    const objects = map.structure?.objects ?? [];
+    const landmasses = objects.filter((object) => object.kind === "CONTINENT");
+    const greatSeas = objects.filter((object) => object.kind === "INLAND_SEA" && object.tileIndices.length >= map.tiles.length * 0.08);
+    const straits = objects.filter((object) => object.kind === "STRAIT");
+    const canalSites = objects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS");
+    assert.equal(map.wraps, false);
+    assert.equal(map.tiles.filter((tile) => tile.terrain < 2).length, Math.round(map.tiles.length * 0.74));
+    assert.equal(landmasses.length, 1, `${seed} fragmented its marginal land`);
+    assert.ok(greatSeas.length >= 2 && greatSeas.length <= 4, `${seed} did not retain a small hierarchy of great seas`);
+    assert.ok(straits.length >= 1 && straits.length <= 3, `${seed} did not retain deliberate narrow straits`);
+    assert.ok(canalSites.length >= 1, `${seed} did not retain a settleable canal isthmus`);
+    const canalTiles = new Set(canalSites.flatMap((object) => object.tileIndices));
+    assert.ok(map.startLocations.every((start) => !canalTiles.has(start.y * map.width + start.x)), `${seed} consumed a canal site with an initial start`);
+    assert.ok([...canalTiles].every((index) => map.tiles[index].terrain >= 2 && map.tiles[index].elevation < 2 && map.tiles[index].wonder === 255 && !map.tiles[index].improvement), `${seed} did not leave its canal site settleable`);
+    assert.equal(objects.filter((object) => object.kind === "ARCHIPELAGO").length, 0);
+    assert.ok((map.structure?.narrativeAssessment?.score ?? 0) >= 85);
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), []);
+    assertMountainPassability(map);
+  }
 });
 
 test("generation history retains the newest 30 exact map snapshots", () => {

@@ -32,7 +32,7 @@ const NARRATIVE_ENVELOPES: Record<MapPresetId, NarrativeEnvelope> = {
   LIVING_WORLD: { water: [15, 65], mountains: [8, 25], preferredWater: 42, preferredMountains: 14, preferredRiverDensity: "DENSE" },
   TECTONIC_CONTINENTS: { water: [40, 65], mountains: [12, 28], preferredWater: 56, preferredMountains: 19 },
   GREAT_WATERSHEDS: { water: [20, 42], mountains: [10, 22], preferredWater: 35, preferredMountains: 15, preferredRiverDensity: "DENSE" },
-  SHATTERED_BASINS: { water: [58, 78], mountains: [6, 20], preferredWater: 66, preferredMountains: 13 },
+  SHATTERED_BASINS: { water: [68, 82], mountains: [3, 14], preferredWater: 74, preferredMountains: 8 },
   MYTHIC_REGIONS: { water: [30, 62], mountains: [12, 30], preferredWater: 52, preferredMountains: 17 },
   ENCIRCLING_LANDS: { water: [15, 38], mountains: [8, 24], preferredWater: 22, preferredMountains: 15 },
   ASTRAL_PANGAEA: { water: [25, 55], mountains: [10, 28], preferredWater: 43, preferredMountains: 18 },
@@ -91,7 +91,7 @@ export const NARRATIVE_PROFILES = {
   LIVING_WORLD: profile({ id: "LIVING_WORLD", label: "Ecological Transect", engine: "ECCENTRIC", verb: "Transitions", premise: "One connected landscape tells a compelling causal environmental story across the map.", requiredMotifs: [m("causal-transect", "Causal environmental transect"), m("living-corridors", "Life-supporting corridors")], forbiddenMotifs: [m("island-focus", "Island-scale composition")], nearestConfusions: ["MONSOON_CONTINENTS", "WILD_REGIONS"], blindRecognition: "The map reads as one complex slice through a living natural world." }),
   TECTONIC_CONTINENTS: profile({ id: "TECTONIC_CONTINENTS", label: "Plate-Built Continents", engine: "ECCENTRIC", verb: "Chronicles", premise: "Each continent records a different authored geological history.", requiredMotifs: [m("distinct-histories", "Distinct continental histories"), m("active-margins", "Responsive margins and interiors")], forbiddenMotifs: [m("repeated-template", "Repeated tectonic template")], nearestConfusions: ["DYNAMIC_EARTH", "COLLIDING_PLATES"], blindRecognition: "Each continent tells a different geological history." }),
   GREAT_WATERSHEDS: profile({ id: "GREAT_WATERSHEDS", label: "Great Watersheds", engine: "ECCENTRIC", verb: "Drains", premise: "A few dominant mountain-fed river systems organize settlement, floodplains and regional identity.", preferredScales: ["CONTINENTAL", "REGIONAL", "PROVINCIAL"], parameterEnvelope: { water: [20, 42], mountains: [10, 22], preferredWater: 35, preferredMountains: 15, preferredRiverDensity: "DENSE" }, requiredMotifs: [m("trunk-rivers", "Dominant trunk rivers"), m("tributary-hierarchy", "Merging tributary hierarchy"), m("wet-lowlands", "Floodplains, marshes and deltas")], forbiddenMotifs: [m("short-unrelated-rivers", "Unrelated short rivers")], topologyProgram: { kind: "watershed-hierarchy", regionRange: [3, 6], relationships: ["headwater", "tributary", "trunk", "outlet"] }, surfaceBiases: { terrain: ["fertile river plains"], features: ["marsh", "forest divides"], resources: ["river food"] }, gameplayContract: { objective: "Make basins and confluences the primary settlement and political structure.", populationRule: "Distribute starts across viable middle and lower valleys without clustering one delta." }, nearestConfusions: ["MONSOON_CONTINENTS", "LIVING_WORLD"], blindRecognition: "The world is arranged around a few enormous river systems." }),
-  SHATTERED_BASINS: profile({ id: "SHATTERED_BASINS", label: "Inland Sea Crossroads", engine: "ECCENTRIC", verb: "Crowds", premise: "Great inland seas crowd scarce land to the margins and concentrate power in straits and isthmuses.", requiredMotifs: [m("great-seas", "Several great inland seas"), m("strait-isthmus", "Dominant straits and isthmuses")], forbiddenMotifs: [m("comfortable-continents", "Comfortable inland continents")], nearestConfusions: ["INLAND_SEAS", "LONELY_OCEANS"], blindRecognition: "Civilizations crowd the margins of great connected seas." }),
+  SHATTERED_BASINS: profile({ id: "SHATTERED_BASINS", label: "Inland Sea Crossroads", engine: "ECCENTRIC", verb: "Crowds", premise: "Colossal inland seas crowd scarce land to the margins and concentrate power in Bosporus-like straits and one-tile canal isthmuses.", requiredMotifs: [m("great-seas", "Two to four colossal inland seas"), m("strait-isthmus", "Dominant straits and canal isthmuses"), m("marginal-land", "Connected marginal shorelands")], forbiddenMotifs: [m("comfortable-continents", "Comfortable inland continents"), m("island-scatter", "Archipelago-like island scatter")], nearestConfusions: ["INLAND_SEAS", "LONELY_OCEANS"], blindRecognition: "Civilizations are compressed against the margins of colossal inland seas whose straits and canal sites organize the world." }),
   MYTHIC_REGIONS: profile({ id: "MYTHIC_REGIONS", label: "Wonder Heartlands", engine: "ECCENTRIC", verb: "Consecrates", premise: "A few mythic hearts concentrate wonders and value behind comparatively barren marches.", requiredMotifs: [m("mythic-hearts", "Enclosed mythic hearts"), m("value-contrast", "Heart-to-march value contrast")], forbiddenMotifs: [m("even-value", "Evenly distributed value")], nearestConfusions: ["WILD_REGIONS", "CONTESTED_HEARTLAND"], blindRecognition: "Exceptional lands of myth rise from comparatively empty marches." }),
   ENCIRCLING_LANDS: profile({ id: "ENCIRCLING_LANDS", label: "Encircled Seas", engine: "ECCENTRIC", verb: "Surrounds", premise: "A continuous outer land journey encloses a hierarchy of inward-facing seas.", requiredMotifs: [m("outer-circuit", "Continuous outer land circuit"), m("enclosed-seas", "Hierarchical enclosed seas")], forbiddenMotifs: [m("broken-ring", "Broken terrestrial circuit")], nearestConfusions: ["INLAND_SEAS", "SHATTERED_BASINS"], blindRecognition: "I could travel around the whole world by land, taking the long outer road around its enclosed seas." }),
   ASTRAL_PANGAEA: profile({ id: "ASTRAL_PANGAEA", label: "Scarred Pangaea", engine: "ECCENTRIC", verb: "Scars", premise: "One continent is unnaturally reorganized by enormous alien graph scars.", requiredMotifs: [m("one-continent", "One surviving continent"), m("alien-scars", "Authoritative alien scars")], forbiddenMotifs: [m("ordinary-fracture", "Ordinary geological fracture")], nearestConfusions: ["PANGAEA", "RIFTWORLD"], blindRecognition: "One continent has been unnaturally reorganized by several enormous alien scars." }),
@@ -121,6 +121,7 @@ export function benchmarkNarrative(id: MapPresetId) { return COMPILED_IDENTITIES
 function seedHash(value: string) { let hash = 2166136261; for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619); return hash >>> 0; }
 function randomFactory(seed: number) { let state = seed || 1; return () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 0x100000000; }; }
 function clamp(value: number, minimum = 0, maximum = 1) { return Math.max(minimum, Math.min(maximum, value)); }
+function deterministicNoise(value: number, seed: number) { const wave = Math.sin(value * 12.9898 + seed * 0.001) * 43758.5453; return wave - Math.floor(wave); }
 function wrappedDistance(one: { x: number; y: number }, two: { x: number; y: number }, wraps: boolean) { let dx = Math.abs(one.x - two.x); if (wraps) dx = Math.min(dx, 1 - dx); return Math.hypot(dx, (one.y - two.y) * 0.866); }
 
 function separatedPoints(count: number, random: () => number, wraps: boolean, margin = 0.08) {
@@ -240,13 +241,20 @@ function compileCatalogSkeleton(
     for (let index = 0; index < systems.length; index += 1) link(index % 2 ? "RIFT_MARGIN" : "ACTIVE_MARGIN", index % 2 ? "WATER_PATH" : "RIDGE_PATH", systems[index], systems[(index + 1) % systems.length], (index % 2 ? -1 : 1) * 0.38, 0.9);
     targets.processProvinces = systems.length; targets.activeMargins = systems.length;
   } else if (id === "SHATTERED_BASINS") {
-    const seas = points(scaleCount(4, 2), 0.19).map((point) => add("GREAT_INLAND_SEA", "WATER", point, 0.17, 1.2));
-    for (let index = 0; index < seas.length - 1; index += 1) link("NARROW_STRAIT", "WATER_PATH", seas[index], seas[index + 1], (random() - 0.5) * 0.15, 0.8);
-    for (let index = 0; index < seas.length; index += 1) {
-      const next = seas[(index + 1) % seas.length];
-      add("VALUABLE_ISTHMUS", "VALUE", { x: (seas[index].x + next.x) / 2, y: (seas[index].y + next.y) / 2 }, 0.035, 1.4);
+    const seaCount = scale === "LOCAL" ? 2 : scale === "PROVINCIAL" ? 3 : 4;
+    const seas = Array.from({ length: seaCount }, (_value, index) => {
+      const t = index / (seaCount - 1);
+      return add("GREAT_INLAND_SEA", "WATER", { x: 0.16 + t * 0.68 + (random() - 0.5) * 0.025, y: 0.5 + (index % 2 ? 0.055 : -0.055) + (random() - 0.5) * 0.025 }, seaCount === 2 ? 0.23 : 0.18, 1.35);
+    });
+    for (let index = 0; index < seas.length - 1; index += 1) {
+      const midpoint = { x: (seas[index].x + seas[index + 1].x) / 2, y: (seas[index].y + seas[index + 1].y) / 2 };
+      if (index % 2 === 0) link("NARROW_STRAIT", "WATER_PATH", seas[index], seas[index + 1], (index % 4 ? -1 : 1) * 0.08, 1);
+      else {
+        const isthmus = add("VALUABLE_ISTHMUS", "VALUE", midpoint, 0.026, 1.5);
+        relationships.push({ id: `canal-isthmus-${index + 1}`, kind: "CANAL_ISTHMUS", effect: "LAND_PATH", from: seas[index].id, to: seas[index + 1].id, points: [{ x: isthmus.x, y: isthmus.y }], strength: 1 });
+      }
     }
-    targets.greatSeas = seas.length; targets.straits = Math.max(1, seas.length - 1); targets.isthmuses = seas.length;
+    targets.greatSeas = seas.length; targets.straits = Math.ceil((seas.length - 1) / 2); targets.isthmuses = Math.floor((seas.length - 1) / 2); targets.maximumIncidentalIslands = scale === "GLOBAL" ? 2 : 0;
   } else if (id === "MYTHIC_REGIONS") {
     const hearts = points(scaleCount(5, 3), 0.13).map((point) => add("MYTHIC_HEART", "VALUE", point, 0.055, 1.5));
     for (const heart of hearts) {
@@ -425,18 +433,112 @@ function exactNarrativeMask(scores: number[], landCount: number) {
   return scores.map((_value, index) => selected.has(index));
 }
 
+function exactNarrativeMaskWithLocks(scores: number[], landCount: number, requiredLand: ReadonlySet<number>, requiredWater: ReadonlySet<number>) {
+  const selected = new Set([...requiredLand].filter((index) => index >= 0 && index < scores.length && !requiredWater.has(index)));
+  const candidates = scores.map((_value, index) => index)
+    .filter((index) => !selected.has(index) && !requiredWater.has(index))
+    .sort((one, two) => scores[two] - scores[one] || one - two);
+  for (const index of candidates) {
+    if (selected.size >= landCount) break;
+    selected.add(index);
+  }
+  if (selected.size > landCount) {
+    const removable = [...selected].filter((index) => !requiredLand.has(index)).sort((one, two) => scores[one] - scores[two] || two - one);
+    while (selected.size > landCount && removable.length) selected.delete(removable.shift()!);
+  }
+  return scores.map((_value, index) => selected.has(index));
+}
+
+function inlandSeaCrossroadsMask(skeleton: NarrativeSkeleton, landCount: number, width: number, height: number, wraps: boolean, seed: number) {
+  const area = width * height;
+  const seas = skeleton.regions.filter((region) => region.role === "GREAT_INLAND_SEA").sort((one, two) => one.x - two.x);
+  const requiredLand = new Set<number>();
+  const requiredWater = new Set<number>();
+  const separators = seas.slice(0, -1).map((sea, index) => ({ x: (sea.x + seas[index + 1].x) / 2, strait: index % 2 === 0, gapY: clamp(0.43 + deterministicNoise(index + 991, seed) * 0.14, 0.38, 0.62), neckY: clamp(0.4 + deterministicNoise(index + 1499, seed) * 0.2, 0.34, 0.66) }));
+  const separatorPaths = separators.map((separator, separatorIndex) => {
+    const base = clamp(Math.round(separator.x * width - 0.5), 1, width - 2);
+    let current = base;
+    return Array.from({ length: height }, (_value, y) => {
+      if (y > 0) {
+        const desired = clamp(Math.round(base + Math.sin(y / Math.max(1, height - 1) * Math.PI * 2 + separatorIndex * 1.7 + seed * 0.004) * Math.min(3, width * 0.025)), 1, width - 2);
+        const allowed = (y - 1) % 2 === 0 ? [current - 1, current] : [current, current + 1];
+        current = allowed.reduce((best, candidate) => Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best, current);
+        current = clamp(current, 1, width - 2);
+      }
+      return current;
+    });
+  });
+  const pathX = (y: number, separatorIndex: number) => separatorPaths[separatorIndex][y];
+
+  for (let x = 0; x < width; x += 1) { requiredLand.add(x); requiredLand.add((height - 1) * width + x); }
+  if (!wraps) for (let y = 1; y < height - 1; y += 1) { requiredLand.add(y * width); requiredLand.add(y * width + width - 1); }
+  separators.forEach((separator, separatorIndex) => {
+    const gapRow = Math.round(separator.gapY * (height - 1));
+    for (let y = 0; y < height; y += 1) {
+      const x = pathX(y, separatorIndex);
+      if (separator.strait && Math.abs(y - gapRow) <= 1) {
+        for (let dx = -1; dx <= 1; dx += 1) requiredWater.add(y * width + clamp(x + dx, 0, width - 1));
+      } else requiredLand.add(y * width + x);
+    }
+  });
+
+  const scores = Array.from({ length: area }, (_value, index) => {
+    const x = index % width; const y = Math.floor(index / width);
+    const nx = (x + 0.5) / width; const ny = (y + 0.5) / height;
+    const edgeTiles = Math.min(x + 0.5, width - x - 0.5, (y + 0.5) * 0.88, (height - y - 0.5) * 0.88);
+    let score = clamp(1 - edgeTiles / Math.max(2, Math.min(width, height) * 0.16)) * 1.9;
+    separators.forEach((separator, separatorIndex) => {
+      const distance = Math.abs(x - pathX(y, separatorIndex));
+      const gapDistance = Math.abs(y / Math.max(1, height - 1) - separator.gapY);
+      const gapSuppression = separator.strait ? clamp(gapDistance / Math.max(0.025, 2.6 / height)) : 1;
+      const neckDistance = Math.abs(y / Math.max(1, height - 1) - separator.neckY);
+      const dividerWidth = separator.strait ? 4.2 : 1.15 + clamp(neckDistance / 0.14) * 4.85;
+      score = Math.max(score, clamp(1 - distance / dividerWidth) * 1.72 * gapSuppression);
+    });
+    for (const sea of seas) score -= clamp(1 - tileDistance(index, sea, width, height, wraps) / Math.max(0.06, sea.radius)) * 0.9;
+    score += Math.sin(nx * 19 + ny * 7 + seed * 0.017) * 0.018 + Math.cos(nx * 11 - ny * 17 + seed * 0.009) * 0.014;
+    return score;
+  });
+  return exactNarrativeMaskWithLocks(scores, landCount, requiredLand, requiredWater);
+}
+
 function narrativeObjects(skeleton: NarrativeSkeleton, landMask: boolean[], width: number, height: number, wraps: boolean) {
   const regions: GeographicObject[] = skeleton.regions.map((region) => ({ id: `narrative-${region.id}`, name: region.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()), kind: region.role === "ICE_SHEET" ? "ICE_SHEET" : region.role === "REFUGE" ? "REFUGE" : "NARRATIVE_REGION", tileIndices: landMask.flatMap((land, index) => (region.effect === "WATER" ? !land : land) && tileDistance(index, region, width, height, wraps) <= region.radius ? [index] : []), attributes: { role: region.role, effect: region.effect ?? "", parent: region.parentId ?? "", priority: region.priority } }));
   const paths: GeographicObject[] = skeleton.relationships.filter((relationship) => relationship.points.length).map((relationship) => ({ id: `narrative-${relationship.id}`, name: relationship.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()), kind: "NARRATIVE_PATH", tileIndices: relationship.points.map((point) => Math.min(width * height - 1, Math.max(0, Math.floor(point.y * height) * width + Math.min(width - 1, Math.floor(point.x * width))))), attributes: { relationship: relationship.kind, effect: relationship.effect ?? "", from: relationship.from, to: relationship.to, strength: relationship.strength } }));
   return [...regions, ...paths].filter((object) => object.tileIndices.length);
 }
 
-function rebuildTopologyObjects(structure: GenerationStructure, landMask: boolean[], width: number, height: number, wraps: boolean) {
-  const replacedKinds = new Set(["CONTINENT", "OCEAN_BASIN"]);
+function rebuildTopologyObjects(structure: GenerationStructure, landMask: boolean[], width: number, height: number, wraps: boolean, skeleton?: NarrativeSkeleton) {
+  const crossroads = skeleton?.profileId === "SHATTERED_BASINS";
+  const replacedKinds = new Set(crossroads ? ["SUPERPOLYGON", "CONTINENT", "OCEAN_BASIN", "INLAND_SEA", "LAKE", "RIFT", "STRAIT", "BAY", "ARCHIPELAGO"] : ["CONTINENT", "OCEAN_BASIN"]);
+  const continents = connectedTileObjects("CONTINENT", landMask, width, height, wraps, "Narrative Landmass");
+  const waters = connectedTileObjects(crossroads ? "INLAND_SEA" : "OCEAN_BASIN", landMask.map((land) => !land), width, height, wraps, crossroads ? "Great Inland Sea" : "Narrative Ocean");
+  if (!crossroads) return [
+    ...structure.objects.filter((object) => !replacedKinds.has(object.kind)).map((object) => ({ ...object, tileIndices: object.tileIndices.filter((index) => index >= 0 && index < landMask.length) })).filter((object) => object.tileIndices.length),
+    ...continents,
+    ...waters,
+  ];
+  const waterIds = new Int32Array(landMask.length).fill(-1);
+  waters.forEach((water, id) => water.tileIndices.forEach((index) => { waterIds[index] = id; }));
+  const canalCandidates = landMask.flatMap((land, index) => {
+    if (!land) return [];
+    const adjacentBasins = new Set(connectedNeighbors(index, width, height, wraps).map((neighbor) => waterIds[neighbor]).filter((id) => id >= 0));
+    return adjacentBasins.size >= 2 ? [index] : [];
+  });
+  const selectedCanals: number[] = [];
+  for (const index of canalCandidates.sort((one, two) => Math.abs(one % width - width / 2) - Math.abs(two % width - width / 2) || one - two)) {
+    if (selectedCanals.every((other) => Math.hypot(index % width - other % width, Math.floor(index / width) - Math.floor(other / width)) >= 6)) selectedCanals.push(index);
+    if (selectedCanals.length >= Math.max(1, skeleton?.targets.isthmuses ?? 1)) break;
+  }
+  const straits = connectedTileObjects("STRAIT", landMask.map((land, index) => !land && connectedNeighbors(index, width, height, wraps).filter((neighbor) => landMask[neighbor]).length >= 3), width, height, wraps, "Narrow Strait")
+    .sort((one, two) => two.tileIndices.length - one.tileIndices.length || Math.abs((one.tileIndices[0] % width) - width / 2) - Math.abs((two.tileIndices[0] % width) - width / 2))
+    .slice(0, Math.max(1, skeleton?.targets.straits ?? 1));
   return [
     ...structure.objects.filter((object) => !replacedKinds.has(object.kind)).map((object) => ({ ...object, tileIndices: object.tileIndices.filter((index) => index >= 0 && index < landMask.length) })).filter((object) => object.tileIndices.length),
-    ...connectedTileObjects("CONTINENT", landMask, width, height, wraps, "Narrative Landmass"),
-    ...connectedTileObjects("OCEAN_BASIN", landMask.map((land) => !land), width, height, wraps, "Narrative Ocean"),
+    ...continents,
+    ...waters,
+    ...straits,
+    ...selectedCanals.map((index, canal) => ({ id: `canal-isthmus-${canal + 1}`, name: `Canal Isthmus ${canal + 1}`, kind: "NARRATIVE_REGION" as const, tileIndices: [index], attributes: { role: "CANAL_ISTHMUS", settleable: true, adjacentBasins: 2 } })),
   ];
 }
 
@@ -496,6 +598,13 @@ export function realizeNarrativeGeography<T extends NarrativeGeography>(geograph
       const center = Math.min(area - 1, Math.floor(island.y * height) * width + Math.min(width - 1, Math.floor(island.x * width)));
       for (let index = 0; index < area; index += 1) if (landMask[index] && tileDistance(index, island, width, height, wraps) < island.radius * 0.75) reliefValues[index] += 0.42;
       elevations[center] = landMask[center] ? 2 : elevations[center];
+    }
+  } else if (skeleton.profileId === "SHATTERED_BASINS") {
+    landMask = inlandSeaCrossroadsMask(skeleton, landCount, width, height, wraps, seed);
+    for (let index = 0; index < area; index += 1) {
+      if (!landMask[index]) { elevations[index] = 0; reliefValues[index] = Math.min(reliefValues[index], 0.18); continue; }
+      const coastDistance = connectedNeighbors(index, width, height, wraps).filter((neighbor) => !landMask[neighbor]).length;
+      if (coastDistance >= 2) elevations[index] = Math.min(elevations[index], 1);
     }
   } else if (skeleton.profileId === "GREAT_WATERSHEDS") {
     for (const relationship of skeleton.relationships.filter((item) => item.kind === "FLOWS_TO")) {
@@ -611,8 +720,8 @@ export function realizeNarrativeGeography<T extends NarrativeGeography>(geograph
     return tile;
   });
 
-  const structureObjects = [...rebuildTopologyObjects(geography.structure, landMask, width, height, wraps), ...narrativeObjects(skeleton, landMask, width, height, wraps)];
-  const structure = { ...geography.structure, objects: structureObjects, narrativeSkeleton: skeleton, diagnostics: { ...geography.structure.diagnostics, narrativeRegions: skeleton.regions.length, narrativeRelationships: skeleton.relationships.length, narrativeConflicts: skeleton.conflicts.length, narrativeRelaxations: skeleton.relaxations.length } };
+  const structureObjects = [...rebuildTopologyObjects(geography.structure, landMask, width, height, wraps, skeleton), ...narrativeObjects(skeleton, landMask, width, height, wraps)];
+  const structure = { ...geography.structure, objects: structureObjects, narrativeSkeleton: skeleton, diagnostics: { ...geography.structure.diagnostics, narrativeRegions: skeleton.regions.length, narrativeRelationships: skeleton.relationships.length, narrativeConflicts: skeleton.conflicts.length, narrativeRelaxations: skeleton.relaxations.length, ...(skeleton.profileId === "SHATTERED_BASINS" ? { narrativeGreatSeas: structureObjects.filter((object) => object.kind === "INLAND_SEA" && object.tileIndices.length >= area * 0.08).length, narrativeStraits: structureObjects.filter((object) => object.kind === "STRAIT").length, narrativeCanalSites: structureObjects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS").length, narrativeLandComponents: structureObjects.filter((object) => object.kind === "CONTINENT").length } : {}) } };
   return { ...geography, landMask, reliefValues, temperatures, moistures, elevations, riverGuidance, tiles, structure, startLocations };
 }
 
@@ -785,8 +894,15 @@ function catalogNarrativeFindings(map: Civ5Map, skeleton: NarrativeSkeleton, pro
       topologyEvidence = `${skeleton.targets.mythicHearts ?? 0} mythic hearts and their barren or mountainous marches retain ${Math.round(rawRegionFidelity * 100)}% direct surface expression.`;
       break;
     case "SHATTERED_BASINS":
-      topologyScore = clamp(regionFidelity * 0.6 + pathFidelity * 0.4);
-      topologyEvidence = `${skeleton.targets.greatSeas ?? 0} great seas, ${skeleton.targets.straits ?? 0} straits and ${skeleton.targets.isthmuses ?? 0} valuable isthmuses remain in the compiled plan.`;
+      {
+        const greatSeas = map.structure?.objects.filter((object) => object.kind === "INLAND_SEA" && object.tileIndices.length >= map.tiles.length * 0.08).length ?? 0;
+        const straits = map.structure?.objects.filter((object) => object.kind === "STRAIT").length ?? 0;
+        const canalSites = map.structure?.objects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS").length ?? 0;
+        const incidentalIslands = landSizes.slice(1).filter((size) => size < map.tiles.length * 0.02).length;
+        const waterShare = waterTiles / Math.max(1, map.tiles.length);
+        topologyScore = clamp((clamp(greatSeas / 2) + clamp(straits) + clamp(canalSites) + clamp(1 - incidentalIslands / 3) + clamp((waterShare - 0.55) / 0.13)) / 5);
+        topologyEvidence = `${greatSeas} colossal inland-sea components, ${straits} narrow straits, ${canalSites} verified canal-isthmus sites, ${incidentalIslands} incidental small islands and ${Math.round(waterShare * 100)}% water remain in the final map.`;
+      }
       break;
     case "LABYRINTH": case "RIFTWORLD": case "RIFT_REALMS": case "PENINSULA_REALM":
       topologyScore = pathFidelity;
@@ -798,7 +914,7 @@ function catalogNarrativeFindings(map: Civ5Map, skeleton: NarrativeSkeleton, pro
       break;
   }
   const motifs = profile.requiredMotifs.map((motif, index) => finding(motif.id, motif.label, clamp(topologyScore * (index ? 0.94 : 1)), topologyEvidence));
-  const antiScore = skeleton.profileId === "ANCIENT_CRATONS" ? topologyScore : clamp(regionFidelity * 0.5 + pathFidelity * 0.5);
+  const antiScore = skeleton.profileId === "ANCIENT_CRATONS" || skeleton.profileId === "SHATTERED_BASINS" ? topologyScore : clamp(regionFidelity * 0.5 + pathFidelity * 0.5);
   const antiMotifs = profile.forbiddenMotifs.map((motif) => finding(motif.id, `Avoid ${motif.label.toLowerCase()}`, antiScore, `Final-map sampling distinguishes the authored ${profile.topologyProgram.kind} program from ${motif.label.toLowerCase()}: ${Math.round(rawRegionFidelity * 100)}% direct region and ${Math.round(rawPathFidelity * 100)}% direct relationship expression.`));
   return { motifs, antiMotifs };
 }
