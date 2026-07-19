@@ -14,6 +14,7 @@ import {
 } from "react";
 import {
   createDemoMap,
+  inspectCiv5MapStructure,
   parseCiv5Map,
   parseCiv5MapForRepair,
   serializeCiv5Map,
@@ -35,25 +36,23 @@ import {
   type StructureOperation,
 } from "@/lib/map-design";
 import { addGenerationToHistory, MAX_GENERATION_HISTORY, restoreGeneration, type GenerationHistoryEntry } from "@/lib/generation-history";
+import type { IdentityLabSession as LegacyIdentityLabSession } from "@/lib/identity-lab";
 import {
-  createIdentityLabSession,
-  exportIdentityLabSession,
-  identityLabChoices,
-  identityLabFileName,
-  identityLabPrototype,
-  IDENTITY_LAB_CUES,
-  IDENTITY_LAB_PROTOTYPES,
-  IDENTITY_LAB_STORAGE_KEY,
-  importIdentityLabSession,
-  recordIdentityLabGeneration,
-  recordIdentityLabGenerationError,
-  selectIdentityLabCandidate,
-  setIdentityLabVerdict,
-  submitIdentityLabReview,
-  type IdentityCue,
-  type IdentityLabSession,
-  type IdentityVerdict,
-} from "@/lib/identity-lab";
+  CONTINUOUS_IDENTITY_LAB_STORAGE_KEY,
+  continuousIdentityLabFileName,
+  createContinuousIdentityLabSession,
+  currentContinuousIdentityLabTrial,
+  endContinuousIdentityLabSession,
+  exportIdentityLabEvidence,
+  importIdentityLabEvidence,
+  isContinuousIdentityLabSession,
+  prefetchedContinuousIdentityLabTrial,
+  presentContinuousIdentityLabTrial,
+  recordContinuousIdentityLabGeneration,
+  recordContinuousIdentityLabGenerationError,
+  submitContinuousIdentityLabAnswer,
+  type ContinuousIdentityLabSession,
+} from "@/lib/identity-lab-continuous";
 import { CLIMATE_PROJECTIONS } from "@/lib/climate-projection";
 import { applyRepairIssues, buildRepairIssues, cloneMap, issueSelectedByProfile, type RepairIssue, type RepairProfile } from "@/lib/map-repair";
 import {
@@ -85,14 +84,16 @@ import { mergeLuaDependencies, type LuaProjectDependency, type LuaRuntimeMetadat
 import { buildPoliticalOwnership, hasPoliticalLayer, politicalColors } from "@/lib/political-map";
 import { fitViewport, minimumViewportZoom } from "@/lib/map-viewport";
 import { generationPassChangesBetweenMaps, markGenerationStructureStale } from "@/lib/generation-structure";
-import { describeWorldCharacter, worldCharacterProfile } from "@/lib/world-character";
-import { createExcogitareProject, parseExcogitareProject, serializeExcogitareProject } from "@/lib/excogitare-project";
-import type { ProjectHistory, ProtectionChannel, ProtectionState } from "@/lib/authoring-schema";
-import { applyProtectionState, emptyProtectionState, PROTECTION_CHANNELS, protectSemanticObject, protectTiles } from "@/lib/map-protection";
+import { describeWorldCharacter } from "@/lib/world-character";
+import { createExcogitareProject, parseExcogitareProject, serializeExcogitareProject, type ProjectHistoryPolicy } from "@/lib/excogitare-project";
+import type { ExcogitareProject, ProjectHistory, ProjectManifest, ProtectionChannel, ProtectionState, ScenarioDraft } from "@/lib/authoring-schema";
+import { applyProtectionState, cloneProtectionState, emptyProtectionState, eraseProtectedTiles, protectableSemantics, PROTECTION_CHANNELS, protectSemanticObject, protectTiles, removeProtection, type ProtectableSemantic } from "@/lib/map-protection";
 import { ARCHETYPE_PROFILES, describeArchetype } from "@/lib/world-archetype";
 import { WORLD_SCALE_PROFILES } from "@/lib/world-scale";
 import { describeNarrativeProfile, narrativeProfile } from "@/lib/narrative-map-types";
 import { CreateOperationStatus, CreateStagePanel, CreateStageTabs, GenerationHistoryCard, normalizeCreateStage, type CreateStage } from "./create-workspace";
+import { ScenarioStageTabs, ScenarioWorkspace, type ScenarioStage } from "./scenario-workspace";
+import { applyScenarioDraft, cloneScenarioDraft, scenarioCompatibility, scenarioDraftFromMap, scenarioExportSummary, validateScenarioDraft } from "@/lib/scenario-authoring";
 
 const HEX_RADIUS = 20;
 const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS;
@@ -105,7 +106,7 @@ type Size = { width: number; height: number };
 type Layers = { political: boolean; strategy: boolean; grid: boolean; features: boolean; resources: boolean; elevation: boolean; starts: boolean; cityStates: boolean };
 type HoveredTile = { tile: Civ5Tile; col: number; row: number } | null;
 type ImportedMapSource = { fileName: string; buffer: ArrayBuffer; salvaged?: boolean };
-type WorkspaceMode = "VIEW" | "CREATE" | "REPAIR" | "LAB" | "SCRIPT";
+type WorkspaceMode = "VIEW" | "CREATE" | "SCENARIO" | "REPAIR" | "LAB" | "SCRIPT";
 type Brush = { terrain: number | null; elevation: number | null; feature: number | null; resource: number | null };
 type TileSelection = { minX: number; minY: number; maxX: number; maxY: number };
 type TileClipboard = { width: number; height: number; tiles: Civ5Tile[] };
@@ -700,6 +701,7 @@ function drawMap(
   selection: TileSelection | null,
   focusedStart: Civ5StartLocation | null,
   highlightedRepairs: ReadonlySet<number>,
+  protectedTiles: ReadonlySet<number>,
   politicalOwnership: Int16Array,
   transparentBackground = false,
 ) {
@@ -838,6 +840,14 @@ function drawMap(
         context.fill();
         context.strokeStyle = "#efb06f";
         context.lineWidth = 2.1 / Math.max(view.zoom, 0.5);
+        context.stroke();
+      }
+      if (protectedTiles.has(sourceIndex)) {
+        hexPath(context, center.x, center.y);
+        context.fillStyle = "rgba(128, 112, 214, .22)";
+        context.fill();
+        context.strokeStyle = "rgba(183, 171, 255, .9)";
+        context.lineWidth = 1.45 / Math.max(view.zoom, 0.5);
         context.stroke();
       }
   }
@@ -992,21 +1002,34 @@ export function Civ5MapViewer() {
   const [sourceFile, setSourceFile] = useState<ImportedMapSource | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>("VIEW");
   const [labStage, setLabStage] = useState<LabStage>("REVIEW");
-  const [labSession, setLabSession] = useState<IdentityLabSession | null>(null);
+  const [labSession, setLabSession] = useState<ContinuousIdentityLabSession | null>(null);
+  const [labLegacyArchive, setLabLegacyArchive] = useState<LegacyIdentityLabSession | null>(null);
   const [labMap, setLabMap] = useState<Civ5Map | null>(null);
   const [labActiveCandidateId, setLabActiveCandidateId] = useState<string | null>(null);
   const [labLoading, setLabLoading] = useState(false);
+  const [labPrefetching, setLabPrefetching] = useState(false);
+  const [labPrefetchedTrialId, setLabPrefetchedTrialId] = useState<string | null>(null);
   const [labStatus, setLabStatus] = useState("Start or import a blind-recognition session.");
   const [labStorageReady, setLabStorageReady] = useState(false);
-  const [labSamplesPerType, setLabSamplesPerType] = useState(2);
   const [labStyle, setLabStyle] = useState<MapGenerationOptions["style"]>("MUNDANE");
   const [labSize, setLabSize] = useState<MapGenerationOptions["size"]>("STANDARD");
   const [labSessionSeed, setLabSessionSeed] = useState("baseline-1");
-  const [labGuessPrimary, setLabGuessPrimary] = useState<MapGenerationOptions["preset"] | "">("");
-  const [labGuessSecondary, setLabGuessSecondary] = useState<MapGenerationOptions["preset"] | "">("");
-  const [labConfidence, setLabConfidence] = useState<1 | 2 | 3 | 4 | 5>(3);
-  const [labCues, setLabCues] = useState<Set<IdentityCue>>(new Set());
-  const [labNotes, setLabNotes] = useState("");
+  const [labSelectedChoice, setLabSelectedChoice] = useState<MapGenerationOptions["preset"] | "">("");
+  const [projectName, setProjectName] = useState("The Twin Continents Project");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectDirty, setProjectDirty] = useState(false);
+  const [projectLastSavedAt, setProjectLastSavedAt] = useState<string | null>(null);
+  const [projectHistoryPolicy, setProjectHistoryPolicy] = useState<ProjectHistoryPolicy>("FULL");
+  const [showProjectSaveDialog, setShowProjectSaveDialog] = useState(false);
+  const [projectScenario, setProjectScenario] = useState<ScenarioDraft | null>(null);
+  const [scenarioStage, setScenarioStage] = useState<ScenarioStage>("SETUP");
+  const [selectedScenarioFactionId, setSelectedScenarioFactionId] = useState("");
+  const [scenarioPlacementFactionId, setScenarioPlacementFactionId] = useState("");
+  const [showScenarioExportConfirmation, setShowScenarioExportConfirmation] = useState(false);
+  const [scenarioExportPreflightError, setScenarioExportPreflightError] = useState("");
+  const [projectExtensions, setProjectExtensions] = useState<Record<string, unknown> | undefined>(undefined);
+  const [projectOpaqueFields, setProjectOpaqueFields] = useState<Record<string, unknown>>({});
+  const [projectSourceManifest, setProjectSourceManifest] = useState<ProjectManifest | null>(null);
   const [generationOptions, setGenerationOptions] = useState<MapGenerationOptions>(DEFAULT_GENERATION_OPTIONS);
   const [generationScale, setGenerationScale] = useState<WorldScale>("GLOBAL");
   const [generationArchetype, setGenerationArchetype] = useState<WorldArchetype>("NARRATIVE_DEFAULT");
@@ -1030,8 +1053,14 @@ export function Civ5MapViewer() {
   const [structureOperation, setStructureOperation] = useState<StructureOperation>("RAISE_PLATE");
   const [structureStrength, setStructureStrength] = useState<1 | 2 | 3>(2);
   const [protectionState, setProtectionState] = useState<ProtectionState>(() => emptyProtectionState());
+  const [pastProtectionStates, setPastProtectionStates] = useState<ProtectionState[]>([]);
+  const [futureProtectionStates, setFutureProtectionStates] = useState<ProtectionState[]>([]);
   const [preserveChannels, setPreserveChannels] = useState<Set<ProtectionChannel>>(() => new Set(["TOPOLOGY", "ELEVATION", "CLIMATE", "FEATURES", "HYDROLOGY", "CONTENT"]));
   const [semanticProtectionId, setSemanticProtectionId] = useState("");
+  const [semanticProtectionPolicy, setSemanticProtectionPolicy] = useState<"EXACT" | "SHAPE" | "FUNCTION" | "RELATIONSHIP">("FUNCTION");
+  const [semanticProtectionHard, setSemanticProtectionHard] = useState(true);
+  const [showProtectionOverlay, setShowProtectionOverlay] = useState(true);
+  const [protectionRegionName, setProtectionRegionName] = useState("Protected region");
   const [batchCount, setBatchCount] = useState(8);
   const [batchCandidates, setBatchCandidates] = useState<BatchCandidate[]>([]);
   const [batchProgress, setBatchProgress] = useState(0);
@@ -1088,11 +1117,15 @@ export function Civ5MapViewer() {
   const archetypePreviewCancelRef = useRef<HTMLButtonElement>(null);
   const gameBreakingGeometryCancelRef = useRef<HTMLButtonElement>(null);
   const luaExperimentalCancelRef = useRef<HTMLButtonElement>(null);
+  const scenarioExportCancelRef = useRef<HTMLButtonElement>(null);
   const repairSourceMapRef = useRef<Civ5Map | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const luaInputRef = useRef<HTMLInputElement>(null);
   const luaDependencyInputRef = useRef<HTMLInputElement>(null);
   const labInputRef = useRef<HTMLInputElement>(null);
+  const labPrefetchRef = useRef<{ trialId: string; map: Civ5Map } | null>(null);
+  const labOperationEpochRef = useRef(0);
+  const projectSavedIntentRef = useRef<string | null>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
   const generationIdRef = useRef(0);
   const generationRequestIdRef = useRef(0);
@@ -1103,6 +1136,37 @@ export function Civ5MapViewer() {
   const mapRef = useRef(map);
   const createScrollPositionsRef = useRef<Record<CreateStage, number>>({ GENERATE: 0, REFINE: 0, ITERATE: 0, EDIT: 0, ANALYZE: 0 });
   const dragRef = useRef<{ x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
+  const preserveDragRef = useRef<{ x: number; y: number } | null>(null);
+  const projectIntentKey = useMemo(() => JSON.stringify({ generationOptions, generationScale, generationArchetype, generationArchetypeIntensity, generationEffort, matchIntent }), [generationOptions, generationScale, generationArchetype, generationArchetypeIntensity, generationEffort, matchIntent]);
+
+  useEffect(() => {
+    if (projectSavedIntentRef.current === null) {
+      projectSavedIntentRef.current = projectIntentKey;
+      return;
+    }
+    if (projectSavedIntentRef.current === projectIntentKey) return;
+    const frame = window.requestAnimationFrame(() => setProjectDirty(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [projectIntentKey]);
+
+  useEffect(() => {
+    const warnIfUnsaved = (event: BeforeUnloadEvent) => {
+      if (!projectDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnIfUnsaved);
+    return () => window.removeEventListener("beforeunload", warnIfUnsaved);
+  }, [projectDirty]);
+
+  useEffect(() => {
+    if (!showProjectSaveDialog) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowProjectSaveDialog(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showProjectSaveDialog]);
 
   useLayoutEffect(() => {
     if (mode !== "CREATE" || createView !== "GENERATE" || !engineCarouselRef.current) return;
@@ -1164,11 +1228,16 @@ export function Civ5MapViewer() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       try {
-        const stored = window.localStorage.getItem(IDENTITY_LAB_STORAGE_KEY);
+        const stored = window.localStorage.getItem(CONTINUOUS_IDENTITY_LAB_STORAGE_KEY);
         if (stored) {
-          const restored = importIdentityLabSession(stored);
-          setLabSession(restored);
-          setLabStatus(`${restored.summary.reviewed} of ${restored.summary.candidates} blind reviews restored from this device.`);
+          const restored = importIdentityLabEvidence(stored);
+          if (isContinuousIdentityLabSession(restored)) {
+            setLabSession(restored);
+            setLabStage(restored.status === "ENDED" ? "RESULTS" : "REVIEW");
+            setLabStatus(restored.status === "ENDED"
+              ? `${restored.summary.trialsAnswered} completed blind trials restored from this device. Results remain available for export.`
+              : `${restored.summary.trialsAnswered} continuous blind trials restored from this device. Generate the current trial to resume.`);
+          }
         }
       } catch (error) {
         setLabStatus(error instanceof Error ? `Saved Lab session was not loaded: ${error.message}` : "Saved Lab session was not loaded.");
@@ -1181,7 +1250,13 @@ export function Civ5MapViewer() {
 
   useEffect(() => {
     if (!labStorageReady || !labSession) return;
-    window.localStorage.setItem(IDENTITY_LAB_STORAGE_KEY, exportIdentityLabSession(labSession));
+    let warningFrame = 0;
+    try {
+      window.localStorage.setItem(CONTINUOUS_IDENTITY_LAB_STORAGE_KEY, exportIdentityLabEvidence(labSession));
+    } catch {
+      warningFrame = window.requestAnimationFrame(() => setLabStatus("This continuous session has outgrown device recovery storage. End and export remains the durable handoff."));
+    }
+    return () => window.cancelAnimationFrame(warningFrame);
   }, [labSession, labStorageReady]);
 
   const replaceMap = useCallback((next: Civ5Map, source: ImportedMapSource | null = null) => {
@@ -1195,6 +1270,7 @@ export function Civ5MapViewer() {
     setSelectionAnchor(null);
     setFocusedStart(null);
     setActiveGenerationId(null);
+    setProjectDirty(true);
   }, []);
 
   const generateMapAsync = useCallback((options: MapGenerationOptions, recipe?: GenerationRecipe) => new Promise<Civ5Map>((resolve, reject) => {
@@ -1231,7 +1307,7 @@ export function Civ5MapViewer() {
     worker.postMessage({ id, options, recipe });
   }), []);
 
-  const regenerateMapAsync = useCallback((source: Civ5Map, options: MapGenerationOptions, stage: RegenerationStage, variation: number, recipe?: GenerationRecipe) => new Promise<Civ5Map>((resolve, reject) => {
+  const regenerateMapAsync = useCallback((source: Civ5Map, options: MapGenerationOptions, stage: RegenerationStage, variation: number, recipe?: GenerationRecipe, protection?: ProtectionState) => new Promise<Civ5Map>((resolve, reject) => {
     generationWorkerRef.current?.terminate();
     generationRejectRef.current?.(new DOMException("Superseded by a new generation", "AbortError"));
     const worker = new Worker(new URL("./map-generation.worker.ts", import.meta.url), { type: "module" });
@@ -1259,7 +1335,7 @@ export function Civ5MapViewer() {
       setGenerationStage("");
       reject(new Error("The background regeneration worker stopped unexpectedly."));
     };
-    worker.postMessage({ id, kind: "REGENERATE", map: source, options, stage, variation, recipe });
+    worker.postMessage({ id, kind: "REGENERATE", map: source, options, stage, variation, recipe, protection });
   }), []);
 
   const cancelGeneration = useCallback(() => {
@@ -1288,6 +1364,7 @@ export function Civ5MapViewer() {
     setPastMaps((past) => [...past.slice(-49), current]);
     setFutureMaps([]);
     setMap(installed);
+    setProjectDirty(true);
   }, []);
 
   const beginRepair = useCallback((target: Civ5Map, diagnostics: string[] = []) => {
@@ -1304,6 +1381,24 @@ export function Civ5MapViewer() {
 
   const repairPreviewMap = useMemo(() => repairBaseline ? applyRepairIssues(repairBaseline, repairIssues, repairSelected) : map, [repairBaseline, repairIssues, repairSelected, map]);
   const repairPreviewIssues = useMemo(() => buildRepairIssues(repairPreviewMap), [repairPreviewMap]);
+  const scenarioDraft = useMemo(() => scenarioDraftFromMap(map, projectScenario), [map, projectScenario]);
+  const scenarioPreviewMap = useMemo(() => applyScenarioDraft(map, scenarioDraft), [map, scenarioDraft]);
+  const scenarioFindings = useMemo(() => validateScenarioDraft(map, scenarioDraft), [map, scenarioDraft]);
+  const scenarioCompatibilityReport = useMemo(() => scenarioCompatibility(map, scenarioDraft), [map, scenarioDraft]);
+  const scenarioExportReport = useMemo(() => scenarioExportSummary(map, scenarioDraft), [map, scenarioDraft]);
+  const selectedScenarioFaction = scenarioDraft.factions.find((faction) => faction.id === selectedScenarioFactionId)
+    ?? scenarioDraft.factions.find((faction) => faction.status !== "DISABLED");
+  const scenarioFocusedStart: Civ5StartLocation | null = selectedScenarioFaction?.start ? {
+    ...selectedScenarioFaction.start,
+    player: selectedScenarioFaction.slot,
+    civilization: selectedScenarioFaction.civilization,
+    leader: selectedScenarioFaction.leader,
+    team: selectedScenarioFaction.team,
+    playable: selectedScenarioFaction.playable,
+    cityState: selectedScenarioFaction.cityState,
+    teamColor: selectedScenarioFaction.teamColor,
+  } : null;
+  const renderFocusedStart = mode === "SCENARIO" ? scenarioFocusedStart : focusedStart;
   const comparisonCheckpoint = useMemo(() => checkpoints.find((checkpoint) => checkpoint.id === comparisonCheckpointId) ?? null, [checkpoints, comparisonCheckpointId]);
   const mapComparison = useMemo(() => comparisonCheckpoint ? compareMaps(map, comparisonCheckpoint.map) : null, [map, comparisonCheckpoint]);
   const archetypePreviewComparison = useMemo(() => archetypePreviewMap ? compareMaps(archetypePreviewMap, map) : null, [archetypePreviewMap, map]);
@@ -1321,6 +1416,8 @@ export function Civ5MapViewer() {
   }, [archetypePreviewComparison, archetypePreviewMap, map]);
   const canvasMap = mode === "LAB" && labMap
     ? labMap
+    : mode === "SCENARIO"
+    ? scenarioPreviewMap
     : mode === "REPAIR" && repairBaseline
     ? repairView === "ORIGINAL" ? repairBaseline : repairPreviewMap
     : mode === "CREATE" && archetypePreviewMap && archetypePreviewView !== "ORIGINAL" ? archetypePreviewMap
@@ -1332,6 +1429,16 @@ export function Civ5MapViewer() {
     : mode === "CREATE" && comparisonView === "DIFFERENCE" && mapComparison?.dimensionsMatch
       ? mapComparison.changedTiles
       : new Set<number>(), [mode, repairView, repairIssues, repairSelected, archetypePreviewMap, archetypePreviewView, archetypePreviewComparison, comparisonView, mapComparison]);
+  const semanticProtectionChoices = useMemo<ProtectableSemantic[]>(() => protectableSemantics(map), [map]);
+  const protectedOverlay = useMemo(() => {
+    const indices = new Set<number>();
+    if (!showProtectionOverlay || mode !== "CREATE") return indices;
+    if (protectionState.tileMask?.width === canvasMap.width && protectionState.tileMask.height === canvasMap.height) {
+      for (const channel of PROTECTION_CHANNELS) for (let index = 0; index < canvasMap.tiles.length; index += 1) if (protectionState.tileMask.channels[channel]?.[index]) indices.add(index);
+    }
+    for (const semantic of protectionState.semantic) for (const index of semantic.sourceTileIndices ?? []) if (index >= 0 && index < canvasMap.tiles.length) indices.add(index);
+    return indices;
+  }, [canvasMap.height, canvasMap.tiles.length, canvasMap.width, mode, protectionState, showProtectionOverlay]);
   const politicalAvailable = hasPoliticalLayer(canvasMap);
   const strategyAvailable = Boolean(canvasMap.structure?.strategicGraph);
   const politicalOwnership = useMemo(() => buildPoliticalOwnership(canvasMap), [canvasMap]);
@@ -1344,6 +1451,7 @@ export function Civ5MapViewer() {
     mapRef.current = previous;
     setMap(previous);
     setPastMaps((past) => past.slice(0, -1));
+    setProjectDirty(true);
     if (mode === "REPAIR") beginRepair(previous, repairDiagnostics);
   };
 
@@ -1354,6 +1462,7 @@ export function Civ5MapViewer() {
     mapRef.current = next;
     setMap(next);
     setFutureMaps((future) => future.slice(1));
+    setProjectDirty(true);
     if (mode === "REPAIR") beginRepair(next, repairDiagnostics);
   };
 
@@ -1396,6 +1505,19 @@ export function Civ5MapViewer() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [showExportValidation]);
+
+  useEffect(() => {
+    if (!showScenarioExportConfirmation) return;
+    const frame = window.requestAnimationFrame(() => scenarioExportCancelRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowScenarioExportConfirmation(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showScenarioExportConfirmation]);
 
   useEffect(() => {
     if (!archetypePreviewMap) return;
@@ -1470,14 +1592,14 @@ export function Civ5MapViewer() {
     // Complete the next frame away from the visible canvas. If a transient
     // layout state culls every tile, retain the last valid map frame instead
     // of replacing it with the blue canvas background.
-    const paintedTiles = drawMap(renderContext, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights, politicalOwnership);
+    const paintedTiles = drawMap(renderContext, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, renderFocusedStart, repairHighlights, protectedOverlay, politicalOwnership);
     if (canvasMap.tiles.length && paintedTiles === 0) return;
     context.save();
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.globalCompositeOperation = "copy";
     context.drawImage(renderCanvas, 0, 0);
     context.restore();
-  }, [canvasMap, layers, hovered, view, size, mapProjection, selection, focusedStart, repairHighlights, politicalOwnership]);
+  }, [canvasMap, layers, hovered, view, size, mapProjection, selection, renderFocusedStart, repairHighlights, protectedOverlay, politicalOwnership]);
 
   const terrainBreakdown = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1508,8 +1630,27 @@ export function Civ5MapViewer() {
     const archetypeLabel = generationArchetype === "EXISTING" ? "Existing surface" : generationArchetype === "NARRATIVE_DEFAULT" ? "Narrative surface" : `${ARCHETYPE_PROFILES[generationArchetype].label} ${generationArchetypeIntensity.toLowerCase()}`;
     return `${projectionLabel} · ${engineLabel} · ${styleLabel} · ${presetLabel} · ${generationScale.toLowerCase()} scale · ${archetypeLabel} · ${sizeLabel} ${dimensions.width}×${dimensions.height} · ${generationOptions.players} players`;
   }, [generationArchetype, generationArchetypeIntensity, generationOptions, generationScale]);
+  const generationCompactSummary = useMemo(() => {
+    const presetLabel = MAP_PRESETS.find((item) => item.id === generationOptions.preset)?.label ?? generationOptions.preset;
+    const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry);
+    const engineLabel = generationOptions.engine === "ECCENTRIC" ? "Eccentric" : generationOptions.engine === "PHYSICAL" ? "Physical" : generationOptions.engine === "POLIS" ? "Polis" : "Excogitare";
+    return `${engineLabel} · ${presetLabel} · ${dimensions.width}×${dimensions.height} · ${generationOptions.players}P`;
+  }, [generationOptions]);
   const generationResourceEstimate = useMemo(() => estimateGenerationResources(generationOptions, generationEffort), [generationOptions, generationEffort]);
-  const validationIssues = useMemo(() => validateCiv5Map(map), [map]);
+  const validationIssues = useMemo(() => {
+    const modelIssues = validateCiv5Map(map);
+    try {
+      const encoded = sourceFile && !sourceFile.salvaged ? updateCiv5Map(sourceFile.buffer, map) : serializeCiv5Map(map);
+      const structural = inspectCiv5MapStructure(encoded).map((issue) => ({ severity: issue.severity, category: "STRUCTURE" as const, message: `Encoded file: ${issue.message}` }));
+      const reparsed = parseCiv5Map(encoded, `${map.name}.Civ5Map`);
+      const roundTripErrors = validateCiv5Map(reparsed)
+        .filter((issue) => issue.severity === "ERROR")
+        .map((issue) => ({ ...issue, message: `Encoded file: ${issue.message}` }));
+      return [...modelIssues, ...structural, ...roundTripErrors].filter((issue, index, all) => all.findIndex((candidate) => candidate.severity === issue.severity && candidate.category === issue.category && candidate.message === issue.message) === index);
+    } catch (error) {
+      return [...modelIssues, { severity: "ERROR" as const, category: "STRUCTURE" as const, message: error instanceof Error ? `Encoded file: ${error.message}` : "Encoded file: structural inspection failed." }];
+    }
+  }, [map, sourceFile]);
   const balanceReport = useMemo(() => analyzeMultiplayerBalance(map), [map]);
   const narrativeAssessment = map.structure?.narrativeAssessment;
 
@@ -1526,13 +1667,15 @@ export function Civ5MapViewer() {
       setMessage("Choose a file ending in .Civ5Map");
       return;
     }
+    if (projectDirty && !window.confirm("Open this Civ5Map as a new unsaved project? Download the current project first if you want to retain it.")) return;
     try {
       setMessage("Reading map…");
       const buffer = await file.arrayBuffer();
       if (mode === "REPAIR") {
         const parsed = parseCiv5MapForRepair(buffer, file.name);
+        const structuralDiagnostics = inspectCiv5MapStructure(buffer).map((issue) => `${issue.severity}: ${issue.message}`);
         replaceMap(parsed.map, { fileName: file.name, buffer, salvaged: parsed.salvaged });
-        beginRepair(parsed.map, parsed.diagnostics);
+        beginRepair(parsed.map, [...parsed.diagnostics, ...structuralDiagnostics]);
         setMessage(parsed.salvaged ? `${file.name} · damaged data recovered for repair` : `${file.name} · repair tests complete`);
       } else {
         const parsed = parseCiv5Map(buffer, file.name);
@@ -1541,12 +1684,26 @@ export function Civ5MapViewer() {
         setGenerationArchetypeIntensity("STRONG");
         setMessage(`${file.name} · rendered locally`);
       }
+      const importedProjectName = `${file.name.replace(/\.civ5map$/i, "")} Project`;
+      setProjectName(importedProjectName);
+      setProjectId(null);
+      setProjectLastSavedAt(null);
+      setProjectScenario(null);
+      setProjectExtensions(undefined);
+      setProjectOpaqueFields({});
+      setProjectSourceManifest(null);
+      setGenerationHistory([]);
+      setCheckpoints([]);
+      setProtectionState(emptyProtectionState());
+      setPastProtectionStates([]);
+      setFutureProtectionStates([]);
+      setProjectDirty(true);
       setShowEditPrompt(false);
       setIsEditingMetadata(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "That map could not be read.");
     }
-  }, [beginRepair, mode, replaceMap]);
+  }, [beginRepair, mode, projectDirty, replaceMap]);
 
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1561,12 +1718,41 @@ export function Civ5MapViewer() {
     if (file) void loadFile(file);
   };
 
+  const tileAtPointer = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const projectedPoint = {
+      x: (event.clientX - rect.left - view.x) / view.zoom,
+      y: (event.clientY - rect.top - view.y) / view.zoom,
+    };
+    const worldPoint = unprojectPoint(projectedPoint.x, projectedPoint.y, mapProjection);
+    const target = projection === "ISOMETRIC"
+      ? closestIsometricTile(map, projectedPoint.x, projectedPoint.y, mapProjection, layers.elevation)
+      : closestTile(map, worldPoint.x, worldPoint.y);
+    return target ? { x: target.col, y: map.height - 1 - target.row } : null;
+  };
+
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (mode === "CREATE" && createView === "EDIT" && editTool === "PRESERVE") {
+      const target = tileAtPointer(event);
+      if (target) {
+        preserveDragRef.current = target;
+        setSelectionAnchor(target);
+        setSelection({ minX: target.x, minY: target.y, maxX: target.x, maxY: target.y });
+        setMessage("Drag across the geography to define the protected region");
+      }
+      return;
+    }
     dragRef.current = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y, moved: false };
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const preserveOrigin = preserveDragRef.current;
+    if (preserveOrigin) {
+      const target = tileAtPointer(event);
+      if (target) setSelection({ minX: Math.min(preserveOrigin.x, target.x), minY: Math.min(preserveOrigin.y, target.y), maxX: Math.max(preserveOrigin.x, target.x), maxY: Math.max(preserveOrigin.y, target.y) });
+      return;
+    }
     const drag = dragRef.current;
     if (drag) {
       if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 4) drag.moved = true;
@@ -1587,9 +1773,33 @@ export function Civ5MapViewer() {
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const preserveOrigin = preserveDragRef.current;
+    if (preserveOrigin) {
+      const target = tileAtPointer(event) ?? preserveOrigin;
+      setSelection({ minX: Math.min(preserveOrigin.x, target.x), minY: Math.min(preserveOrigin.y, target.y), maxX: Math.max(preserveOrigin.x, target.x), maxY: Math.max(preserveOrigin.y, target.y) });
+      preserveDragRef.current = null;
+      setSelectionAnchor(null);
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      setMessage("Region selected · choose the channels to preserve");
+      return;
+    }
     const drag = dragRef.current;
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
+    if (mode === "SCENARIO" && scenarioPlacementFactionId && !drag?.moved) {
+      const target = tileAtPointer(event);
+      if (!target) return;
+      const next = cloneScenarioDraft(scenarioDraft);
+      const faction = next.factions.find((candidate) => candidate.id === scenarioPlacementFactionId);
+      if (!faction) return;
+      faction.start = target;
+      setProjectScenario(next);
+      setSelectedScenarioFactionId(faction.id);
+      setScenarioPlacementFactionId("");
+      setProjectDirty(true);
+      setMessage(`Faction ${faction.slot + 1} start placed at ${target.x}, ${target.y}`);
+      return;
+    }
     if (mode !== "CREATE" || createView !== "EDIT" || drag?.moved) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const projectedPoint = {
@@ -1602,7 +1812,7 @@ export function Civ5MapViewer() {
       : closestTile(map, worldPoint.x, worldPoint.y);
     if (!target) return;
     const sourceY = map.height - 1 - target.row;
-    if (editTool === "SELECT" || editTool === "STRUCTURE" || editTool === "PRESERVE") {
+    if (editTool === "SELECT" || editTool === "STRUCTURE") {
       if (editTool === "SELECT" && isPasting && tileClipboard) {
         commitMap((current) => {
           const tiles = current.tiles.map((tile) => ({ ...tile }));
@@ -1626,7 +1836,7 @@ export function Civ5MapViewer() {
       } else {
         setSelection({ minX: Math.min(selectionAnchor.x, target.col), minY: Math.min(selectionAnchor.y, sourceY), maxX: Math.max(selectionAnchor.x, target.col), maxY: Math.max(selectionAnchor.y, sourceY) });
         setSelectionAnchor(null);
-        setMessage(editTool === "STRUCTURE" ? "World region selected · choose a structural operation" : editTool === "PRESERVE" ? "Region selected · choose the channels to preserve" : "Region selected · copy or edit it");
+        setMessage(editTool === "STRUCTURE" ? "World region selected · choose a structural operation" : "Region selected · copy or edit it");
       }
       return;
     }
@@ -1712,26 +1922,67 @@ export function Civ5MapViewer() {
   const activeRecipe = (options = generationOptions): GenerationRecipe => {
     const normalized = normalizeGenerationOptions(options, allowGameBreakingGeometry);
     const base = generationRecipeFromOptions(normalized);
-    return { ...base, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, enabledVictories: [...matchIntent.enabledVictories], emphasizedVictories: [...matchIntent.emphasizedVictories], flexiblePlayers: Math.max(0, normalized.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: normalized.balance, teamSize: normalized.teamSize, teamLayout: normalized.teamLayout, strategicBalance: normalized.strategicBalance } };
+    return { ...base, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, seats: matchIntent.seats?.slice(0, normalized.players).map((seat) => ({ ...seat })), enabledVictories: [...matchIntent.enabledVictories], emphasizedVictories: [...matchIntent.emphasizedVictories], flexiblePlayers: Math.max(0, normalized.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: normalized.balance, teamSize: normalized.teamSize, teamLayout: normalized.teamLayout, strategicBalance: normalized.strategicBalance } };
+  };
+
+  const requestProjectExport = () => {
+    setProjectName((current) => current.trim() || `${map.name} Project`);
+    setShowProjectSaveDialog(true);
   };
 
   const exportProject = () => {
     try {
       const recipe = map.recipe ? normalizeGenerationRecipe(map.recipe, DEFAULT_GENERATION_OPTIONS) : activeRecipe();
       const historyEntries = generationHistory.map((entry) => ({ id: String(entry.id), parentId: entry.parentId === undefined ? undefined : String(entry.parentId), operation: entry.operation, createdAt: entry.createdAt, recipe: entry.map.recipe ?? recipe, map: entry.map, provenance: entry.map.structure?.provenance ?? [] }));
-      const history: ProjectHistory = { schemaVersion: 1, activeEntryId: activeGenerationId === null ? undefined : String(activeGenerationId), entries: historyEntries };
+      const projectCheckpoints = checkpoints.map((checkpoint) => ({ id: String(checkpoint.id), name: checkpoint.name, createdAt: checkpoint.createdAt, recipe: checkpoint.map.recipe ?? recipe, map: checkpoint.map, provenance: checkpoint.map.structure?.provenance ?? [] }));
+      const history: ProjectHistory = { schemaVersion: 1, activeEntryId: activeGenerationId === null ? undefined : String(activeGenerationId), entries: historyEntries, checkpoints: projectCheckpoints };
       const expandedSections = Object.entries(createDisclosureState).flatMap(([stage, entries]) => Object.entries(entries).filter(([, open]) => open).map(([key]) => `${stage}:${key}`));
-      const project = createExcogitareProject({ projectName: map.name, map: { ...map, recipe }, recipe, history, protection: protectionState, excogitareVersion: APP_VERSION, editorState: { schemaVersion: 1, workspace: mode, stage: mode === "CREATE" ? createView : undefined, view, expandedSections, stageScrollPositions: { ...createScrollPositionsRef.current } } });
-      const fileName = `${mapExportBaseName(map)}.excogitare`;
-      download(serializeExcogitareProject(project), fileName, "application/vnd.excogitare.project+json");
-      setMessage(`${fileName} · project downloaded for later reimport`);
+      const now = new Date().toISOString();
+      const project = createExcogitareProject({ projectName, projectId: projectId ?? undefined, map: { ...map, recipe }, recipe, history, protection: protectionState, scenario: projectScenario ?? undefined, excogitareVersion: APP_VERSION, now: projectSourceManifest?.createdAt ?? now, editorState: { schemaVersion: 1, workspace: mode, stage: mode === "CREATE" ? createView : mode === "SCENARIO" ? scenarioStage : undefined, view, expandedSections, stageScrollPositions: { ...createScrollPositionsRef.current } } });
+      if (projectSourceManifest) project.manifest = { ...projectSourceManifest, ...project.manifest, projectId: projectId ?? project.manifest.projectId, projectName: projectName.trim() || map.name, createdAt: projectSourceManifest.createdAt };
+      Object.assign(project, projectOpaqueFields);
+      project.extensions = projectExtensions;
+      const encoded = serializeExcogitareProject(project, { historyPolicy: projectHistoryPolicy, now });
+      const fileName = `${mapExportBaseName({ ...map, name: projectName.trim() || map.name })}.excogitare`;
+      download(encoded, fileName, "application/vnd.excogitare.project+zip");
+      setProjectId(project.manifest.projectId);
+      setProjectLastSavedAt(now);
+      setProjectSourceManifest({ ...project.manifest, updatedAt: now, historyPolicy: projectHistoryPolicy });
+      projectSavedIntentRef.current = projectIntentKey;
+      setProjectDirty(false);
+      setShowProjectSaveDialog(false);
+      setMessage(`${fileName} · ${projectHistoryPolicy === "FULL" ? `${historyEntries.length} generations` : "current map"} and ${projectCheckpoints.length} named checkpoint${projectCheckpoints.length === 1 ? "" : "s"} downloaded`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "The project could not be exported."); }
   };
 
+  const beginNewProject = () => {
+    if (projectDirty && !window.confirm("Begin a new project from the current map? Download the present project first if you want to retain its history and protection state.")) return;
+    setProjectName(`${map.name} Project`);
+    setProjectId(null);
+    setProjectLastSavedAt(null);
+    setProjectScenario(null);
+    setProjectExtensions(undefined);
+    setProjectOpaqueFields({});
+    setProjectSourceManifest(null);
+    setGenerationHistory([]);
+    setActiveGenerationId(null);
+    setCheckpoints([]);
+    setComparisonCheckpointId(null);
+    setProtectionState(emptyProtectionState());
+    setPastProtectionStates([]);
+    setFutureProtectionStates([]);
+    setProjectDirty(true);
+    setMessage(`${map.name} · new unsaved project begun from the current map`);
+  };
+
   const importProject = async (file: File) => {
+    if (projectDirty && !window.confirm("Open this downloaded project? Unsaved work in the current project will be replaced.")) return;
     try {
-      const project = parseExcogitareProject(await file.text());
+      const project = parseExcogitareProject(await file.arrayBuffer());
       const projectRecipe = normalizeGenerationRecipe(project.recipe, DEFAULT_GENERATION_OPTIONS);
+      const projectOptions = generationOptionsFromRecipe(projectRecipe);
+      const projectNeedsGameBreakingPermission = isGameBreakingMapSize(projectOptions.size) || isGameBreakingGeometry(projectOptions.geometry);
+      const restoredGenerationOptions = normalizeGenerationOptions(projectOptions, allowGameBreakingGeometry || projectNeedsGameBreakingPermission);
       let fallbackHistoryId = generationIdRef.current;
       const restoredHistory = project.history.entries.slice(0, MAX_GENERATION_HISTORY).map((entry) => {
         const operation = (["GENERATE", "RANDOMISE", "SELECTIVE_WORLD", "SELECTIVE_CLIMATE", "SELECTIVE_RIVERS", "SELECTIVE_CONTENT", "SELECTIVE_STARTS", "BATCH_SELECTION", "PROJECT_IMPORT"].includes(entry.operation) ? entry.operation : "PROJECT_IMPORT") as GenerationHistoryEntry["operation"];
@@ -1740,7 +1991,9 @@ export function Civ5MapViewer() {
         return { id: Number(entry.id) || ++fallbackHistoryId, parentId: parsedParentId !== undefined && Number.isFinite(parsedParentId) ? parsedParentId : undefined, operation, createdAt: entry.createdAt ?? project.manifest.updatedAt, map: { ...entry.map, recipe } };
       });
       const restoredMap = { ...project.map, recipe: normalizeGenerationRecipe(project.map.recipe ?? projectRecipe, DEFAULT_GENERATION_OPTIONS) };
+      const restoredCheckpoints = (project.history.checkpoints ?? []).map((checkpoint) => ({ id: Number(checkpoint.id) || ++checkpointIdRef.current, name: checkpoint.name, createdAt: checkpoint.createdAt, map: { ...checkpoint.map, recipe: normalizeGenerationRecipe(checkpoint.map.recipe ?? checkpoint.recipe, DEFAULT_GENERATION_OPTIONS) } }));
       const restoredStage = normalizeCreateStage(project.editorState?.stage);
+      const restoredScenarioStage = (["SETUP", "FACTIONS", "WORLD", "OBJECTIVES", "VALIDATE"] as const).find((stage) => stage === project.editorState?.stage) ?? "SETUP";
       const restoredDisclosureState: Record<CreateStage, Record<string, boolean>> = { GENERATE: {}, REFINE: {}, ITERATE: {}, EDIT: {}, ANALYZE: {} };
       for (const stored of project.editorState?.expandedSections ?? []) {
         const separator = stored.indexOf(":");
@@ -1748,23 +2001,41 @@ export function Civ5MapViewer() {
         if (separator > 0 && !normalized.recovered) restoredDisclosureState[normalized.stage][stored.slice(separator + 1)] = true;
       }
       replaceMap(restoredMap);
-      setGenerationOptions(normalizeGenerationOptions(generationOptionsFromRecipe(projectRecipe), allowGameBreakingGeometry));
+      if (projectNeedsGameBreakingPermission) setAllowGameBreakingGeometry(true);
+      setGenerationOptions(restoredGenerationOptions);
       setGenerationScale(projectRecipe.scale);
       setGenerationArchetype(projectRecipe.archetype);
       setGenerationArchetypeIntensity(projectRecipe.archetypeIntensity);
       setGenerationEffort(projectRecipe.effort);
       setMatchIntent(projectRecipe.matchIntent);
-      setProtectionState(project.protection);
+      setProtectionState(cloneProtectionState(project.protection));
+      setPastProtectionStates([]);
+      setFutureProtectionStates([]);
       setGenerationHistory(restoredHistory);
+      setCheckpoints(restoredCheckpoints);
+      setComparisonCheckpointId(null);
       generationIdRef.current = Math.max(generationIdRef.current, ...restoredHistory.map((entry) => entry.id), 0);
+      checkpointIdRef.current = Math.max(checkpointIdRef.current, ...restoredCheckpoints.map((checkpoint) => checkpoint.id), 0);
       const activeId = project.history.activeEntryId ? Number(project.history.activeEntryId) : null;
       setActiveGenerationId(activeId !== null && Number.isFinite(activeId) && restoredHistory.some((entry) => entry.id === activeId) ? activeId : null);
-      setMode("CREATE");
+      setMode(project.editorState?.workspace === "SCENARIO" ? "SCENARIO" : "CREATE");
       setCreateView(restoredStage.stage);
+      setScenarioStage(restoredScenarioStage);
       setCreateDisclosureState(restoredDisclosureState);
       for (const stage of ["GENERATE", "REFINE", "ITERATE", "EDIT", "ANALYZE"] as const) createScrollPositionsRef.current[stage] = Math.max(0, Number(project.editorState?.stageScrollPositions?.[stage]) || 0);
       if (project.editorState?.view) setView(project.editorState.view);
-      setMessage(`${file.name} · project restored from downloaded file${restoredStage.recovered ? " · unknown Create stage recovered to Design" : ""}`);
+      const knownProjectFields = new Set(["schemaVersion", "manifest", "map", "recipe", "protection", "scenario", "history", "editorState", "derived", "extensions"]);
+      setProjectOpaqueFields(Object.fromEntries(Object.entries(project as ExcogitareProject & Record<string, unknown>).filter(([key]) => !knownProjectFields.has(key))));
+      setProjectExtensions(project.extensions);
+      setProjectScenario(project.scenario);
+      setProjectSourceManifest(project.manifest);
+      setProjectName(project.manifest.projectName);
+      setProjectId(project.manifest.projectId);
+      setProjectLastSavedAt(project.manifest.updatedAt);
+      setProjectHistoryPolicy(project.manifest.historyPolicy ?? "FULL");
+      projectSavedIntentRef.current = JSON.stringify({ generationOptions: restoredGenerationOptions, generationScale: projectRecipe.scale, generationArchetype: projectRecipe.archetype, generationArchetypeIntensity: projectRecipe.archetypeIntensity, generationEffort: projectRecipe.effort, matchIntent: projectRecipe.matchIntent });
+      setProjectDirty(false);
+      setMessage(`${file.name} · ${project.manifest.bundleVersion === 2 ? "compressed project" : "legacy v1 project migrated"} and restored${project.editorState?.workspace !== "SCENARIO" && restoredStage.recovered ? " · unknown Create stage recovered to Design" : ""}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "The project could not be opened. The active map was not replaced."); }
   };
 
@@ -1775,7 +2046,7 @@ export function Civ5MapViewer() {
     exportCanvas.height = Math.round(size.height * pixelRatio);
     const context = exportCanvas.getContext("2d", { alpha: true });
     if (!context) return;
-    drawMap(context, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, focusedStart, repairHighlights, politicalOwnership, true);
+    drawMap(context, canvasMap, layers, hovered, view, size, pixelRatio, mapProjection, selection, renderFocusedStart, repairHighlights, new Set<number>(), politicalOwnership, true);
     const fileName = `${mapExportBaseName(canvasMap)}.png`;
     exportCanvas.toBlob((blob) => {
       if (!blob) return;
@@ -1813,6 +2084,11 @@ export function Civ5MapViewer() {
   const performCiv5MapExport = (targetMap = map, repaired = false) => {
     try {
       const exported = sourceFile && !sourceFile.salvaged ? updateCiv5Map(sourceFile.buffer, targetMap) : serializeCiv5Map(targetMap);
+      const structuralError = inspectCiv5MapStructure(exported).find((issue) => issue.severity === "ERROR");
+      if (structuralError) throw new Error(`Export blocked: ${structuralError.message}`);
+      const reparsed = parseCiv5Map(exported, `${targetMap.name}.Civ5Map`);
+      const encodedError = validateCiv5Map(reparsed).find((issue) => issue.severity === "ERROR");
+      if (encodedError) throw new Error(`Export blocked after binary round trip: ${encodedError.message}`);
       const baseName = mapExportBaseName(targetMap);
       const suffix = repaired ? "-repaired" : "";
       const downloadName = `${baseName}${suffix}.Civ5Map`;
@@ -1825,12 +2101,64 @@ export function Civ5MapViewer() {
 
   const exportCiv5Map = () => {
     if (isEditingMetadata) return;
+    if (mode === "SCENARIO") {
+      requestScenarioExport();
+      return;
+    }
     if (validationIssues.some((issue) => issue.severity !== "INFO")) {
       setShowExportValidation(true);
       return;
     }
     performCiv5MapExport();
   };
+
+  const hasBlockingStructureError = validationIssues.some((issue) => issue.category === "STRUCTURE" && issue.severity === "ERROR");
+
+  const changeScenarioDraft = (next: ScenarioDraft) => {
+    setProjectScenario(next);
+    setProjectDirty(true);
+  };
+
+  const applyScenarioPreview = () => {
+    setProjectScenario(cloneScenarioDraft(scenarioDraft));
+    commitMap(scenarioPreviewMap);
+    setMessage("Scenario preview applied · undo remains available");
+  };
+
+  const sendScenarioToRepair = () => {
+    setProjectScenario(cloneScenarioDraft(scenarioDraft));
+    commitMap(scenarioPreviewMap);
+    beginRepair(scenarioPreviewMap);
+    setScenarioPlacementFactionId("");
+    setRepairStage("INSPECT");
+    setMode("REPAIR");
+    setMessage("Scenario preview sent to Repair · no corrections were applied automatically");
+  };
+
+  function requestScenarioExport() {
+    let preflightError = "";
+    try {
+      const importedScenario = sourceFile && !sourceFile.salvaged
+        ? parseCiv5Map(sourceFile.buffer, sourceFile.fileName).scenarioDataPresent
+        : false;
+      if (!importedScenario) {
+        preflightError = "New scenario Civ5Map construction is disabled. Download the Excogitare project to retain this Scenario draft; ordinary map export remains available from Create or Explore.";
+      } else {
+        const encoded = updateCiv5Map(sourceFile!.buffer, scenarioPreviewMap);
+        const structuralError = inspectCiv5MapStructure(encoded).find((issue) => issue.severity === "ERROR");
+        if (structuralError) preflightError = structuralError.message;
+        else {
+          const reparsed = parseCiv5Map(encoded, `${scenarioPreviewMap.name}.Civ5Map`);
+          const encodedError = validateCiv5Map(reparsed).find((issue) => issue.severity === "ERROR");
+          if (encodedError) preflightError = encodedError.message;
+        }
+      }
+    } catch (error) {
+      preflightError = error instanceof Error ? error.message : "The Scenario could not be encoded safely.";
+    }
+    setScenarioExportPreflightError(preflightError);
+    setShowScenarioExportConfirmation(true);
+  }
 
   const selectRepairProfile = (profile: RepairProfile) => {
     setRepairProfile(profile);
@@ -1856,6 +2184,10 @@ export function Civ5MapViewer() {
   const applySelectedRepairs = () => {
     if (!repairBaseline) return;
     const repaired = applyRepairIssues(repairBaseline, repairIssues, repairSelected);
+    if (repaired === repairBaseline) {
+      setMessage("The selected corrections conflict with a legal population layout · no changes were applied");
+      return;
+    }
     const appliedCount = repairIssues.filter((issue) => repairSelected.has(issue.id) && issue.mutation).length;
     commitMap(repaired);
     beginRepair(repaired, repairDiagnostics);
@@ -1885,96 +2217,141 @@ export function Civ5MapViewer() {
       setMode("LAB");
       return;
     }
+    if (nextMode === "SCENARIO") {
+      const draft = scenarioDraftFromMap(mapRef.current, projectScenario);
+      setProjectScenario(draft);
+      setSelectedScenarioFactionId((current) => draft.factions.some((faction) => faction.id === current) ? current : draft.factions.find((faction) => faction.status !== "DISABLED")?.id ?? "");
+      setScenarioPlacementFactionId("");
+      setLayers((current) => ({ ...current, political: true, starts: true, cityStates: true }));
+      setMode("SCENARIO");
+      return;
+    }
     if (nextMode === "REPAIR") enterRepairMode();
     else setMode(nextMode);
   };
 
-  const populateIdentityLabForm = (candidate: IdentityLabSession["candidates"][number]) => {
-    setLabGuessPrimary(candidate.review?.guessPrimary ?? "");
-    setLabGuessSecondary(candidate.review?.guessSecondary ?? "");
-    setLabConfidence(candidate.review?.confidence ?? 3);
-    setLabCues(new Set(candidate.review?.cues ?? []));
-    setLabNotes(candidate.review?.notes ?? "");
+  const prefetchIdentityLabTrial = async (sourceSession: ContinuousIdentityLabSession) => {
+    const trial = prefetchedContinuousIdentityLabTrial(sourceSession);
+    if (!trial || sourceSession.status !== "ACTIVE") return;
+    const operationEpoch = labOperationEpochRef.current;
+    setLabPrefetching(true);
+    setLabPrefetchedTrialId(null);
+    labPrefetchRef.current = null;
+    try {
+      const generated = await generateMapAsync(trial.options, trial.recipe);
+      if (operationEpoch !== labOperationEpochRef.current) return;
+      labPrefetchRef.current = { trialId: trial.id, map: generated };
+      setLabPrefetchedTrialId(trial.id);
+      setLabSession((current) => current?.id === sourceSession.id ? recordContinuousIdentityLabGeneration(current, trial.id, generated, new Date().toISOString()) : current);
+      setLabStatus("Choose one answer. The next unlabeled map is ready; correctness remains hidden until the session ends.");
+    } catch (error) {
+      if (operationEpoch !== labOperationEpochRef.current) return;
+      const detail = error instanceof Error ? error.message : "Map generation failed.";
+      setLabSession((current) => current?.id === sourceSession.id ? recordContinuousIdentityLabGenerationError(current, trial.id, detail, new Date().toISOString()) : current);
+      setLabStatus(`The current trial is safe, but next-map prefetch failed: ${detail}`);
+    } finally {
+      if (operationEpoch === labOperationEpochRef.current) setLabPrefetching(false);
+    }
   };
 
-  const openIdentityLabCandidate = async (sourceSession: IdentityLabSession, index: number) => {
-    const selected = selectIdentityLabCandidate(sourceSession, index, new Date().toISOString());
-    const candidate = selected.candidates[selected.currentIndex];
-    setLabSession(selected);
-    populateIdentityLabForm(candidate);
+  const openIdentityLabTrial = async (sourceSession: ContinuousIdentityLabSession) => {
+    const trial = currentContinuousIdentityLabTrial(sourceSession);
+    if (!trial || sourceSession.status !== "ACTIVE") return;
+    const operationEpoch = ++labOperationEpochRef.current;
+    setLabSession(sourceSession);
+    setLabLegacyArchive(null);
     setLabStage("REVIEW");
     setLabLoading(true);
     setLabMap(null);
     setLabActiveCandidateId(null);
-    setLabStatus(`Generating blind candidate ${selected.currentIndex + 1} of ${selected.candidates.length}…`);
+    setLabSelectedChoice("");
+    setLabPrefetchedTrialId(null);
+    labPrefetchRef.current = null;
+    setLabStatus(`Generating blind trial ${trial.sequence + 1}…`);
     try {
-      const generated = await generateMapAsync(candidate.options);
+      const generated = await generateMapAsync(trial.options, trial.recipe);
+      if (operationEpoch !== labOperationEpochRef.current) return;
+      const generatedAt = new Date().toISOString();
+      const recorded = recordContinuousIdentityLabGeneration(sourceSession, trial.id, generated, generatedAt);
+      const presented = presentContinuousIdentityLabTrial(recorded, trial.id, generatedAt);
+      setLabSession(presented);
       setLabMap(generated);
-      setLabActiveCandidateId(candidate.id);
+      setLabActiveCandidateId(trial.id);
       fitMap(size, projectionTransform(generated.width, generated.height, "FLAT"));
-      setLabSession((current) => current?.id === selected.id ? recordIdentityLabGeneration(current, candidate.id, generated, new Date().toISOString()) : current);
-      setLabStatus(`Candidate ${selected.currentIndex + 1} is ready. Its Map Type remains hidden until a guess is submitted.`);
+      setLabStatus("The map is ready. Four plausible identities follow; no result will be shown between trials.");
+      void prefetchIdentityLabTrial(presented);
     } catch (error) {
+      if (operationEpoch !== labOperationEpochRef.current) return;
       const detail = error instanceof Error ? error.message : "Map generation failed.";
-      setLabSession((current) => current?.id === selected.id ? recordIdentityLabGenerationError(current, candidate.id, detail, new Date().toISOString()) : current);
-      setLabStatus(`Candidate generation failed: ${detail}`);
+      const failed = recordContinuousIdentityLabGenerationError(sourceSession, trial.id, detail, new Date().toISOString());
+      setLabSession(failed);
+      setLabStatus(`Current trial generation failed: ${detail}`);
     } finally {
-      setLabLoading(false);
+      if (operationEpoch === labOperationEpochRef.current) setLabLoading(false);
     }
   };
 
   const startIdentityLabSession = () => {
-    if (labSession?.summary.reviewed && !window.confirm("Start a new blind deck? Export the current JSON first if you want to retain these reviews.")) return;
+    if ((labSession?.summary.trialsAnswered || labLegacyArchive?.summary.reviewed) && !window.confirm("Start a new continuous session? Download the current JSON first if you want to retain its evidence.")) return;
     const now = new Date().toISOString();
-    const next = createIdentityLabSession({
-      sessionSeed: labSessionSeed,
-      samplesPerType: labSamplesPerType,
-      size: labSize,
-      style: labStyle,
-      modifier: "NONE",
-    }, now);
+    const next = createContinuousIdentityLabSession({ sessionSeed: labSessionSeed, size: labSize, style: labStyle, modifier: "NONE" }, now);
     setLabSession(next);
+    setLabLegacyArchive(null);
     setLabMap(null);
     setLabActiveCandidateId(null);
     setLabStage("REVIEW");
-    void openIdentityLabCandidate(next, 0);
-  };
-
-  const moveIdentityLabCandidate = (direction: -1 | 1) => {
-    if (!labSession || labLoading) return;
-    const index = Math.max(0, Math.min(labSession.candidates.length - 1, labSession.currentIndex + direction));
-    if (index === labSession.currentIndex) return;
-    void openIdentityLabCandidate(labSession, index);
+    void openIdentityLabTrial(next);
   };
 
   const submitIdentityGuess = () => {
-    if (!labSession || !labActiveCandidateId || !labGuessPrimary) return;
+    if (!labSession || !labActiveCandidateId || !labSelectedChoice || labPrefetching) return;
+    const cached = labPrefetchRef.current;
+    const current = currentContinuousIdentityLabTrial(labSession);
+    if (!current || !cached || cached.trialId !== prefetchedContinuousIdentityLabTrial(labSession)?.id) {
+      setLabStatus("The next map is not ready. Retry prefetch without losing this answer.");
+      return;
+    }
     try {
-      const reviewed = submitIdentityLabReview(labSession, labActiveCandidateId, {
-        guessPrimary: labGuessPrimary,
-        guessSecondary: labGuessSecondary || undefined,
-        confidence: labConfidence,
-        cues: [...labCues],
-        notes: labNotes,
-      }, new Date().toISOString());
-      const candidate = reviewed.candidates[reviewed.currentIndex];
-      setLabSession(reviewed);
-      setLabStatus(candidate.review?.guessPrimary === candidate.intendedPreset ? "First-choice recognition matched." : candidate.review?.guessSecondary === candidate.intendedPreset ? "The intended identity appeared as the second choice." : "The intended identity was not recognized in the top two choices.");
+      const now = new Date().toISOString();
+      let advanced = submitContinuousIdentityLabAnswer(labSession, labActiveCandidateId, labSelectedChoice, now);
+      const next = currentContinuousIdentityLabTrial(advanced)!;
+      advanced = recordContinuousIdentityLabGeneration(advanced, next.id, cached.map, now);
+      advanced = presentContinuousIdentityLabTrial(advanced, next.id, now);
+      setLabSession(advanced);
+      setLabMap(cached.map);
+      setLabActiveCandidateId(next.id);
+      setLabSelectedChoice("");
+      setLabPrefetchedTrialId(null);
+      labPrefetchRef.current = null;
+      fitMap(size, projectionTransform(cached.map.width, cached.map.height, "FLAT"));
+      setLabStatus(`Trial ${next.sequence + 1} is ready. The preceding answer was retained without revealing correctness.`);
+      void prefetchIdentityLabTrial(advanced);
     } catch (error) {
-      setLabStatus(error instanceof Error ? error.message : "The blind review could not be recorded.");
+      setLabStatus(error instanceof Error ? error.message : "The blind answer could not be recorded.");
     }
   };
 
-  const chooseIdentityVerdict = (verdict: IdentityVerdict) => {
-    if (!labSession || !labActiveCandidateId) return;
-    setLabSession(setIdentityLabVerdict(labSession, labActiveCandidateId, verdict, new Date().toISOString()));
-    setLabStatus("Post-reveal verdict retained in this device's Lab session.");
+  const endAndExportIdentityLab = () => {
+    if (!labSession || labSession.status !== "ACTIVE") return;
+    labOperationEpochRef.current += 1;
+    const ended = endContinuousIdentityLabSession(labSession, new Date().toISOString());
+    setLabSession(ended);
+    setLabMap(null);
+    setLabActiveCandidateId(null);
+    setLabPrefetchedTrialId(null);
+    setLabLoading(false);
+    setLabPrefetching(false);
+    labPrefetchRef.current = null;
+    setLabStage("RESULTS");
+    download(exportIdentityLabEvidence(ended), continuousIdentityLabFileName(ended), "application/json");
+    setLabStatus("Session ended and schema v2 evidence downloaded. Accuracy is now available in Results.");
   };
 
   const exportIdentityEvidence = () => {
-    if (!labSession) return;
-    download(exportIdentityLabSession(labSession), identityLabFileName(labSession), "application/json");
-    setLabStatus("Identity Lab JSON exported with exact generation options, reviews, diagnostics and narrative-guide metadata.");
+    const evidence = labSession ?? labLegacyArchive;
+    if (!evidence) return;
+    download(exportIdentityLabEvidence(evidence), continuousIdentityLabFileName(evidence), "application/json");
+    setLabStatus(evidence.schemaVersion === 1 ? "Archived schema v1 evidence downloaded without inventing v2 timing or choices." : "Schema v2 evidence downloaded with exact recipes, choices, answers, timings, diagnostics and narrative assessment.");
   };
 
   const importIdentityEvidence = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1982,13 +2359,26 @@ export function Civ5MapViewer() {
     event.target.value = "";
     if (!file) return;
     try {
-      const imported = importIdentityLabSession(await file.text());
-      setLabSession(imported);
+      const imported = importIdentityLabEvidence(await file.text());
+      labOperationEpochRef.current += 1;
+      setLabLoading(false);
+      setLabPrefetching(false);
       setLabMap(null);
       setLabActiveCandidateId(null);
-      populateIdentityLabForm(imported.candidates[imported.currentIndex]);
-      setLabStage("REVIEW");
-      setLabStatus(`${file.name} imported. Regenerate the selected candidate from its exact retained options.`);
+      setLabPrefetchedTrialId(null);
+      labPrefetchRef.current = null;
+      if (isContinuousIdentityLabSession(imported)) {
+        setLabSession(imported);
+        setLabLegacyArchive(null);
+        setLabStage(imported.status === "ENDED" ? "RESULTS" : "REVIEW");
+        setLabStatus(`${file.name} imported as schema v2${imported.status === "ENDED" ? ". Review its completed evidence." : ". Regenerating the current trial and bounded prefetch."}`);
+        if (imported.status === "ACTIVE") void openIdentityLabTrial(imported);
+      } else {
+        setLabSession(null);
+        setLabLegacyArchive(imported);
+        setLabStage("RESULTS");
+        setLabStatus(`${file.name} imported as a read-only schema v1 archive. Its judgments were not reinterpreted as timed four-choice trials.`);
+      }
     } catch (error) {
       setLabStatus(error instanceof Error ? error.message : "That file is not valid Identity Lab JSON.");
     }
@@ -2054,9 +2444,11 @@ export function Civ5MapViewer() {
     if (options !== generationOptions) setGenerationOptions(options);
     try {
       const baseRecipe = generationRecipeFromOptions(options);
-      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
+      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, seats: matchIntent.seats?.slice(0, options.players).map((seat) => ({ ...seat })), flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
       const generated = await generateMapAsync(options, recipe);
       replaceMap(generated);
+      setProjectScenario(null);
+      if (!projectId) setProjectName(`${generated.name} Project`);
       const id = ++generationIdRef.current;
       setGenerationHistory((history) => addGenerationToHistory(history, generated, id, { parentId: activeGenerationId ?? undefined, operation: "GENERATE" }));
       setActiveGenerationId(id);
@@ -2085,6 +2477,8 @@ export function Civ5MapViewer() {
     try {
       const generated = await generateMapAsync(options, { ...randomizedRecipe, effort: "STANDARD" });
       replaceMap(generated);
+      setProjectScenario(null);
+      if (!projectId) setProjectName(`${generated.name} Project`);
       const id = ++generationIdRef.current;
       setGenerationHistory((history) => addGenerationToHistory(history, generated, id, { operation: "RANDOMISE" }));
       setActiveGenerationId(id);
@@ -2104,6 +2498,7 @@ export function Civ5MapViewer() {
       const restored = restoreGeneration(entry);
       setShowLegend(false);
       replaceMap(restored);
+      setProjectScenario(null);
       setActiveGenerationId(entry.id);
       if (restored.recipe) {
         setGenerationOptions(normalizeGenerationOptions(generationOptionsFromRecipe(restored.recipe), allowGameBreakingGeometry));
@@ -2165,8 +2560,8 @@ export function Civ5MapViewer() {
     if (options !== generationOptions) setGenerationOptions(options);
     try {
       const baseRecipe = generationRecipeFromOptions(options);
-      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
-      const regenerated = await regenerateMapAsync(map, options, stage, variation, recipe);
+      const recipe = { ...baseRecipe, scale: generationScale, archetype: generationArchetype, archetypeIntensity: generationArchetypeIntensity, effort: generationEffort, matchIntent: { ...matchIntent, seats: matchIntent.seats?.slice(0, options.players).map((seat) => ({ ...seat })), flexiblePlayers: Math.max(0, options.players - matchIntent.humanPlayers - matchIntent.aiPlayers), balanceMode: options.balance, teamSize: options.teamSize, teamLayout: options.teamLayout, strategicBalance: options.strategicBalance } } satisfies GenerationRecipe;
+      const regenerated = await regenerateMapAsync(map, options, stage, variation, recipe, protectionState);
       const protectedResult = applyProtectionState(map, regenerated, protectionState);
       if (protectedResult.blocked) {
         const detail = `Regeneration blocked · ${protectedResult.conflicts.join(" ")}`;
@@ -2175,6 +2570,7 @@ export function Civ5MapViewer() {
         return;
       }
       const accepted = protectedResult.map;
+      if (protectionState.tileMask || protectionState.semantic.length) setProtectionState((current) => ({ ...cloneProtectionState(current), lastReport: protectedResult.report }));
       if (stage === "CLIMATE") {
         setArchetypePreviewMap(accepted);
         setArchetypePreviewView("DIFFERENCE");
@@ -2190,7 +2586,7 @@ export function Civ5MapViewer() {
       setComparisonCheckpointId(null);
       setComparisonView("CURRENT");
       const labels: Record<RegenerationStage, string> = { WORLD: "world", CLIMATE: "climate and biomes", RIVERS: "river network", CONTENT: "resources and sites", STARTS: "players and starts" };
-      setMessage(`${labels[stage]} regenerated${protectionState.tileMask || protectionState.semantic.length ? " · protected authoring data retained" : ""} · other compatible layers retained`);
+      setMessage(`${labels[stage]} regenerated${protectionState.tileMask || protectionState.semantic.length ? ` · ${protectedResult.report.summary}` : ""} · other compatible layers retained`);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         const detail = error instanceof Error ? error.message : "Selective regeneration failed.";
@@ -2255,6 +2651,7 @@ export function Civ5MapViewer() {
   const openBatchCandidate = (candidate: BatchCandidate) => {
     const restored = cloneMap(candidate.map);
     replaceMap(restored);
+    setProjectScenario(null);
     if (restored.generation) setGenerationOptions(normalizeGenerationOptions(restored.generation, allowGameBreakingGeometry));
     const id = ++generationIdRef.current;
     setGenerationHistory((history) => addGenerationToHistory(history, restored, id, { parentId: activeGenerationId ?? undefined, operation: "BATCH_SELECTION" }));
@@ -2266,6 +2663,7 @@ export function Civ5MapViewer() {
     const id = ++checkpointIdRef.current;
     const checkpoint = createMapCheckpoint(map, checkpointName, id);
     setCheckpoints((current) => [checkpoint, ...current].slice(0, 30));
+    setProjectDirty(true);
     setCheckpointName("");
     setMessage(`${checkpoint.name} · checkpoint saved`);
   };
@@ -2307,18 +2705,52 @@ export function Civ5MapViewer() {
     return indices;
   };
 
+  const commitProtection = (next: ProtectionState) => {
+    setPastProtectionStates((past) => [...past.slice(-49), cloneProtectionState(protectionState)]);
+    setFutureProtectionStates([]);
+    setProtectionState(cloneProtectionState(next));
+    setProjectDirty(true);
+  };
+
+  const undoProtection = () => {
+    const previous = pastProtectionStates.at(-1);
+    if (!previous) return;
+    setFutureProtectionStates((future) => [cloneProtectionState(protectionState), ...future.slice(0, 49)]);
+    setPastProtectionStates((past) => past.slice(0, -1));
+    setProtectionState(cloneProtectionState(previous));
+    setProjectDirty(true);
+    setMessage("Protection change undone");
+  };
+
+  const redoProtection = () => {
+    const next = futureProtectionStates[0];
+    if (!next) return;
+    setPastProtectionStates((past) => [...past.slice(-49), cloneProtectionState(protectionState)]);
+    setFutureProtectionStates((future) => future.slice(1));
+    setProtectionState(cloneProtectionState(next));
+    setProjectDirty(true);
+    setMessage("Protection change restored");
+  };
+
   const preserveSelection = () => {
     const indices = selectedTileIndices();
     if (!indices.length || !preserveChannels.size) return;
-    setProtectionState((current) => protectTiles(current, map.width, map.height, indices, [...preserveChannels], `Protected region ${(current.tileMask?.namedRegions.length ?? 0) + 1}`));
+    commitProtection(protectTiles(protectionState, map.width, map.height, indices, [...preserveChannels], protectionRegionName.trim() || `Protected region ${(protectionState.tileMask?.namedRegions.length ?? 0) + 1}`));
     setMessage(`${indices.length} tiles protected across ${preserveChannels.size} authoring channels`);
+  };
+
+  const eraseSelectionProtection = () => {
+    const indices = selectedTileIndices();
+    if (!indices.length || !preserveChannels.size) return;
+    commitProtection(eraseProtectedTiles(protectionState, indices, [...preserveChannels]));
+    setMessage(`${indices.length} tiles erased from ${preserveChannels.size} protection channels`);
   };
 
   const preserveSemanticSelection = () => {
     if (!semanticProtectionId) return;
     try {
-      setProtectionState((current) => protectSemanticObject(current, map, semanticProtectionId, "FUNCTION"));
-      setMessage("Semantic geography protected by function and lineage");
+      commitProtection(protectSemanticObject(protectionState, map, semanticProtectionId, semanticProtectionPolicy, semanticProtectionHard));
+      setMessage(`${semanticProtectionPolicy.toLowerCase()} semantic protection added${semanticProtectionHard ? " as a hard constraint" : " with degradable tolerance"}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "The semantic object could not be protected."); }
   };
 
@@ -2374,6 +2806,7 @@ export function Civ5MapViewer() {
       if (report.execution === "NATIVE" && !luaDependencies.length && !luaPostProcess.trim()) {
         const result = mapFromLuaScript(luaSource);
         replaceMap(result.map);
+        setProjectScenario(null);
         setGenerationOptions(result.map.generation ? normalizeGenerationOptions(result.map.generation, allowGameBreakingGeometry) : generationOptions);
         setLuaLogs([]);
         setLuaRunStatus("Map generated and opened in the editor.");
@@ -2386,6 +2819,7 @@ export function Civ5MapViewer() {
         postProcessSource: luaPostProcess,
       });
       replaceMap(result.map);
+      setProjectScenario(null);
       setLuaCustomOptions(result.metadata.options);
       setLuaMetadata(result.metadata);
       setLuaLogs(result.logs);
@@ -2416,9 +2850,9 @@ export function Civ5MapViewer() {
     }
   };
 
-  const labCurrentCandidate = labSession?.candidates[labSession.currentIndex] ?? null;
-  const labCurrentPrototype = labCurrentCandidate ? identityLabPrototype(labCurrentCandidate.intendedPreset) : undefined;
-  const labChoiceOptions = labCurrentCandidate ? identityLabChoices(labCurrentCandidate.engine) : [];
+  const labCurrentCandidate = labSession ? currentContinuousIdentityLabTrial(labSession) ?? null : null;
+  const labNextCandidate = labSession ? prefetchedContinuousIdentityLabTrial(labSession) ?? null : null;
+  const labChoiceOptions = labCurrentCandidate?.choices.map((preset) => ({ id: preset, label: MAP_PRESETS.find((item) => item.id === preset)?.label ?? preset })) ?? [];
   const labCandidateLoaded = Boolean(labCurrentCandidate && labMap && labActiveCandidateId === labCurrentCandidate.id);
   const presetLabel = (preset: MapGenerationOptions["preset"] | undefined) => MAP_PRESETS.find((item) => item.id === preset)?.label ?? preset ?? "Unknown";
   const activeTile = hovered?.tile;
@@ -2426,6 +2860,8 @@ export function Civ5MapViewer() {
     ? { key: "explore", label: "Explore", symbol: "⌖" }
     : mode === "CREATE"
       ? { key: "create", label: "Create", symbol: "+" }
+      : mode === "SCENARIO"
+        ? { key: "scenario", label: "Scenario", symbol: "§" }
       : mode === "REPAIR"
         ? { key: "repair", label: "Repair", symbol: "◇" }
         : mode === "LAB"
@@ -2449,9 +2885,19 @@ export function Civ5MapViewer() {
           : repairStage === "CORRECT"
             ? { stage: "Correct", title: "Proposed corrections", description: "Choose an automation profile and preview only the repairs you are prepared to accept." }
             : { stage: "Validate", title: "Export readiness", description: "Test the corrected preview again and identify anything that still blocks a defensible export." }
+        : mode === "SCENARIO"
+          ? scenarioStage === "SETUP"
+            ? { stage: "Setup", title: "Scenario identity", description: "Define the scenario, lobby intent, slot capacity and ruleset context before assigning its actors." }
+            : scenarioStage === "FACTIONS"
+              ? { stage: "Factions", title: "Factions and starts", description: "Author explicit civilization slots, teams, control intent and legal map-linked starting plots." }
+              : scenarioStage === "WORLD"
+                ? { stage: "World", title: "Scenario world", description: "Edit existing cities, territory ownership, declared improvements and road or railroad records." }
+                : scenarioStage === "OBJECTIVES"
+                  ? { stage: "Objectives", title: "Objectives and briefing", description: "Attach faction or semantic-geography goals while retaining unsupported intentions honestly in the project." }
+                  : { stage: "Validate", title: "Scenario export readiness", description: "Check every link and binary boundary, disclose Project-only fields and hand fixable geography to Repair." }
         : mode === "LAB"
           ? labStage === "REVIEW"
-            ? { stage: "Blind review", title: "Identity Lab", description: "Judge an unlabeled map, record the cues you perceived, then reveal the intended narrative identity." }
+            ? { stage: "Blind recognition", title: "Identity Lab", description: "Choose among four plausible Map Types; the next unlabeled map is prefetched and correctness remains hidden until you end." }
             : labStage === "RESULTS"
               ? { stage: "Results", title: "Recognition evidence", description: "Inspect accuracy, confusion pairs and per-identity results retained in the current session." }
               : { stage: "Guide", title: "Evidence contract", description: "Understand the JSON schema and how Lab evidence guides changes to the narrative identities." }
@@ -2472,14 +2918,20 @@ export function Civ5MapViewer() {
         : repairStage === "CORRECT" ? `${repairSelected.size} corrections selected`
           : repairPreviewIssues.some((issue) => issue.severity === "ERROR") ? `${repairPreviewIssues.filter((issue) => issue.severity === "ERROR").length} blockers remain`
             : repairPreviewIssues.length ? `${repairPreviewIssues.length} diagnostics remain` : "Ready for export"
+      : mode === "SCENARIO"
+        ? scenarioFindings.some((finding) => finding.severity === "ERROR")
+          ? `${scenarioFindings.filter((finding) => finding.severity === "ERROR").length} blockers`
+          : `${scenarioDraft.factions.filter((faction) => faction.status !== "DISABLED").length} factions · export review ready`
       : mode === "LAB"
         ? labLoading ? generationStage || "Generating blind candidate"
-          : labSession ? `${labSession.summary.reviewed} of ${labSession.summary.candidates} reviewed` : "No Lab session"
+          : labPrefetching ? "Current trial ready · preparing next"
+            : labSession ? labSession.status === "ENDED" ? `${labSession.summary.trialsAnswered} trials ended` : `${labSession.summary.trialsAnswered} trials answered`
+              : labLegacyArchive ? `${labLegacyArchive.summary.reviewed} archived v1 reviews` : "No Lab session"
         : luaStage === "SCRIPT" ? luaFileName || "No script loaded"
           : luaStage === "GENERATE" ? luaIsRunning ? "Lua project running" : luaMetadata ? "Map generated" : "Awaiting generation"
             : luaReport?.title || "No compatibility report yet";
   const workspaceContextDetail = mode === "LAB"
-    ? labCurrentCandidate?.revealedAt ? presetLabel(labCurrentCandidate.intendedPreset) : labSession ? `Blind candidate ${labSession.currentIndex + 1}` : "Narrative identity development"
+    ? labSession ? labSession.status === "ENDED" ? "Schema v2 results" : `Blind trial ${(labCurrentCandidate?.sequence ?? 0) + 1}` : labLegacyArchive ? "Read-only schema v1 archive" : "Narrative identity development"
     : map.name;
   const mapMetadataContent = (
     <>
@@ -2532,19 +2984,19 @@ export function Civ5MapViewer() {
         <nav className="workspace-navigation" aria-label="Workspaces">
           <span className="workspace-navigation-label">Workspaces</span>
           <div className="workspace-tabs">
-            {(["VIEW", "CREATE", "REPAIR", "LAB", "SCRIPT"] as const).map((item) => (
+            {(["VIEW", "CREATE", "SCENARIO", "REPAIR", "LAB", "SCRIPT"] as const).map((item) => (
               <button
                 key={item}
                 type="button"
-                data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "REPAIR" ? "Inspect a Civ5Map, choose corrections, and validate the repaired result." : item === "LAB" ? "Run development-stage blind Map Type recognition sessions and export evidence for generator iteration." : "Experimentally edit, generate, and diagnose Civ V Lua map projects."}
-                className={`workspace-tab workspace-tab-${item === "VIEW" ? "explore" : item === "CREATE" ? "create" : item === "REPAIR" ? "repair" : item === "LAB" ? "lab" : "lua"}${mode === item ? " is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`}
+                data-tooltip={item === "VIEW" ? "Inspect map statistics, terrain, layers, starts, resources, and individual tiles." : item === "CREATE" ? "Design a generated world, iterate on it, edit tiles and structures, then review balance and validity." : item === "SCENARIO" ? "Turn the current geography into an authored Scenario with factions, cities, ownership, objectives and export validation." : item === "REPAIR" ? "Inspect a Civ5Map, choose corrections, and validate the repaired result." : item === "LAB" ? "Run development-stage blind Map Type recognition sessions and export evidence for generator iteration." : "Experimentally edit, generate, and diagnose Civ V Lua map projects."}
+                className={`workspace-tab workspace-tab-${item === "VIEW" ? "explore" : item === "CREATE" ? "create" : item === "SCENARIO" ? "scenario" : item === "REPAIR" ? "repair" : item === "LAB" ? "lab" : "lua"}${mode === item ? " is-active" : ""}${item === "SCRIPT" ? " lua-mode-tab" : ""}`}
                 aria-current={mode === item ? "page" : undefined}
                 aria-expanded={item === "VIEW" ? undefined : mode === item}
-                aria-controls={item === "CREATE" ? "create-workspace-navigation" : item === "REPAIR" ? "repair-workspace-navigation" : item === "LAB" ? "lab-workspace-navigation" : item === "SCRIPT" ? "lua-workspace-navigation" : undefined}
+                aria-controls={item === "CREATE" ? "create-workspace-navigation" : item === "SCENARIO" ? "scenario-workspace-navigation" : item === "REPAIR" ? "repair-workspace-navigation" : item === "LAB" ? "lab-workspace-navigation" : item === "SCRIPT" ? "lua-workspace-navigation" : undefined}
                 onClick={() => selectWorkspaceMode(item)}
               >
-                <span className="workspace-tab-symbol" aria-hidden="true">{item === "VIEW" ? "⌖" : item === "CREATE" ? "+" : item === "REPAIR" ? "◇" : item === "LAB" ? "◫" : "{ }"}</span>
-                <span>{item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "REPAIR" ? "Repair" : item === "LAB" ? "Lab" : "Lua"}</span>
+                <span className="workspace-tab-symbol" aria-hidden="true">{item === "VIEW" ? "⌖" : item === "CREATE" ? "+" : item === "SCENARIO" ? "§" : item === "REPAIR" ? "◇" : item === "LAB" ? "◫" : "{ }"}</span>
+                <span>{item === "VIEW" ? "Explore" : item === "CREATE" ? "Create" : item === "SCENARIO" ? "Scenario" : item === "REPAIR" ? "Repair" : item === "LAB" ? "Lab" : "Lua"}</span>
                 {item === "LAB" && <span className="development-badge">Development</span>}
                 {item === "SCRIPT" && <span className="experimental-badge">Experimental</span>}
               </button>
@@ -2554,13 +3006,17 @@ export function Civ5MapViewer() {
         <div className="topbar-actions">
           {mode !== "LAB" && (
           <>
+          <div className={`project-status${projectDirty ? " is-unsaved" : projectLastSavedAt ? " is-downloaded" : ""}`} aria-label={`${projectName}, ${projectDirty ? "unsaved changes" : projectLastSavedAt ? "downloaded project" : "not yet downloaded"}`} data-tooltip={`${projectName} · ${projectDirty ? "Unsaved changes—download the project to retain them." : projectLastSavedAt ? "Downloaded project; later changes will be marked unsaved." : "Local session—not yet downloaded."}`}>
+            <span>{projectName}</span><small>{projectDirty ? "Unsaved" : projectLastSavedAt ? "Downloaded" : "Local session"}</small>
+          </div>
           <div className="history-actions" aria-label="Edit history">
             <button type="button" data-tooltip="Undo the most recent map edit while preserving the current zoom and pan." onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
             <button type="button" data-tooltip="Restore the most recently undone map edit while preserving the current zoom and pan." onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
           </div>
           <button className="button button-secondary button-export-view" type="button" data-tooltip="Export the current rendered view as a transparent-background PNG at high resolution." onClick={exportView}>Export PNG</button>
-          <button className="button button-secondary" type="button" data-tooltip="Download the complete authoring recipe, current map, and generation history as a reimportable Excogitare project." onClick={exportProject}>Save project</button>
-          <button className="button button-secondary" type="button" data-tooltip="Open a previously downloaded .excogitare project without relying on browser persistence." onClick={() => projectInputRef.current?.click()}>Open project</button>
+          <button className="button button-secondary button-new-project" type="button" data-tooltip="Begin a new unsaved project from the current generated or imported map." onClick={beginNewProject}>New project</button>
+          <button className="button button-secondary" type="button" data-tooltip={`${projectName} · ${projectDirty ? "Unsaved. " : ""}Choose a history policy, then download a compressed, SHA-256 verified Excogitare project.`} onClick={requestProjectExport}>Save project</button>
+          <button className="button button-secondary" type="button" data-tooltip="Open a downloaded .excogitare ZIP bundle or migrate a legacy v1 project without relying on browser persistence." onClick={() => projectInputRef.current?.click()}>Open project</button>
           {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" data-tooltip="Download the current map as an Excogitare-compatible Lua generation script." onClick={exportLua}>Export Lua</button>}
           {mode === "SCRIPT" && <button className="button button-secondary button-export-script" type="button" data-tooltip="Download a Civ V mod manifest for the exported Lua map script." onClick={exportModInfo}>Export .modinfo</button>}
           <button
@@ -2580,7 +3036,7 @@ export function Civ5MapViewer() {
           <input ref={luaInputRef} className="visually-hidden" type="file" accept=".lua,text/x-lua,text/plain" onChange={onLuaFileChange} />
           <input ref={luaDependencyInputRef} className="visually-hidden" type="file" multiple accept=".lua,text/x-lua,text/plain" onChange={onLuaDependencyChange} />
           <input ref={labInputRef} className="visually-hidden" type="file" accept=".json,application/json" onChange={(event) => void importIdentityEvidence(event)} />
-          <input ref={projectInputRef} className="visually-hidden" type="file" accept=".excogitare,application/vnd.excogitare.project+json,application/json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void importProject(file); }} />
+          <input ref={projectInputRef} className="visually-hidden" type="file" accept=".excogitare,application/vnd.excogitare.project+zip,application/vnd.excogitare.project+json,application/zip,application/json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void importProject(file); }} />
         </div>
       </header>
 
@@ -2592,6 +3048,9 @@ export function Civ5MapViewer() {
           </div>
           {mode === "CREATE" && (
             <CreateStageTabs active={createView} onChange={selectCreateStage} />
+          )}
+          {mode === "SCENARIO" && (
+            <ScenarioStageTabs active={scenarioStage} onChange={(stage) => { setScenarioStage(stage); setScenarioPlacementFactionId(""); }} />
           )}
           {mode === "REPAIR" && (
             <div id="repair-workspace-navigation" className="workspace-stage-tabs" role="tablist" aria-label="Repair workspace">
@@ -2609,8 +3068,8 @@ export function Civ5MapViewer() {
           )}
           {mode === "LAB" && (
             <div id="lab-workspace-navigation" className="workspace-stage-tabs lab-stage-tabs" role="tablist" aria-label="Lab workspace">
-              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "REVIEW"} className={labStage === "REVIEW" ? "is-active" : ""} data-tooltip="Generate an unlabeled candidate, submit a guess, then reveal the intended Map Type." onClick={() => setLabStage("REVIEW")}>Review</button>
-              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "RESULTS"} className={labStage === "RESULTS" ? "is-active" : ""} disabled={!labSession} data-tooltip="Inspect recognition rates, per-identity performance and confusion pairs." onClick={() => setLabStage("RESULTS")}>Results</button>
+              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "REVIEW"} className={labStage === "REVIEW" ? "is-active" : ""} disabled={Boolean(labLegacyArchive) || labSession?.status === "ENDED"} data-tooltip="Choose one of four plausible Map Types and automatically continue to the prefetched trial without correctness feedback." onClick={() => setLabStage("REVIEW")}>Review</button>
+              <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "RESULTS"} className={labStage === "RESULTS" ? "is-active" : ""} disabled={!labLegacyArchive && labSession?.status !== "ENDED"} data-tooltip="Available only after End and export, so accuracy cannot contaminate an active blind session." onClick={() => setLabStage("RESULTS")}>Results</button>
               <button type="button" role="tab" aria-controls="lab-workspace-panel" aria-selected={labStage === "GUIDE"} className={labStage === "GUIDE" ? "is-active" : ""} data-tooltip="Read how the exported JSON maps human evidence to the narrative identities guide." onClick={() => setLabStage("GUIDE")}>Guide</button>
             </div>
           )}
@@ -2620,11 +3079,13 @@ export function Civ5MapViewer() {
 
       <section className="workspace">
         <aside ref={sidebarRef} className="sidebar" aria-label="Map information and layers" onScroll={(event) => { if (mode === "CREATE") createScrollPositionsRef.current[createView] = event.currentTarget.scrollTop; }}>
-          <header className="workspace-masthead">
-            <p><span aria-hidden="true">{workspacePresentation.symbol}</span>{workspacePresentation.label} / {workspaceTask.stage}</p>
-            <h2>{workspaceTask.title}</h2>
-            <span>{workspaceTask.description}</span>
-          </header>
+          {mode !== "CREATE" && (
+            <header className="workspace-masthead">
+              <p><span aria-hidden="true">{workspacePresentation.symbol}</span>{workspacePresentation.label} / {workspaceTask.stage}</p>
+              <h2>{workspaceTask.title}</h2>
+              <span>{workspaceTask.description}</span>
+            </header>
+          )}
           {mode === "CREATE" && (
             <button className="randomise-world-button" type="button" data-tooltip="Choose a completely new safe combination of generation settings and immediately build the resulting map." disabled={generationRunning} onClick={() => void randomiseWorld()}>
               <span>Randomise</span><small>{generationRunning ? generationStage : allowGameBreakingGeometry ? "New map from every option" : "New map from Civ V-safe options"}</small>
@@ -2657,89 +3118,99 @@ export function Civ5MapViewer() {
 
           {mode === "LAB" && (
             <div id="lab-workspace-panel" className="identity-lab-panel">
-              {!labSession && labStage !== "GUIDE" ? (
+              {!labSession && !labLegacyArchive && labStage !== "GUIDE" ? (
                 <>
                   <section className="lab-introduction">
-                    <div className="section-title"><h3>Prototype identities</h3><span>4 narratives</span></div>
-                    <p>The first deck tests four different failures of Map Type identity. The type name, generated map name, description and seed remain hidden during review.</p>
-                    <div className="lab-prototype-list">
-                      {IDENTITY_LAB_PROTOTYPES.map((prototype) => (
-                        <div key={prototype.preset}><strong>{prototype.label}</strong><span>{prototype.dimension}</span></div>
-                      ))}
-                    </div>
+                    <div className="section-title"><h3>Continuous blind recognition</h3><span>33 narratives</span></div>
+                    <p>Each trial generates one unlabeled Map Type and exactly four plausible choices drawn from the narrative guide&apos;s nearest confusions. Correctness remains hidden until you end the session.</p>
                   </section>
                   <section className="lab-session-builder">
-                    <div className="section-title"><h3>New blind deck</h3><span>{labSamplesPerType * IDENTITY_LAB_PROTOTYPES.length} maps</span></div>
-                    <label className="control-field"><span>Samples per type</span><select value={labSamplesPerType} onChange={(event) => setLabSamplesPerType(Number(event.target.value))}><option value={1}>1 · quick calibration</option><option value={2}>2 · baseline</option><option value={3}>3 · stronger evidence</option><option value={5}>5 · extended session</option></select></label>
+                    <div className="section-title"><h3>New continuous session</h3><span>ends when you choose</span></div>
                     <label className="control-field"><span>World character</span><select value={labStyle} onChange={(event) => setLabStyle(event.target.value as MapGenerationOptions["style"])}><option value="MUNDANE">Mundane · baseline recognition</option><option value="REALISTIC">Realistic</option><option value="FANTASTICAL">Fantastical</option><option value="BRUTAL">Brutal</option></select></label>
                     <label className="control-field"><span>Map size</span><select value={labSize} onChange={(event) => setLabSize(event.target.value as MapGenerationOptions["size"])}><option value="SMALL">Small · faster</option><option value="STANDARD">Standard · recommended</option><option value="HUGE">Huge · detailed</option></select></label>
                     <label className="control-field"><span>Session seed</span><input value={labSessionSeed} maxLength={80} onChange={(event) => setLabSessionSeed(event.target.value)} /></label>
-                    <button className="lab-primary-action" type="button" disabled={labLoading || !labSessionSeed.trim()} onClick={startIdentityLabSession}>Start blind session</button>
+                    <button className="lab-primary-action" type="button" disabled={labLoading || !labSessionSeed.trim()} onClick={startIdentityLabSession}>Start continuous session</button>
                     <button className="lab-secondary-action" type="button" onClick={() => labInputRef.current?.click()}>Import session JSON</button>
                   </section>
                 </>
               ) : labStage === "REVIEW" && labCurrentCandidate && labSession ? (
                 <>
                   <section className="lab-candidate-header">
-                    <div><span>Candidate {labSession.currentIndex + 1} / {labSession.candidates.length}</span><strong>{labCurrentCandidate.revealedAt ? presetLabel(labCurrentCandidate.intendedPreset) : "Identity hidden"}</strong><small>{labCurrentCandidate.engine === "ECCENTRIC" ? "Eccentric" : "Physical"} engine · {labSession.configuration.style.toLowerCase()} character</small></div>
-                    <div className="lab-candidate-nav"><button type="button" aria-label="Previous blind candidate" disabled={labLoading || labSession.currentIndex === 0} onClick={() => moveIdentityLabCandidate(-1)}>←</button><button type="button" aria-label="Next blind candidate" disabled={labLoading || labSession.currentIndex === labSession.candidates.length - 1} onClick={() => moveIdentityLabCandidate(1)}>→</button></div>
+                    <div><span>Trial {labCurrentCandidate.sequence + 1}</span><strong>Identity hidden</strong><small>4 choices · {labSession.configuration.style.toLowerCase()} character · schema v2</small></div>
+                    <div className="lab-prefetch-state" aria-label="Bounded prefetch status"><span>{labPrefetching ? "Preparing next" : labPrefetchedTrialId === labNextCandidate?.id ? "Next ready" : "Next unavailable"}</span></div>
                   </section>
                   <p className="lab-status" role="status">{labStatus}</p>
                   {!labCandidateLoaded && (
-                    <button className="lab-primary-action" type="button" disabled={labLoading} onClick={() => void openIdentityLabCandidate(labSession, labSession.currentIndex)}>{labLoading ? generationStage || "Generating…" : labCurrentCandidate.generationError ? "Retry candidate" : "Generate candidate"}</button>
+                    <button className="lab-primary-action" type="button" disabled={labLoading} onClick={() => void openIdentityLabTrial(labSession)}>{labLoading ? generationStage || "Generating…" : labCurrentCandidate.generationError ? "Retry current trial" : "Generate current trial"}</button>
                   )}
-                  {labCandidateLoaded && !labCurrentCandidate.review && (
+                  {labCandidateLoaded && (
                     <section className="lab-review-form" aria-label="Blind Map Type review">
-                      <label className="control-field"><span>Most likely Map Type</span><select value={labGuessPrimary} onChange={(event) => { const value = event.target.value as MapGenerationOptions["preset"] | ""; setLabGuessPrimary(value); if (value === labGuessSecondary) setLabGuessSecondary(""); }}><option value="">Choose within {labCurrentCandidate.engine === "ECCENTRIC" ? "Eccentric" : "Physical"}…</option>{labChoiceOptions.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label>
-                      <label className="control-field"><span>Second choice · optional</span><select value={labGuessSecondary} onChange={(event) => setLabGuessSecondary(event.target.value as MapGenerationOptions["preset"] | "")}><option value="">No second choice</option>{labChoiceOptions.filter((choice) => choice.id !== labGuessPrimary).map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label>
-                      <fieldset className="lab-confidence"><legend>Confidence</legend>{([1, 2, 3, 4, 5] as const).map((value) => <button key={value} type="button" aria-pressed={labConfidence === value} className={labConfidence === value ? "is-active" : ""} onClick={() => setLabConfidence(value)}>{value}</button>)}</fieldset>
-                      <fieldset className="lab-cue-picker"><legend>What did you perceive?</legend>{IDENTITY_LAB_CUES.map((cue) => <label key={cue.id}><input type="checkbox" checked={labCues.has(cue.id)} onChange={() => setLabCues((current) => { const next = new Set(current); if (next.has(cue.id)) next.delete(cue.id); else next.add(cue.id); return next; })} /><span>{cue.label}</span></label>)}</fieldset>
-                      <label className="control-field"><span>Observation notes · optional</span><textarea rows={4} maxLength={4000} value={labNotes} onChange={(event) => setLabNotes(event.target.value)} placeholder="Describe the geography that led to your guess. Do not try to infer the hidden seed." /></label>
-                      <button className="lab-primary-action" type="button" disabled={!labGuessPrimary} onClick={submitIdentityGuess}>Submit guess and reveal</button>
+                      <fieldset className="lab-four-choice"><legend>Which Map Type does this world express?</legend>{labChoiceOptions.map((choice, index) => <button key={choice.id} type="button" aria-pressed={labSelectedChoice === choice.id} className={labSelectedChoice === choice.id ? "is-active" : ""} onClick={() => setLabSelectedChoice(choice.id)}><span>Option {String.fromCharCode(65 + index)}</span><strong>{choice.label}</strong></button>)}</fieldset>
+                      <p className="lab-blind-caveat">No answer, target, engine or score is revealed between trials. Prior records retain recipes and evidence—not map snapshots.</p>
+                      <button className="lab-primary-action" type="button" disabled={!labSelectedChoice || labPrefetching || labPrefetchedTrialId !== labNextCandidate?.id} onClick={submitIdentityGuess}>{labPrefetching ? "Preparing next map…" : "Submit and continue"}</button>
+                      {!labPrefetching && labPrefetchedTrialId !== labNextCandidate?.id && <button className="lab-secondary-action" type="button" onClick={() => void prefetchIdentityLabTrial(labSession)}>Retry next-map prefetch</button>}
                     </section>
                   )}
-                  {labCurrentCandidate.review && labCurrentCandidate.revealedAt && labCurrentPrototype && (
-                    <section className="lab-reveal">
-                      <span className={labCurrentCandidate.review.guessPrimary === labCurrentCandidate.intendedPreset ? "is-correct" : "is-missed"}>{labCurrentCandidate.review.guessPrimary === labCurrentCandidate.intendedPreset ? "First-choice match" : labCurrentCandidate.review.guessSecondary === labCurrentCandidate.intendedPreset ? "Second-choice match" : "Identity not recognized"}</span>
-                      <h3>{labCurrentPrototype.label}</h3>
-                      <p>{labCurrentPrototype.premise}</p>
-                      <dl className="lab-review-summary"><div><dt>Primary guess</dt><dd>{presetLabel(labCurrentCandidate.review.guessPrimary)}</dd></div><div><dt>Second choice</dt><dd>{presetLabel(labCurrentCandidate.review.guessSecondary)}</dd></div><div><dt>Confidence</dt><dd>{labCurrentCandidate.review.confidence} / 5</dd></div></dl>
-                      <fieldset className="lab-verdict-picker"><legend>Post-reveal verdict</legend>{(["RECOGNIZABLE", "AMBIGUOUS", "ATTRACTIVE_WRONG", "FAILED"] as const).map((verdict) => <button key={verdict} type="button" aria-pressed={labCurrentCandidate.review?.verdict === verdict} className={labCurrentCandidate.review?.verdict === verdict ? "is-active" : ""} onClick={() => chooseIdentityVerdict(verdict)}>{verdict === "ATTRACTIVE_WRONG" ? "Attractive but wrong" : verdict.toLowerCase()}</button>)}</fieldset>
-                      {labCurrentCandidate.diagnostics && <details className="lab-diagnostics"><summary>Structural diagnostics</summary><dl>{Object.entries(labCurrentCandidate.diagnostics).map(([key, value]) => <div key={key}><dt>{friendlyName(key.replace(/([a-z])([A-Z])/g, "$1_$2"), "")}</dt><dd>{value}</dd></div>)}</dl></details>}
-                    </section>
-                  )}
-                  <div className="lab-session-actions"><button type="button" onClick={exportIdentityEvidence}>Export JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button><button type="button" onClick={startIdentityLabSession}>New deck</button></div>
+                  <div className="lab-session-actions"><button className="lab-end-action" type="button" onClick={endAndExportIdentityLab}>End and export</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button></div>
                 </>
-              ) : labStage === "RESULTS" && labSession ? (
+              ) : labStage === "RESULTS" && (labSession?.status === "ENDED" || labLegacyArchive) ? (
                 <section className="lab-results">
-                  <div className="lab-score-grid"><div><strong>{labSession.summary.reviewed}</strong><span>Reviewed</span></div><div><strong>{labSession.summary.firstChoicePercent}%</strong><span>First choice</span></div><div><strong>{labSession.summary.topTwoPercent}%</strong><span>Top two</span></div></div>
-                  <div className="section-title"><h3>By narrative identity</h3><span>{labSession.summary.candidates} candidates</span></div>
-                  <div className="lab-identity-results">{labSession.summary.byIdentity.map((result) => <div key={result.intendedPreset}><span><strong>{presetLabel(result.intendedPreset)}</strong><small>{result.reviewed} / {result.candidates} reviewed</small></span><span>{result.firstChoiceCorrect} first · {result.topTwoCorrect} top two</span></div>)}</div>
-                  <div className="section-title"><h3>Confusion pairs</h3><span>{labSession.summary.confusions.length}</span></div>
-                  {labSession.summary.confusions.length ? <div className="lab-confusions">{labSession.summary.confusions.map((confusion) => <div key={`${confusion.intendedPreset}-${confusion.guessedPreset}`}><span>{presetLabel(confusion.intendedPreset)}</span><b>→</b><span>{presetLabel(confusion.guessedPreset)}</span><strong>{confusion.count}</strong></div>)}</div> : <p className="workspace-empty-state">No first-choice confusion has been recorded yet.</p>}
+                  {labSession ? <>
+                    <div className="lab-score-grid"><div><strong>{labSession.summary.trialsAnswered}</strong><span>Trials</span></div><div><strong>{labSession.summary.accuracyPercent}%</strong><span>Accuracy</span></div><div><strong>{(labSession.summary.averageResponseTimeMs / 1000).toFixed(1)}s</strong><span>Mean response</span></div></div>
+                    <div className="section-title"><h3>By narrative identity</h3><span>schema v2</span></div>
+                    <div className="lab-identity-results">{labSession.summary.byIdentity.filter((result) => result.answered).map((result) => <div key={result.targetPreset}><span><strong>{presetLabel(result.targetPreset)}</strong><small>{result.answered} answered</small></span><span>{result.correct} correct · {result.accuracyPercent}%</span></div>)}</div>
+                    <div className="section-title"><h3>Confusion pairs</h3><span>{labSession.summary.confusions.length}</span></div>
+                    {labSession.summary.confusions.length ? <div className="lab-confusions">{labSession.summary.confusions.map((confusion) => <div key={`${confusion.targetPreset}-${confusion.selectedPreset}`}><span>{presetLabel(confusion.targetPreset)}</span><b>→</b><span>{presetLabel(confusion.selectedPreset)}</span><strong>{confusion.count}</strong></div>)}</div> : <p className="workspace-empty-state">No incorrect recognition pair was recorded.</p>}
+                  </> : labLegacyArchive ? <>
+                    <div className="section-title"><h3>Archived finite session</h3><span>schema v1 · read only</span></div>
+                    <p className="lab-caveat">This evidence remains in its original finite-deck form. Excogitare does not invent response times, four-choice positions or continuous-trial meaning for it.</p>
+                    <div className="lab-score-grid"><div><strong>{labLegacyArchive.summary.reviewed}</strong><span>Reviewed</span></div><div><strong>{labLegacyArchive.summary.firstChoicePercent}%</strong><span>First choice</span></div><div><strong>{labLegacyArchive.summary.topTwoPercent}%</strong><span>Top two</span></div></div>
+                    <div className="section-title"><h3>Confusion pairs</h3><span>{labLegacyArchive.summary.confusions.length}</span></div>
+                    {labLegacyArchive.summary.confusions.length ? <div className="lab-confusions">{labLegacyArchive.summary.confusions.map((confusion) => <div key={`${confusion.intendedPreset}-${confusion.guessedPreset}`}><span>{presetLabel(confusion.intendedPreset)}</span><b>→</b><span>{presetLabel(confusion.guessedPreset)}</span><strong>{confusion.count}</strong></div>)}</div> : <p className="workspace-empty-state">No first-choice confusion was recorded.</p>}
+                  </> : null}
                   <p className="lab-status" role="status">{labStatus}</p>
-                  <div className="lab-session-actions"><button type="button" onClick={() => setLabStage("REVIEW")}>Return to review</button><button type="button" onClick={exportIdentityEvidence}>Export JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button></div>
+                  <div className="lab-session-actions"><button type="button" onClick={exportIdentityEvidence}>Download JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button><button type="button" onClick={() => { setLabSession(null); setLabLegacyArchive(null); setLabStage("REVIEW"); }}>New session</button></div>
                 </section>
               ) : (
                 <section className="lab-guide">
-                  <div className="section-title"><h3>How to read the JSON</h3><span>schema v1</span></div>
-                  <p>The export is a durable evidence handoff. It contains no uploaded account data and no embedded Civ5Map binary; every candidate can be regenerated from its exact retained options.</p>
+                  <div className="section-title"><h3>How to read the JSON</h3><span>schema v2</span></div>
+                  <p>The export is the durable evidence handoff. It contains no uploaded account data or Civ5Map binary; each trial can be regenerated from its exact recipe while prior maps themselves are discarded.</p>
                   <dl>
                     <div><dt><code>narrativeGuide</code></dt><dd>Names version 1 of <code>docs/features/map-type-narrative-identities.md</code>, the specification against which the candidate is judged.</dd></div>
-                    <div><dt><code>configuration</code></dt><dd>Records the stable deck seed, character, size, samples per type and four prototype identities.</dd></div>
-                    <div><dt><code>candidates[].options</code></dt><dd>Contains the complete deterministic generation recipe used to reproduce the unlabeled map.</dd></div>
-                    <div><dt><code>intendedPreset</code></dt><dd>Connects a candidate to its narrative entry. It is deliberately hidden until the blind guess is submitted.</dd></div>
-                    <div><dt><code>review</code></dt><dd>Retains primary and secondary guesses, confidence, perceived cue tags, notes and the post-reveal verdict.</dd></div>
-                    <div><dt><code>diagnostics</code></dt><dd>Records structural measurements that explain the result. They support but do not replace human recognition.</dd></div>
+                    <div><dt><code>configuration</code></dt><dd>Records the deterministic session seed, character, size and complete target catalogue.</dd></div>
+                    <div><dt><code>trials[].recipe</code></dt><dd>Contains the authoritative recipe used to reproduce that unlabeled map.</dd></div>
+                    <div><dt><code>targetPreset / choices</code></dt><dd>Records one intended identity and exactly four deterministically positioned choices drawn first from its nearest confusions.</dd></div>
+                    <div><dt><code>selectedPreset / responseTimeMs</code></dt><dd>Records the single blind answer and elapsed viewing time. Neither is scored in the interface before End and export.</dd></div>
+                    <div><dt><code>diagnostics / narrativeEvidence</code></dt><dd>Retains structural measurements and the final Narrative Assessment without retaining the generated map snapshot.</dd></div>
                     <div><dt><code>summary.confusions</code></dt><dd>Lists intended-versus-guessed pairs. These identify which narrative rules need iteration.</dd></div>
                   </dl>
+                  <p className="lab-caveat">Schema v1 remains importable as a read-only archive. Its finite-deck judgments are never rewritten as v2 timings or four-choice evidence.</p>
                   <div className="section-title"><h3>How it changes generation</h3><span>reviewed loop</span></div>
-                  <ol><li>Export the session after blind review.</li><li>Attach the JSON or provide its local path in a development task.</li><li>Compare confusion pairs, cue tags, notes and diagnostics with the narrative guide.</li><li>Change engine rules across the stable seed deck—not individual favorable maps.</li><li>Import the same JSON and regenerate candidates to compare the next implementation.</li></ol>
+                  <ol><li>End and export after enough blind trials.</li><li>Attach the JSON or provide its local path in a development task.</li><li>Compare confusion pairs, response times, diagnostics and Narrative Assessments with the guide.</li><li>Change engine rules across repeatable recipes—not individual favorable maps.</li><li>Run a new seeded session after implementation and compare aggregate evidence.</li></ol>
                   <p className="lab-caveat">The Lab never modifies a generator automatically. Narrative changes remain deliberate code changes reviewed against legality, accessibility, determinism and World Character variation.</p>
                   <div className="lab-session-actions"><button type="button" onClick={exportIdentityEvidence}>Export JSON</button><button type="button" onClick={() => labInputRef.current?.click()}>Import JSON</button></div>
                 </section>
               )}
             </div>
+          )}
+
+          {mode === "SCENARIO" && (
+            <ScenarioWorkspace
+              map={map}
+              draft={scenarioDraft}
+              stage={scenarioStage}
+              findings={scenarioFindings}
+              compatibility={scenarioCompatibilityReport}
+              selectedFactionId={selectedScenarioFactionId}
+              placementFactionId={scenarioPlacementFactionId}
+              hoveredCoordinate={hovered ? { x: hovered.col, y: canvasMap.height - 1 - hovered.row } : undefined}
+              onChange={changeScenarioDraft}
+              onSelectFaction={setSelectedScenarioFactionId}
+              onPlaceFaction={setScenarioPlacementFactionId}
+              onApply={applyScenarioPreview}
+              onSendToRepair={sendScenarioToRepair}
+              onExport={requestScenarioExport}
+            />
           )}
 
           {mode === "REPAIR" && repairBaseline && (
@@ -2916,7 +3387,7 @@ export function Civ5MapViewer() {
                       )}
                       {checkpoints.length ? (
                         <div className="checkpoint-list">
-                          {checkpoints.map((checkpoint) => <div key={checkpoint.id}><span><strong>{checkpoint.name}</strong><small>{checkpoint.map.width}×{checkpoint.map.height} · {new Date(checkpoint.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></span><div><button type="button" onClick={() => compareCheckpoint(checkpoint)}>Compare</button><button type="button" onClick={() => restoreCheckpoint(checkpoint)}>Restore</button><button type="button" aria-label={`Delete ${checkpoint.name}`} onClick={() => { setCheckpoints((current) => current.filter((item) => item.id !== checkpoint.id)); if (comparisonCheckpointId === checkpoint.id) setComparisonCheckpointId(null); }}>×</button></div></div>)}
+                          {checkpoints.map((checkpoint) => <div key={checkpoint.id}><span><strong>{checkpoint.name}</strong><small>{checkpoint.map.width}×{checkpoint.map.height} · {new Date(checkpoint.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></span><div><button type="button" onClick={() => compareCheckpoint(checkpoint)}>Compare</button><button type="button" onClick={() => restoreCheckpoint(checkpoint)}>Restore</button><button type="button" aria-label={`Delete ${checkpoint.name}`} onClick={() => { setCheckpoints((current) => current.filter((item) => item.id !== checkpoint.id)); if (comparisonCheckpointId === checkpoint.id) setComparisonCheckpointId(null); setProjectDirty(true); }}>×</button></div></div>)}
                         </div>
                       ) : <p className="iteration-note">Save a deliberate revision before a risky generation pass or structural edit.</p>}
                     </div>
@@ -2953,7 +3424,7 @@ export function Civ5MapViewer() {
                       <button
                         key={value}
                         type="button"
-                        data-tooltip={`${note}. This changes the character of the selected engine without replacing it.`}
+                        data-tooltip={`${note}. ${describeWorldCharacter(generationOptions.engine, value)}`}
                         className={generationOptions.style === value ? "is-active" : ""}
                         onClick={() => setGenerationOptions((current) => value === "BRUTAL"
                           ? { ...current, style: value, balance: "TOURNAMENT", startQuality: "BALANCED", mountainPercent: Math.max(18, current.mountainPercent) }
@@ -2963,12 +3434,8 @@ export function Civ5MapViewer() {
                       </button>
                     ))}
                   </fieldset>
-                  <p className="world-character-explanation" aria-live="polite">
-                    <strong>{GENERATION_ENGINES.find((engine) => engine.id === generationOptions.engine)?.label} × {worldCharacterProfile(generationOptions.style).label}</strong>
-                    <span>{describeWorldCharacter(generationOptions.engine, generationOptions.style)}</span>
-                  </p>
                   <div className="recipe-fields">
-                  <label className="control-field map-type-control" data-tooltip="Choose a geographic archetype. Selecting one also chooses its required engine and recommended physical defaults.">
+                  <label className="control-field map-type-control" data-tooltip={`Choose a geographic archetype and its recommended defaults. ${describeNarrativeProfile(generationOptions.preset, generationOptions.style)}`}>
                     <span>Map type</span>
                     <select value={generationOptions.preset} onChange={(event) => {
                       const preset = MAP_PRESETS.find((item) => item.id === event.target.value);
@@ -2980,21 +3447,19 @@ export function Civ5MapViewer() {
                       <optgroup label="Physical worlds">{MAP_PRESETS.filter((preset) => preset.engine === "PHYSICAL").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                       <optgroup label="Polis worlds">{MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
                     </select>
-                    <small>{describeNarrativeProfile(generationOptions.preset, generationOptions.style)}</small>
-                    <em className={`narrative-profile-state state-${narrativeProfile(generationOptions.preset).implementation.toLowerCase().replaceAll("_", "-")}`}>{narrativeProfile(generationOptions.preset).implementation === "BENCHMARK" ? "Recognition benchmark active" : "Narrative profile retained · specialized compiler pending"}</em>
+                    <em className={`narrative-profile-state state-${narrativeProfile(generationOptions.preset).implementation.toLowerCase().replaceAll("_", "-")}`}>{narrativeProfile(generationOptions.preset).implementation === "BENCHMARK" ? "Recognition benchmark" : "Compiler pending"}</em>
                   </label>
-                  <label className="control-field scale-control" data-tooltip="Scale describes how much of the imagined world is visible; it is independent of the tile budget.">
+                  <label className="control-field scale-control" data-tooltip={`Scale describes how much of the imagined world is visible; it is independent of the tile budget. ${WORLD_SCALE_PROFILES[generationScale].subject} Map Size changes resolution, not this category.`}>
                     <span>Scale</span>
                     <select value={generationScale} onChange={(event) => setGenerationScale(event.target.value as WorldScale)}>
-                      <option value="GLOBAL">Global · most of a planet</option>
-                      <option value="CONTINENTAL">Continental · a continent or continental system</option>
-                      <option value="REGIONAL">Regional · connected countries, basins, or seas</option>
-                      <option value="PROVINCIAL">Provincial · one subcontinental theatre</option>
-                      <option value="LOCAL">Local · a detailed valley, island group, or scenario region</option>
+                      <option value="GLOBAL">Global</option>
+                      <option value="CONTINENTAL">Continental</option>
+                      <option value="REGIONAL">Regional</option>
+                      <option value="PROVINCIAL">Provincial</option>
+                      <option value="LOCAL">Local</option>
                     </select>
-                    <small>{WORLD_SCALE_PROFILES[generationScale].subject} Map Size changes resolution, not this geographic category.</small>
                   </label>
-                  <label className="control-field archetype-control" data-tooltip="Apply an environmental coat while preserving land, elevation, rivers, starts, and scenario data by default.">
+                  <label className="control-field archetype-control" data-tooltip={`Apply an environmental coat while preserving land, elevation, rivers, starts, and scenario data by default. ${describeArchetype(generationArchetype, generationArchetypeIntensity)}`}>
                     <span>Archetype</span>
                     <select value={generationArchetype} onChange={(event) => setGenerationArchetype(event.target.value as WorldArchetype)}>
                       <option value="EXISTING">Existing · retain the current surface</option>
@@ -3003,33 +3468,31 @@ export function Civ5MapViewer() {
                       <option value="MONSOON">Monsoon</option><option value="MEDITERRANEAN">Mediterranean</option><option value="STEPPE">Steppe</option><option value="SAVANNA">Savanna</option>
                       <option value="MARSHLAND">Marshland</option><option value="VOLCANIC">Volcanic</option><option value="JURASSIC">Jurassic</option><option value="POST_COLLAPSE">Post-Collapse</option><option value="FALLOUT_WASTES">Fallout Wastes</option>
                     </select>
-                    <small>{describeArchetype(generationArchetype, generationArchetypeIntensity)}</small>
                     {generationArchetype !== "EXISTING" && generationArchetype !== "NARRATIVE_DEFAULT" && !ARCHETYPE_PROFILES[generationArchetype].compatibleCharacters.includes(generationOptions.style) && <small className="archetype-conflict-warning">This coat contradicts the selected World Character. It remains explicit, but Review will treat the intended identity as weakened.</small>}
                   </label>
-                  <label className="control-field archetype-intensity-control" data-tooltip="Hint repaints selected coherent regions, Strong makes the coat dominant, and Transformative additionally rebuilds compatible resources and wonders only after a Difference preview and confirmation.">
+                  <label className="control-field archetype-intensity-control" data-tooltip={`Hint repaints selected coherent regions, Strong makes the coat dominant, and Transformative additionally rebuilds compatible resources and wonders only after a Difference preview and confirmation.${generationArchetype !== "EXISTING" && generationArchetype !== "NARRATIVE_DEFAULT" ? ` Resource ecology: ${ARCHETYPE_PROFILES[generationArchetype].resourceEcology.join(", ")}; favors ${ARCHETYPE_PROFILES[generationArchetype].wonderTendencies.join(" and ")}.` : ""}`}>
                     <span>Archetype intensity</span>
                     <select value={generationArchetypeIntensity} disabled={generationArchetype === "EXISTING" || generationArchetype === "NARRATIVE_DEFAULT"} onChange={(event) => setGenerationArchetypeIntensity(event.target.value as ArchetypeIntensity)}>
                       <option value="HINT">Hint · restrained regional coat</option>
                       <option value="STRONG">Strong · dominant surface coat</option>
                       <option value="TRANSFORMATIVE">Transformative · surface and content ecology</option>
                     </select>
-                    {generationArchetype !== "EXISTING" && generationArchetype !== "NARRATIVE_DEFAULT" && <small>{ARCHETYPE_PROFILES[generationArchetype].resourceEcology.join(" · ")} · favors {ARCHETYPE_PROFILES[generationArchetype].wonderTendencies.join(" and ")}.</small>}
                   </label>
-                  <label className="control-field map-size-control" data-tooltip="Choose a tile budget. Non-stock community dimensions remain hidden until Game Breaking generation is enabled; recommended player and city-state counts update with the selection.">
+                  <label className="control-field map-size-control" data-tooltip={`Choose a tile budget. At the current geometry, ${MAP_SIZES.find((item) => item.id === generationOptions.size)?.label ?? generationOptions.size} contains ${(() => { const dimensions = resolveMapDimensions(generationOptions.size, generationOptions.geometry); return (dimensions.width * dimensions.height).toLocaleString(); })()} tiles. Non-stock dimensions remain behind Game Breaking permission.`}>
                     <span>Map size</span>
                     <select value={generationOptions.size} onChange={(event) => {
                       const nextSize = event.target.value as MapGenerationOptions["size"];
                       const next = MAP_SIZES.find((item) => item.id === nextSize);
                       setGenerationOptions((current) => ({ ...current, size: nextSize, players: next?.recommendedPlayers ?? current.players, cityStates: next?.recommendedCityStates ?? current.cityStates }));
                     }}>
-                      {MAP_SIZES.filter((item) => allowGameBreakingGeometry || !item.gameBreaking).map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height} · {(item.width * item.height).toLocaleString()} tiles{item.gameBreaking ? " · experimental" : ""}</option>)}
+                      {MAP_SIZES.filter((item) => allowGameBreakingGeometry || !item.gameBreaking).map((item) => <option key={item.id} value={item.id}>{item.label} · {item.width}×{item.height}{item.gameBreaking ? " · experimental" : ""}</option>)}
                     </select>
-                    <small>{isGameBreakingMapSize(generationOptions.size) ? "Non-stock community dimensions; Civ V and WorldBuilder stability is not guaranteed." : "Stock Civ V dimensions."}</small>
+                    {isGameBreakingMapSize(generationOptions.size) && <small className="generation-resource-warning">Non-stock dimensions; Civ V stability is not guaranteed.</small>}
                   </label>
-                  <label className="control-field generation-effort-control" data-tooltip="Effort uses fixed deterministic candidate budgets rather than elapsed time, so the same recipe remains reproducible.">
+                  <label className="control-field generation-effort-control" data-tooltip={`Effort uses fixed deterministic candidate budgets rather than elapsed time, so the same recipe remains reproducible. ${generationResourceEstimate.candidates} candidate${generationResourceEstimate.candidates === 1 ? "" : "s"}; approximately ${generationResourceEstimate.estimatedPeakMegabytes} MB peak working memory. Mobile Randomise always uses Standard effort and safe dimensions.`}>
                     <span>Generation effort</span>
-                    <select value={generationEffort} onChange={(event) => setGenerationEffort(event.target.value as GenerationEffort)}><option value="STANDARD">Standard · one complete candidate</option><option value="THOROUGH">Thorough · four candidates</option><option value="EXHAUSTIVE">Exhaustive · twelve candidates</option></select>
-                    <small className={generationResourceEstimate.warning ? "generation-resource-warning" : undefined}>{generationResourceEstimate.warning ?? `${generationResourceEstimate.candidates} deterministic candidate${generationResourceEstimate.candidates === 1 ? "" : "s"} · approximately ${generationResourceEstimate.estimatedPeakMegabytes} MB peak working memory. Mobile Randomise always returns to Standard effort and safe dimensions.`}</small>
+                    <select value={generationEffort} onChange={(event) => setGenerationEffort(event.target.value as GenerationEffort)}><option value="STANDARD">Standard</option><option value="THOROUGH">Thorough</option><option value="EXHAUSTIVE">Exhaustive</option></select>
+                    {generationResourceEstimate.warning && <small className="generation-resource-warning">{generationResourceEstimate.warning}</small>}
                   </label>
                   </div>
                   <div className="seed-row">
@@ -3041,14 +3504,13 @@ export function Civ5MapViewer() {
                     <summary data-tooltip="Control the map's climate orientation, modifier, wrapping, aspect ratio, land-water balance, relief, and physical structure."><span>1 · World shape</span><small>{generationOptions.waterPercent}% water · {generationOptions.mountainPercent}% mountains</small></summary>
                     <div className="creator-group-body">
                       <button className="group-reset" type="button" onClick={() => setGenerationOptions((current) => ({ ...current, modifier: DEFAULT_GENERATION_OPTIONS.modifier, wrapType: DEFAULT_GENERATION_OPTIONS.wrapType, geometry: DEFAULT_GENERATION_OPTIONS.geometry, waterPercent: DEFAULT_GENERATION_OPTIONS.waterPercent, mountainPercent: current.style === "BRUTAL" ? 18 : DEFAULT_GENERATION_OPTIONS.mountainPercent, worldAge: DEFAULT_GENERATION_OPTIONS.worldAge, granularity: DEFAULT_GENERATION_OPTIONS.granularity, oceanBasins: DEFAULT_GENERATION_OPTIONS.oceanBasins, landAtPoles: DEFAULT_GENERATION_OPTIONS.landAtPoles, coastalRangePercent: DEFAULT_GENERATION_OPTIONS.coastalRangePercent, riverDensity: DEFAULT_GENERATION_OPTIONS.riverDensity, fantasticality: DEFAULT_GENERATION_OPTIONS.fantasticality, regionClimateLogic: DEFAULT_GENERATION_OPTIONS.regionClimateLogic, plateActivity: DEFAULT_GENERATION_OPTIONS.plateActivity, erosionStrength: DEFAULT_GENERATION_OPTIONS.erosionStrength, polisConflictPattern: DEFAULT_GENERATION_OPTIONS.polisConflictPattern, polisSymmetry: DEFAULT_GENERATION_OPTIONS.polisSymmetry, polisExpansionPressure: DEFAULT_GENERATION_OPTIONS.polisExpansionPressure, polisNavalImportance: DEFAULT_GENERATION_OPTIONS.polisNavalImportance, polisChokepointDensity: DEFAULT_GENERATION_OPTIONS.polisChokepointDensity, polisSafeRadius: DEFAULT_GENERATION_OPTIONS.polisSafeRadius }))}>Reset world shape</button>
-                      <label className="control-field projection-type-control" data-tooltip="Relocate the climatic poles without changing Civ V's rectangular tile adjacency or the 2D/3D camera.">
+                      <label className="control-field projection-type-control" data-tooltip={`Relocate the climatic poles without changing Civ V's rectangular tile adjacency or the 2D/3D camera. ${CLIMATE_PROJECTIONS.find((projectionType) => projectionType.id === generationOptions.projectionType)?.description ?? ""}`}>
                         <span>Pole orientation</span>
                         <select value={generationOptions.projectionType} onChange={(event) => setGenerationOptions((current) => ({ ...current, projectionType: event.target.value as MapGenerationOptions["projectionType"] }))}>
                           {CLIMATE_PROJECTIONS.map((projectionType) => <option key={projectionType.id} value={projectionType.id}>{projectionType.label}</option>)}
                         </select>
-                        <small>{CLIMATE_PROJECTIONS.find((projectionType) => projectionType.id === generationOptions.projectionType)?.description}</small>
                       </label>
-                      <label className="control-field" data-tooltip="Apply a broad thematic transformation such as Strategic Depth or Doomsday on top of the chosen map type.">
+                      <label className="control-field" data-tooltip={`Apply a broad thematic transformation on top of the chosen map type. ${WORLD_MODIFIERS.find((modifier) => modifier.id === (generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier))?.description ?? ""}`}>
                         <span>World modifier</span>
                         <select value={generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier} onChange={(event) => {
                           const modifier = event.target.value as MapGenerationOptions["modifier"];
@@ -3056,7 +3518,6 @@ export function Civ5MapViewer() {
                         }}>
                           {WORLD_MODIFIERS.map((modifier) => <option key={modifier.id} value={modifier.id}>{modifier.label}</option>)}
                         </select>
-                        <small>{WORLD_MODIFIERS.find((modifier) => modifier.id === (generationOptions.modifier === "FANTASTICAL" ? "NONE" : generationOptions.modifier))?.description}</small>
                       </label>
                       <label className="control-field" data-tooltip="Choose whether east and west edges connect in Civ V. This affects navigation and exported map metadata.">
                         <span>Wrap type</span>
@@ -3086,7 +3547,7 @@ export function Civ5MapViewer() {
                         <label className="control-field percentage-field" data-tooltip="Set the target share of impassable mountain tiles. Accessibility passes still preserve routes across every landmass."><span>Mountain percent <output>{generationOptions.mountainPercent}%</output></span><input type="range" min={generationOptions.modifier === "STRATEGIC_DEPTH" ? 22 : generationOptions.modifier === "DOOMSDAY" || generationOptions.style === "BRUTAL" ? 18 : 0} max="38" step="1" value={generationOptions.mountainPercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, mountainPercent: Number(event.target.value) }))} /></label>
                       </div>
                       <details className="advanced-controls">
-                        <summary data-tooltip="Reveal engine-specific controls for world age, geographic granularity, basins, tectonics, erosion, coastal ranges, and river density."><span>More world controls</span><small>age, geology, rivers</small></summary>
+                        <summary data-tooltip={`Reveal engine-specific controls for world age, geographic granularity, basins, tectonics, erosion, coastal ranges, and river density. ${generationOptions.engine === "ECCENTRIC" ? "Eccentric retains a dense subpolygon mesh, land and astronomy basins, biome palettes, boundary ranges and drainage." : generationOptions.engine === "PHYSICAL" ? "Physical retains moving plates, crust, convergence, rifting, eroded relief, sea level, basins and drainage-ready elevation." : generationOptions.engine === "POLIS" ? "Polis validates strategic territories and required routes before terrain, keeping mountain passes open by construction." : "Excogitare exposes direct terrain-form controls."}`}><span>More world controls</span><small>age, geology, rivers</small></summary>
                         <div>
                       <label className="control-field"><span>World age</span><select value={generationOptions.worldAge} onChange={(event) => setGenerationOptions((current) => ({ ...current, worldAge: event.target.value as MapGenerationOptions["worldAge"] }))}><option value="YOUNG">Young</option><option value="NORMAL">Normal</option><option value="OLD">Old</option></select></label>
                       {generationOptions.engine === "ECCENTRIC" && (
@@ -3100,7 +3561,6 @@ export function Civ5MapViewer() {
                           <label className="check-row"><input type="checkbox" checked={generationOptions.landAtPoles} onChange={(event) => setGenerationOptions((current) => ({ ...current, landAtPoles: event.target.checked }))} /><span>Permit continents and islands at the poles</span></label>
                           <label className="control-field percentage-field"><span>Coastal mountain ranges <output>{generationOptions.coastalRangePercent}%</output></span><input type="range" min="0" max="100" value={generationOptions.coastalRangePercent} onChange={(event) => setGenerationOptions((current) => ({ ...current, coastalRangePercent: Number(event.target.value) }))} /></label>
                           <label className="control-field"><span>River network</span><select value={generationOptions.riverDensity} onChange={(event) => setGenerationOptions((current) => ({ ...current, riverDensity: event.target.value as MapGenerationOptions["riverDensity"] }))}><option value="SPARSE">Sparse · major systems</option><option value="NORMAL">Normal · rivers and tributaries</option><option value="DENSE">Dense · wet watersheds</option></select></label>
-                          <small>The engine now retains a dense subpolygon mesh, compiles land and astronomy basins over it, assigns several biome palettes to each climate realm, then resolves boundary ranges and drainage. Ordinary maps may contain well over a thousand retained subregions.</small>
                         </div>
                       )}
                       {generationOptions.engine === "PHYSICAL" && (
@@ -3110,7 +3570,6 @@ export function Civ5MapViewer() {
                             <label className="control-field"><span>Erosion</span><select value={generationOptions.erosionStrength} onChange={(event) => setGenerationOptions((current) => ({ ...current, erosionStrength: event.target.value as MapGenerationOptions["erosionStrength"] }))}><option value="LIGHT">Light · young relief</option><option value="MODERATE">Moderate · mature terrain</option><option value="STRONG">Strong · ancient terrain</option></select></label>
                           </div>
                           <label className="control-field"><span>River network</span><select value={generationOptions.riverDensity} onChange={(event) => setGenerationOptions((current) => ({ ...current, riverDensity: event.target.value as MapGenerationOptions["riverDensity"] }))}><option value="SPARSE">Sparse · major systems</option><option value="NORMAL">Normal · rivers and tributaries</option><option value="DENSE">Dense · wet watersheds</option></select></label>
-                          <small>Physical retains plate ownership and motion, crust type, convergence, rifting, eroded relief, exact sea level, continents, ocean basins, and drainage-ready elevation.</small>
                         </div>
                       )}
                       {generationOptions.engine === "POLIS" && (
@@ -3123,7 +3582,6 @@ export function Civ5MapViewer() {
                           </div>
                           <label className="control-field percentage-field" data-tooltip="Higher values narrow protected routes and raise mountains around their approaches without blocking them."><span>Chokepoint density <output>{generationOptions.polisChokepointDensity}%</output></span><input type="range" min="0" max="100" value={generationOptions.polisChokepointDensity} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisChokepointDensity: Number(event.target.value) }))} /></label>
                           <label className="control-field"><span>Safe territory radius</span><input type="number" min="2" max="8" value={generationOptions.polisSafeRadius} onChange={(event) => setGenerationOptions((current) => ({ ...current, polisSafeRadius: Math.max(2, Math.min(8, Number(event.target.value))) }))} /></label>
-                          <small>Polis validates this graph before terrain. Safe territories and required land routes are immutable masks during relief generation; mountain passes therefore remain passable by construction.</small>
                         </div>
                       )}
                         </div>
@@ -3160,7 +3618,7 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Ancient ruins</span><select value={generationOptions.ruinAbundance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinAbundance: event.target.value as MapGenerationOptions["ruinAbundance"] }))}><option value="NONE">None</option><option value="SCARCE">Scarce</option><option value="STANDARD">Standard</option><option value="RAGING">Abundant</option></select></label>
                         <label className="control-field"><span>Ruin start distance</span><input type="number" min="1" max="12" value={generationOptions.ruinStartDistance} onChange={(event) => setGenerationOptions((current) => ({ ...current, ruinStartDistance: Number(event.target.value) }))} /></label>
                       </div>
-                      <small className="content-note">Camps, ruins, ruined cities, roads, and generated start locations are written into the exported scenario section. Units, developed cities, and broader scenario scripting remain outside Create.</small>
+                      <small className="content-note">Camps, ruins, ruined cities, roads, and designed start locations are retained in the Excogitare project. Ordinary Civ5Map export contains geography only, and Civ V assigns starts when the game is created.</small>
                         </div>
                       </details>
                     </div>
@@ -3175,7 +3633,7 @@ export function Civ5MapViewer() {
                         <label className="control-field"><span>Rainfall</span><select value={generationOptions.rainfall} onChange={(event) => setGenerationOptions((current) => ({ ...current, rainfall: event.target.value as MapGenerationOptions["rainfall"] }))}><option value="ARID">Arid</option><option value="NORMAL">Normal</option><option value="WET">Wet</option></select></label>
                       </div>
                       <details className="advanced-controls">
-                        <summary data-tooltip="Reveal engine-specific climate simulation and regional-contrast controls."><span>More climate controls</span><small>simulation and contrast</small></summary>
+                        <summary data-tooltip={`Reveal engine-specific climate simulation and regional-contrast controls.${generationOptions.engine === "PHYSICAL" ? " Physical couples latitude, altitude, continentality, seasonal range, circulation, vapor transport, water recharge, orographic rainfall, evaporation and outlet drainage." : ""}`}><span>More climate controls</span><small>simulation and contrast</small></summary>
                         <div>
                       {generationOptions.engine === "ECCENTRIC" && (
                         <div className="control-grid">
@@ -3190,14 +3648,12 @@ export function Civ5MapViewer() {
                             <label className="control-field" data-tooltip="Control annual temperature range. Continental interiors and high latitudes respond more strongly than maritime coasts."><span>Axial seasonality</span><select value={generationOptions.physicalSeasonality} onChange={(event) => setGenerationOptions((current) => ({ ...current, physicalSeasonality: event.target.value as MapGenerationOptions["physicalSeasonality"] }))}><option value="MILD">Mild · low seasonal range</option><option value="EARTHLIKE">Earth-like</option><option value="EXTREME">Extreme · strong seasons</option></select></label>
                           </div>
                           <label className="control-field" data-tooltip="Control how strongly oceans and lakes moderate temperature, recharge atmospheric vapor, and moisten nearby land."><span>Ocean influence</span><select value={generationOptions.physicalOceanInfluence} onChange={(event) => setGenerationOptions((current) => ({ ...current, physicalOceanInfluence: event.target.value as MapGenerationOptions["physicalOceanInfluence"] }))}><option value="WEAK">Weak · continental extremes</option><option value="NORMAL">Normal</option><option value="STRONG">Strong · maritime climates</option></select></label>
-                          <small className="content-note">Physical climate couples projected latitude, altitude, continentality, seasonal range, smoothly blended circulation cells, iterative vapor transport, lake and ocean recharge, wet-land recycling, orographic rainfall, evaporation demand, and outlet drainage.</small>
                         </div>
                       )}
                         </div>
                       </details>
-                      <fieldset className="terrain-dominance-picker">
+                      <fieldset className="terrain-dominance-picker" data-tooltip="Select one or more terrain types to bias the climate result. With none selected, the climate system determines the mix.">
                         <legend>Dominant terrain</legend>
-                        <small>Select one or more. With none selected, climate determines the mix.</small>
                         <div>
                           {DOMINANT_TERRAINS.map((terrain) => {
                             const selected = (generationOptions.dominantTerrains ?? []).includes(terrain.id);
@@ -3217,14 +3673,20 @@ export function Civ5MapViewer() {
                         <label className="control-field" data-tooltip="Minor powers are optional. Size defaults use roughly one city state per major civilization so the opening world is not overcrowded."><span>City states</span><input type="number" min="0" max="41" value={generationOptions.cityStates} onChange={(event) => setGenerationOptions((current) => ({ ...current, cityStates: Number(event.target.value) }))} /></label>
                         <label className="control-field"><span>Layout</span><select value={generationOptions.balance} onChange={(event) => setGenerationOptions((current) => ({ ...current, balance: event.target.value as MapGenerationOptions["balance"] }))}><option value="STANDARD">Equal separation</option><option value="TOURNAMENT">Tournament</option><option value="TEAMS">Paired teams</option></select></label>
                       </div>
-                      <fieldset className="match-intent-controls">
+                      <fieldset className="match-intent-controls" data-tooltip="Human and AI counts describe the intended lobby. Unassigned seats remain flexible; civilization ownership is authored in Scenario.">
                         <legend>Match intent</legend>
-                        <small>Human and AI counts describe the intended lobby. Unassigned seats remain flexible and may be filled by either.</small>
                         <div className="control-grid three-controls">
-                          <label className="control-field"><span>Human seats</span><input type="number" min="0" max={generationOptions.players} value={matchIntent.humanPlayers} onChange={(event) => setMatchIntent((current) => ({ ...current, humanPlayers: Math.max(0, Math.min(generationOptions.players, Number(event.target.value))) }))} /></label>
-                          <label className="control-field"><span>AI seats</span><input type="number" min="0" max={generationOptions.players} value={matchIntent.aiPlayers} onChange={(event) => setMatchIntent((current) => ({ ...current, aiPlayers: Math.max(0, Math.min(generationOptions.players, Number(event.target.value))) }))} /></label>
+                          <label className="control-field"><span>Human seats</span><input type="number" min="0" max={generationOptions.players - matchIntent.aiPlayers} value={matchIntent.humanPlayers} onChange={(event) => setMatchIntent((current) => ({ ...current, humanPlayers: Math.max(0, Math.min(generationOptions.players - current.aiPlayers, Number(event.target.value))) }))} /></label>
+                          <label className="control-field"><span>AI seats</span><input type="number" min="0" max={generationOptions.players - matchIntent.humanPlayers} value={matchIntent.aiPlayers} onChange={(event) => setMatchIntent((current) => ({ ...current, aiPlayers: Math.max(0, Math.min(generationOptions.players - current.humanPlayers, Number(event.target.value))) }))} /></label>
                           <label className="control-field"><span>AI accommodation</span><select value={matchIntent.aiAccommodation} onChange={(event) => setMatchIntent((current) => ({ ...current, aiAccommodation: event.target.value as MatchIntent["aiAccommodation"] }))}><option value="NORMAL">Normal</option><option value="STRONG">Strong · wider routes</option></select></label>
                         </div>
+                        <small>{Math.max(0, generationOptions.players - matchIntent.humanPlayers - matchIntent.aiPlayers)} flexible seat{Math.max(0, generationOptions.players - matchIntent.humanPlayers - matchIntent.aiPlayers) === 1 ? "" : "s"}</small>
+                        <div className="control-grid">
+                          <label className="control-field" data-tooltip="Free-for-all leaves each start politically independent. Fixed teams asks Polis to construct coherent team realms; flexible records an ordinary lobby that may be reassigned in Civ V."><span>Team intent</span><select value={matchIntent.teamIntent} onChange={(event) => setMatchIntent((current) => ({ ...current, teamIntent: event.target.value as MatchIntent["teamIntent"] }))}><option value="FREE_FOR_ALL">Free-for-all</option><option value="FIXED_TEAMS">Fixed teams</option><option value="FLEXIBLE">Flexible lobby</option></select></label>
+                          <label className="control-field" data-tooltip="Strictness controls how cautiously Review judges role and route equivalence. Unequal Realms remains deliberately asymmetric regardless of this label."><span>Competitive strictness</span><select value={matchIntent.competitiveStrictness} onChange={(event) => setMatchIntent((current) => ({ ...current, competitiveStrictness: event.target.value as MatchIntent["competitiveStrictness"] }))}><option value="CASUAL">Casual</option><option value="BALANCED">Balanced</option><option value="TOURNAMENT">Tournament</option><option value="ASYMMETRIC">Deliberately asymmetric</option></select></label>
+                        </div>
+                        {generationOptions.engine === "POLIS" && generationOptions.preset === "THREE_REALMS" && <small className="content-note">Three Realms requires at least three players and uses equal three-realm groups. Incompatible totals are reduced with a visible generation relaxation.</small>}
+                        {generationOptions.engine === "POLIS" && generationOptions.preset === "UNEQUAL_REALMS" && <small className="content-note">Unequal Realms assigns Tall, Wide, War, and Turtle geographic roles. It is intentionally unbalanced and excluded from Randomise.</small>}
                         <div className="victory-intent-grid">
                           {(["DOMINATION", "SCIENCE", "CULTURE", "DIPLOMACY", "TIME"] as VictoryCondition[]).map((victory) => {
                             const enabled = matchIntent.enabledVictories.includes(victory);
@@ -3232,6 +3694,14 @@ export function Civ5MapViewer() {
                             return <div key={victory}><strong>{victory.toLowerCase()}</strong><button type="button" className={enabled ? "is-active" : ""} disabled={enabled && matchIntent.enabledVictories.length === 1} onClick={() => setMatchIntent((current) => enabled ? { ...current, enabledVictories: current.enabledVictories.filter((item) => item !== victory), emphasizedVictories: current.emphasizedVictories.filter((item) => item !== victory) } : { ...current, enabledVictories: [...current.enabledVictories, victory] })}>{enabled ? "Enabled" : "Disabled"}</button><button type="button" disabled={!enabled} className={emphasized ? "is-active" : ""} onClick={() => setMatchIntent((current) => ({ ...current, emphasizedVictories: emphasized ? current.emphasizedVictories.filter((item) => item !== victory) : [...current.emphasizedVictories, victory] }))}>{emphasized ? "Emphasized" : "Emphasize"}</button></div>;
                           })}
                         </div>
+                        <details className="advanced-controls match-seat-plan">
+                          <summary data-tooltip="Optionally bind Human, AI or Flexible control and a team number to each generated Polis start. Civilization identity still belongs to Scenario."><span>Advanced seat plan</span><small>{matchIntent.seats ? `${matchIntent.seats.length} assigned starts` : "composition only"}</small></summary>
+                          <div className="seat-plan-actions">
+                            <button type="button" onClick={() => setMatchIntent((current) => { const seats = Array.from({ length: generationOptions.players }, (_value, index) => ({ control: index < current.humanPlayers ? "HUMAN" as const : index < current.humanPlayers + current.aiPlayers ? "AI" as const : "FLEXIBLE" as const, team: current.teamIntent === "FIXED_TEAMS" ? Math.floor(index / current.teamSize) : undefined })); return { ...current, seats }; })}>{matchIntent.seats ? "Rebuild from counts" : "Assign starts from counts"}</button>
+                            <button type="button" disabled={!matchIntent.seats} onClick={() => setMatchIntent((current) => ({ ...current, seats: undefined }))}>Use composition only</button>
+                          </div>
+                          {matchIntent.seats && <div className="seat-plan-list">{matchIntent.seats.slice(0, generationOptions.players).map((seat, index) => <div key={index}><strong>Start {index + 1}</strong><select aria-label={`Start ${index + 1} controller`} value={seat.control} onChange={(event) => setMatchIntent((current) => { const seats = [...(current.seats ?? [])]; seats[index] = { ...seats[index], control: event.target.value as typeof seat.control }; return { ...current, seats, humanPlayers: seats.filter((item) => item.control === "HUMAN").length, aiPlayers: seats.filter((item) => item.control === "AI").length, flexiblePlayers: seats.filter((item) => item.control === "FLEXIBLE").length }; })}><option value="HUMAN">Human</option><option value="AI">AI</option><option value="FLEXIBLE">Flexible</option></select><label><span>Team</span><input type="number" min="0" max="21" value={seat.team ?? ""} placeholder="—" onChange={(event) => setMatchIntent((current) => { const seats = [...(current.seats ?? [])]; seats[index] = { ...seats[index], team: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) }; return { ...current, seats }; })} /></label></div>)}</div>}
+                        </details>
                       </fieldset>
                       {generationOptions.balance === "TEAMS" && (
                         <div className="team-balance-controls">
@@ -3239,7 +3709,7 @@ export function Civ5MapViewer() {
                           <label className="control-field"><span>Team geography</span><select value={generationOptions.teamLayout} onChange={(event) => setGenerationOptions((current) => ({ ...current, teamLayout: event.target.value as MapGenerationOptions["teamLayout"] }))}><option value="CLUSTERED">Cluster teammates</option><option value="FRONTLINES">Opposing fronts</option><option value="DISTRIBUTED">Distributed teammates</option></select></label>
                         </div>
                       )}
-                      <label className="control-field"><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select><small>{generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}</small></label>
+                      <label className="control-field" data-tooltip={generationOptions.startQuality === "LEGENDARY" ? "Improves nearby terrain and adds six valuable resources." : generationOptions.startQuality === "BALANCED" ? "Places food, iron, and horses near every start." : "Leaves local terrain and resources untouched."}><span>Start quality</span><select value={generationOptions.startQuality} onChange={(event) => setGenerationOptions((current) => ({ ...current, startQuality: event.target.value as MapGenerationOptions["startQuality"], strategicBalance: false }))}><option value="STANDARD">Standard</option><option value="BALANCED">Balanced strategic access</option><option value="LEGENDARY">Legendary Start</option></select></label>
                       <details className="advanced-controls">
                         <summary data-tooltip="Reveal minimum city-state spacing, regional distribution, and coastal preference."><span>More start controls</span><small>city-state placement</small></summary>
                         <div className="control-grid three-controls">
@@ -3253,12 +3723,12 @@ export function Civ5MapViewer() {
                   </div>
 
                   <div className={`creator-actions${createView === "REFINE" ? " refine-actions" : ""}`}>
-                    <div className="generation-summary action-recipe-summary"><span>{createView === "REFINE" ? "Current refinement" : "Ready to generate"}</span><strong>{generationSummary}</strong></div>
+                    <div className="generation-summary action-recipe-summary" data-tooltip={generationSummary}><span>{createView === "REFINE" ? "Current refinement" : "Ready to generate"}</span><strong>{generationCompactSummary}</strong></div>
                     {createView === "REFINE" ? (
                       <div className="refinement-action-grid">
-                        <button type="button" disabled={generationRunning} onClick={() => void runSelectivePass("CLIMATE")}>Apply surface &amp; climate</button>
-                        <button type="button" disabled={generationRunning} onClick={() => void runSelectivePass("CONTENT")}>Apply content</button>
-                        <button type="button" disabled={generationRunning} onClick={() => void runSelectivePass("STARTS")}>Apply players &amp; starts</button>
+                        <button type="button" data-tooltip="Repaint terrain and biome features from the current climate and Archetype settings. A Difference preview opens before the current map is replaced." disabled={generationRunning} onClick={() => void runSelectivePass("CLIMATE")}><strong>Surface &amp; climate</strong><span>Preview <b aria-hidden="true">→</b></span></button>
+                        <button type="button" data-tooltip="Regenerate resources, wonders, barbarian camps, ruins and other supported sites while retaining compatible geography, rivers and starts." disabled={generationRunning} onClick={() => void runSelectivePass("CONTENT")}><strong>Resources &amp; sites</strong><span>Regenerate <b aria-hidden="true">→</b></span></button>
+                        <button type="button" data-tooltip="Rebuild major and city-state starting positions from the current population, Match Intent and balance settings while retaining the world itself." disabled={generationRunning} onClick={() => void runSelectivePass("STARTS")}><strong>Players &amp; starts</strong><span>Rebalance <b aria-hidden="true">→</b></span></button>
                       </div>
                     ) : generationRunning
                       ? <button className="generate-button" type="button" disabled>Generation in progress</button>
@@ -3300,12 +3770,20 @@ export function Civ5MapViewer() {
                     </div>
                   ) : editTool === "PRESERVE" ? (
                     <div className="preservation-editor">
-                      <p className="editor-note">Choose two opposite corners, select the channels that must survive regeneration, then preserve the region.</p>
+                      <p className="editor-note">Paint exact tile channels or preserve the function, shape, or relationships of retained geography. Hard conflicts leave the current map untouched.</p>
+                      <div className="protection-toolbar"><label><input type="checkbox" checked={showProtectionOverlay} onChange={(event) => setShowProtectionOverlay(event.target.checked)} /> Show violet overlay</label><div><button type="button" disabled={!pastProtectionStates.length} onClick={undoProtection}>Undo protection</button><button type="button" disabled={!futureProtectionStates.length} onClick={redoProtection}>Redo</button></div></div>
                       {selection ? <strong>{selection.maxX - selection.minX + 1} × {selection.maxY - selection.minY + 1} tiles selected</strong> : <small>No region selected.</small>}
+                      <label className="control-field"><span>Region name</span><input value={protectionRegionName} maxLength={80} onChange={(event) => setProtectionRegionName(event.target.value)} /></label>
                       <div className="protection-channel-grid">{PROTECTION_CHANNELS.map((channel) => <label key={channel}><input type="checkbox" checked={preserveChannels.has(channel)} onChange={(event) => setPreserveChannels((current) => { const next = new Set(current); if (event.target.checked) next.add(channel); else next.delete(channel); return next; })} /><span>{channel.toLowerCase().replaceAll("_", " ")}</span></label>)}</div>
-                      <div><button type="button" disabled={!selection || !preserveChannels.size} onClick={preserveSelection}>Preserve selected region</button><button type="button" onClick={() => setProtectionState(emptyProtectionState())} disabled={!protectionState.tileMask && !protectionState.semantic.length}>Clear all protection</button></div>
-                      {map.structure?.objects.some((object) => object.semanticId) && <div className="semantic-protection-controls"><label className="control-field"><span>Semantic geography</span><select value={semanticProtectionId} onChange={(event) => setSemanticProtectionId(event.target.value)}><option value="">Choose a retained object</option>{map.structure.objects.filter((object) => object.semanticId).map((object) => <option key={object.semanticId} value={object.semanticId}>{object.name} · {object.kind.toLowerCase().replaceAll("_", " ")}</option>)}</select></label><button type="button" disabled={!semanticProtectionId} onClick={preserveSemanticSelection}>Preserve this feature</button></div>}
-                      <small>{protectionState.tileMask?.namedRegions.length ?? 0} tile regions · {protectionState.semantic.length} semantic protections retained in the project file.</small>
+                      <div><button type="button" disabled={!selection || !preserveChannels.size} onClick={preserveSelection}>Preserve selected region</button><button type="button" disabled={!selection || !preserveChannels.size || !protectionState.tileMask} onClick={eraseSelectionProtection}>Erase from selection</button><button type="button" onClick={() => commitProtection(emptyProtectionState())} disabled={!protectionState.tileMask && !protectionState.semantic.length}>Clear all</button></div>
+                      <div className="semantic-protection-controls">
+                        <label className="control-field"><span>Semantic geography</span><select value={semanticProtectionId} onChange={(event) => setSemanticProtectionId(event.target.value)}><option value="">Choose a generated or inferred object</option>{semanticProtectionChoices.map((object) => <option key={object.semanticId} value={object.semanticId}>{object.label} · {object.objectKind.toLowerCase().replaceAll("_", " ")} · {Math.round(object.inference.confidence * 100)}%</option>)}</select></label>
+                        <div className="control-grid two-controls"><label className="control-field"><span>Policy</span><select value={semanticProtectionPolicy} onChange={(event) => setSemanticProtectionPolicy(event.target.value as typeof semanticProtectionPolicy)}><option value="EXACT">Exact · retain chosen values</option><option value="SHAPE">Shape · retain footprint</option><option value="FUNCTION">Function · retain geographic job</option><option value="RELATIONSHIP">Relationship · retain connections</option></select></label><label className="checkbox-row"><input type="checkbox" checked={semanticProtectionHard} onChange={(event) => setSemanticProtectionHard(event.target.checked)} /><span><strong>Hard constraint</strong><small>Block rather than degrade</small></span></label></div>
+                        {semanticProtectionId && (() => { const selected = semanticProtectionChoices.find((object) => object.semanticId === semanticProtectionId); return selected ? <small>{selected.inference.source === "IMPORTED" ? "Inferred from imported tiles" : "Retained by the generator"} · {Math.round(selected.inference.confidence * 100)}% confidence · {selected.inference.explanation}</small> : null; })()}
+                        <button type="button" disabled={!semanticProtectionId} onClick={preserveSemanticSelection}>{semanticProtectionChoices.find((object) => object.semanticId === semanticProtectionId)?.objectKind === "RIVER_SYSTEM" || semanticProtectionChoices.find((object) => object.semanticId === semanticProtectionId)?.objectKind === "WATERSHED" || semanticProtectionChoices.find((object) => object.semanticId === semanticProtectionId)?.objectKind === "RIVER_BASIN" ? "Preserve this watershed" : "Preserve this feature"}</button>
+                      </div>
+                      {(protectionState.tileMask?.namedRegions.length || protectionState.semantic.length) ? <div className="protection-register">{protectionState.tileMask?.namedRegions.map((region) => <div key={region.id}><span><strong>{region.name}</strong><small>{region.tileIndices.length} tiles · {region.channels.map((channel) => channel.toLowerCase()).join(", ")}</small></span><button type="button" onClick={() => commitProtection(removeProtection(protectionState, region.id))}>Remove</button></div>)}{protectionState.semantic.map((semantic) => <div key={semantic.id}><span><strong>{semantic.label}</strong><small>{semantic.policy.toLowerCase()} · {semantic.hard ? "hard" : "soft"} · {Math.round((semantic.inference?.confidence ?? 0) * 100)}% lineage confidence</small></span><button type="button" onClick={() => commitProtection(removeProtection(protectionState, semantic.id))}>Remove</button></div>)}</div> : <small>No protection constraints yet.</small>}
+                      {protectionState.lastReport && <div className="protection-report"><strong>{protectionState.lastReport.summary}</strong><small>{protectionState.lastReport.engineAdapter.toLowerCase().replaceAll("_", " ")} · {protectionState.lastReport.candidateCount} candidates · {protectionState.lastReport.seamRepairs} seam repairs</small>{protectionState.lastReport.findings.map((finding) => <p key={finding.protectionId} data-status={finding.status}>{finding.label}: {Math.round(finding.score * 100)}% · {finding.message}</p>)}</div>}
                     </div>
                   ) : editTool === "STRUCTURE" ? (
                     <div className="structure-editor">
@@ -3340,6 +3818,16 @@ export function Civ5MapViewer() {
                       {narrativeAssessment.nearestConfusions.length > 0 && <details className="narrative-disclosure"><summary>Nearest confusions</summary><ul>{narrativeAssessment.nearestConfusions.map((item) => <li key={item.profileId}><strong>{item.label} · {item.risk.toLowerCase()} risk</strong><span>{item.evidence}</span></li>)}</ul></details>}
                     </section>
                   )}
+                  {map.structure?.matchAssessment && (
+                    <section className="match-feasibility-assessment">
+                      <div className="section-title"><h3>Match Intent feasibility</h3><span>{map.structure.matchAssessment.engine.toLowerCase()} evidence</span></div>
+                      <p>{map.structure.matchAssessment.summary}</p>
+                      <div className="victory-feasibility-list">
+                        {map.structure.matchAssessment.victories.map((finding) => <article key={finding.victory} className={`status-${finding.status.toLowerCase()}`}><header><strong>{finding.victory.toLowerCase()}</strong><span>{finding.state.toLowerCase()} · {finding.status.toLowerCase()} · {finding.score}%</span></header>{finding.evidence.map((item) => <small key={item}>{item}</small>)}</article>)}
+                      </div>
+                      {map.structure.matchAssessment.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)}
+                    </section>
+                  )}
                   <div className="analysis-summary">
                     <span className={`analysis-grade grade-${balanceReport.grade.toLowerCase()}`}>{balanceReport.grade}</span>
                     <div><h3>Multiplayer balance</h3><p>{balanceReport.summary}</p></div>
@@ -3355,7 +3843,10 @@ export function Civ5MapViewer() {
                         <div><dt>Protected tiles</dt><dd>{map.structure.strategicGraph.protectedTileIndices.length}</dd></div>
                         <div><dt>Minimum start distance</dt><dd>{map.structure.strategicGraph.metrics.minimumStartDistance ?? 0}</dd></div>
                         <div><dt>Average front length</dt><dd>{map.structure.strategicGraph.metrics.averageFrontLength ?? 0}</dd></div>
+                        <div><dt>Route redundancy</dt><dd>{map.structure.strategicGraph.metrics.routeRedundancy ?? 0}</dd></div>
+                        <div><dt>City-state contestability</dt><dd>{Math.round((map.structure.strategicGraph.metrics.cityStateContestability ?? 0) * 100)}%</dd></div>
                       </dl>
+                      <div className="polis-role-list">{map.structure.strategicGraph.realmRoles.map((role) => <span key={`${role.team}-${role.role}`}><strong>{role.role.toLowerCase().replaceAll("_", " ")}</strong> · {role.playerIds.map((player) => `P${player + 1}`).join(", ")}</span>)}</div>
                       {map.structure.strategicGraph.relaxations.length > 0 && <small>{map.structure.strategicGraph.relaxations.join(" ")}</small>}
                     </section>
                   )}
@@ -3551,7 +4042,7 @@ export function Civ5MapViewer() {
           </div>
           )}
 
-          {mode !== "LAB" && <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>}
+          {mode !== "LAB" && <button className="demo-button" type="button" onClick={() => { replaceMap(createDemoMap()); setProjectScenario(null); setShowEditPrompt(false); setIsEditingMetadata(false); setMessage("Demo map loaded"); }}>Reset to sample map</button>}
           <footer className="sidebar-footer">
             <a href="https://github.com/AngelaDMerkel/Excogitare#readme" target="_blank" rel="noreferrer">
               README <span aria-hidden="true">↗</span>
@@ -3573,7 +4064,7 @@ export function Civ5MapViewer() {
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            onPointerCancel={() => { dragRef.current = null; }}
+            onPointerCancel={() => { dragRef.current = null; preserveDragRef.current = null; setSelectionAnchor(null); }}
             onPointerLeave={() => { if (!dragRef.current) setHovered(null); }}
             onWheel={onWheel}
           />
@@ -3785,6 +4276,22 @@ export function Civ5MapViewer() {
         </div>
       )}
 
+      {showProjectSaveDialog && (
+        <div className="export-confirmation-backdrop project-save-backdrop" onPointerDown={(event) => { if (event.currentTarget === event.target) setShowProjectSaveDialog(false); }}>
+          <section className="export-confirmation-modal project-save-modal" role="dialog" aria-modal="true" aria-labelledby="project-save-title" aria-describedby="project-save-summary">
+            <header><span>Durable project download</span><h2 id="project-save-title">Save Excogitare project</h2></header>
+            <p id="project-save-summary">The downloaded <code>.excogitare</code> file is the durable copy. Excogitare has no account, cloud save or server project storage.</p>
+            <label className="project-name-field"><span>Project name</span><input value={projectName} maxLength={160} autoFocus onChange={(event) => { setProjectName(event.target.value); setProjectDirty(true); }} /></label>
+            <fieldset className="project-history-policy"><legend>Generation history</legend>
+              <label><input type="radio" name="project-history-policy" checked={projectHistoryPolicy === "FULL"} onChange={() => setProjectHistoryPolicy("FULL")} /><span><strong>Full history</strong><small>Current map, all {generationHistory.length} retained generation{generationHistory.length === 1 ? "" : "s"}, and {checkpoints.length} named checkpoint{checkpoints.length === 1 ? "" : "s"}.</small></span></label>
+              <label><input type="radio" name="project-history-policy" checked={projectHistoryPolicy === "CURRENT_AND_CHECKPOINTS"} onChange={() => setProjectHistoryPolicy("CURRENT_AND_CHECKPOINTS")} /><span><strong>Current + checkpoints</strong><small>Smaller bundle containing the current map and named checkpoints, without ordinary generation history.</small></span></label>
+            </fieldset>
+            <p className="project-integrity-note">The bundle is compressed with DEFLATE. Every payload—including the clean <code>map.civ5map</code> snapshot—is independently protected by SHA-256 before import.</p>
+            <div className="export-confirmation-actions"><button type="button" onClick={() => setShowProjectSaveDialog(false)}>Cancel</button><button className="confirm-export" type="button" disabled={!projectName.trim()} onClick={exportProject}>Download project</button></div>
+          </section>
+        </div>
+      )}
+
       {archetypePreviewMap && archetypePreviewComparison && (
         <div className="export-confirmation-backdrop archetype-preview-backdrop">
           <section className="export-confirmation-modal archetype-preview-modal" role="dialog" aria-modal="true" aria-labelledby="archetype-preview-title" aria-describedby="archetype-preview-summary">
@@ -3850,6 +4357,48 @@ export function Civ5MapViewer() {
         </div>
       )}
 
+      {showScenarioExportConfirmation && (
+        <div
+          className="export-confirmation-backdrop scenario-export-backdrop"
+          onPointerDown={(event) => { if (event.currentTarget === event.target) setShowScenarioExportConfirmation(false); }}
+        >
+          <section className="export-confirmation-modal scenario-export-modal" role="dialog" aria-modal="true" aria-labelledby="scenario-export-title" aria-describedby="scenario-export-summary">
+            <header>
+              <span>Scenario export boundary</span>
+              <h2 id="scenario-export-title">Review this Civ5Map export</h2>
+            </header>
+            <p id="scenario-export-summary">
+              {scenarioExportReport.errors.length || scenarioExportPreflightError
+                ? `${scenarioExportReport.errors.length + Number(Boolean(scenarioExportPreflightError))} blocking finding${scenarioExportReport.errors.length + Number(Boolean(scenarioExportPreflightError)) === 1 ? "" : "s"} must be resolved before export.`
+                : `The compatible Scenario records are ready to encode with ${scenarioExportReport.warnings.length} warning${scenarioExportReport.warnings.length === 1 ? "" : "s"}.`}
+            </p>
+            {(scenarioExportPreflightError || scenarioExportReport.errors.length > 0 || scenarioExportReport.warnings.length > 0) && (
+              <ul>
+                {scenarioExportPreflightError && <li>Binary preflight: {scenarioExportPreflightError}</li>}
+                {[...scenarioExportReport.errors, ...scenarioExportReport.warnings].slice(0, 6).map((finding) => <li key={finding.id}>{finding.message}</li>)}
+              </ul>
+            )}
+            <div className="scenario-export-disclosure">
+              <strong>Retained only in the Excogitare project</strong>
+              <p>Objectives, briefings, Human/AI intent, era, speed, turn, calendar, units, diplomacy and events are not represented as Civ5Map behavior. They will not be silently passed off as game-facing data.</p>
+              {scenarioExportReport.projectOnly.length > 0 && <ul>{scenarioExportReport.projectOnly.slice(0, 4).map((finding) => <li key={finding.id}>{finding.message}</li>)}</ul>}
+            </div>
+            <div className="export-confirmation-actions">
+              <button ref={scenarioExportCancelRef} type="button" onClick={() => setShowScenarioExportConfirmation(false)}>Cancel</button>
+              <button type="button" onClick={() => { setShowScenarioExportConfirmation(false); sendScenarioToRepair(); }}>Send to Repair</button>
+              <button
+                className="confirm-export confirm-scenario-export"
+                type="button"
+                disabled={scenarioExportReport.errors.length > 0 || Boolean(scenarioExportPreflightError)}
+                onClick={() => { setShowScenarioExportConfirmation(false); performCiv5MapExport(scenarioPreviewMap); }}
+              >
+                Export compatible records
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {showExportValidation && (
         <div
           className="export-confirmation-backdrop"
@@ -3867,7 +4416,7 @@ export function Civ5MapViewer() {
             <div className="export-confirmation-actions">
               <button ref={exportConfirmationCancelRef} type="button" onClick={() => setShowExportValidation(false)}>Cancel</button>
               <button type="button" onClick={() => { setShowExportValidation(false); setMode("CREATE"); setCreateView("ANALYZE"); }}>Open report</button>
-              <button className="confirm-export" type="button" onClick={() => { setShowExportValidation(false); performCiv5MapExport(); }}>Export anyway</button>
+              <button className="confirm-export" type="button" disabled={hasBlockingStructureError} title={hasBlockingStructureError ? "A structurally invalid Civ5Map cannot be exported." : "Export after acknowledging the non-structural findings."} onClick={() => { setShowExportValidation(false); performCiv5MapExport(); }}>{hasBlockingStructureError ? "Structural repair required" : "Export anyway"}</button>
             </div>
           </section>
         </div>

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { derivedEvidenceIsCurrent, type DerivedEvidence, type ProtectionState } from "../lib/authoring-schema.ts";
 import { parseCiv5Map, serializeCiv5Map, type Civ5Map } from "../lib/civ5-map.ts";
 import { addGenerationToHistory, restoreGeneration } from "../lib/generation-history.ts";
@@ -8,9 +10,9 @@ import { dependentPassIds, GENERATION_PASS_DEFINITIONS, GenerationCancelledError
 import { DEFAULT_GENERATION_OPTIONS, estimateGenerationResources, generateMap, generateMapFromRecipe, randomGenerationOptions, randomGenerationRecipe } from "../lib/map-generator.ts";
 import { cloneGenerationRecipe, generationOptionsFromRecipe, generationRecipeFromOptions, normalizeGenerationRecipe, type WorldScale } from "../lib/generation-recipe.ts";
 import { ARCHETYPE_PROFILES, applyWorldArchetype, compatibleArchetypes } from "../lib/world-archetype.ts";
-import { createExcogitareProject, parseExcogitareProject, serializeExcogitareProject } from "../lib/excogitare-project.ts";
-import { applyProtectionState, emptyProtectionState, protectSemanticObject, protectTiles } from "../lib/map-protection.ts";
-import { buildArchetypeRefinementCandidate } from "../lib/map-design.ts";
+import { createExcogitareProject, MAX_PROJECT_BYTES, parseExcogitareProject, serializeExcogitareProject, serializeLegacyExcogitareProjectV1, sha256Hex } from "../lib/excogitare-project.ts";
+import { applyProtectionState, compileGenerationConstraints, compileProtectionConstraints, emptyProtectionState, eraseProtectedTiles, protectableSemantics, protectSemanticObject, protectTiles, removeProtection, scoreProtectionCandidate } from "../lib/map-protection.ts";
+import { buildArchetypeRefinementCandidate, regenerateMapStage } from "../lib/map-design.ts";
 import { buildRepairIssues } from "../lib/map-repair.ts";
 import { WORLD_SCALE_PROFILES } from "../lib/world-scale.ts";
 
@@ -89,6 +91,9 @@ test("all engines retain recipes, structured progress, semantic identities and p
     assert.deepEqual(first.structure, second.structure);
     assert.equal(first.recipe?.engine, engine);
     assert.equal(first.structure?.schemaVersion, 1);
+    assert.equal(first.structure?.matchAssessment?.engine, engine);
+    assert.equal(first.structure?.matchAssessment?.victories.length, 5);
+    assert.ok(first.structure?.matchAssessment?.victories.every((finding) => finding.evidence.length >= 2));
     assert.equal(first.structure?.provenance?.length, 10);
     const passOrder = first.structure?.provenance?.map((pass) => pass.passId) ?? [];
     assert.deepEqual(new Set(passOrder), new Set(GENERATION_PASS_DEFINITIONS.map((definition) => definition.id)));
@@ -288,43 +293,145 @@ test("cooperative cancellation stops a candidate run without mutating an install
   assert.deepEqual(installed.tiles, installedTiles);
 });
 
-test("downloaded Excogitare projects round-trip complete authored state and reject corruption", () => {
+test("downloaded Excogitare ZIP projects round-trip complete authored state and selectable history", () => {
   const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 1, seed: "project-round-trip" });
   const recipe = { ...map.recipe!, scale: "REGIONAL" as const, archetype: "SUNSCOURGED" as const };
   const history = { schemaVersion: 1 as const, activeEntryId: "2", entries: [
     { id: "2", parentId: "1", operation: "SELECTIVE_CLIMATE", createdAt: "2026-07-17T00:02:00.000Z", recipe, map: { ...map, recipe }, provenance: map.structure?.provenance ?? [] },
     { id: "1", operation: "GENERATE", createdAt: "2026-07-17T00:01:00.000Z", recipe, map: { ...map, recipe }, provenance: map.structure?.provenance ?? [] },
-  ] };
+  ], checkpoints: [{ id: "checkpoint-1", name: "Dry coast", createdAt: 1_752_710_400_000, recipe, map: { ...map, recipe }, provenance: map.structure?.provenance ?? [] }] };
   const editorState = { schemaVersion: 1 as const, workspace: "CREATE" as const, stage: "ITERATE", view: { zoom: 1.75, x: 18, y: -7 }, expandedSections: ["REFINE:climate-group", "ITERATE:generation-history"], stageScrollPositions: { GENERATE: 120, REFINE: 360, ITERATE: 84, EDIT: 210, ANALYZE: 40 } };
-  const project = createExcogitareProject({ projectName: "A downloaded project", map: { ...map, recipe }, recipe, history, editorState, excogitareVersion: "test", now: "2026-07-17T00:00:00.000Z", projectId: "project-fixture" });
-  const serialized = serializeExcogitareProject(project);
+  const protectedObject = protectableSemantics(map).find((object) => object.tileIndices.length > 3)!;
+  const projectProtection = protectSemanticObject(protectTiles(emptyProtectionState(), map.width, map.height, [0, 1], ["TOPOLOGY", "CONTENT"], "Project region"), map, protectedObject.semanticId, "SHAPE", false);
+  const project = createExcogitareProject({ projectName: "A downloaded project", map: { ...map, recipe }, recipe, history, protection: projectProtection, editorState, excogitareVersion: "test", now: "2026-07-17T00:00:00.000Z", projectId: "project-fixture" });
+  const serialized = serializeExcogitareProject(project, { historyPolicy: "FULL", now: "2026-07-17T01:00:00.000Z" });
   const restored = parseExcogitareProject(serialized);
+  assert.deepEqual([...new Uint8Array(serialized).subarray(0, 2)], [0x50, 0x4b]);
   assert.equal(restored.manifest.projectName, "A downloaded project");
+  assert.equal(restored.manifest.bundleVersion, 2);
+  assert.equal(restored.manifest.hashAlgorithm, "SHA-256");
+  assert.equal(restored.manifest.historyPolicy, "FULL");
+  assert.ok(Object.values(restored.manifest.payloads ?? {}).every((payload) => /^[a-f0-9]{64}$/.test(payload.sha256)));
   assert.equal(restored.recipe.scale, "REGIONAL");
   assert.equal(restored.recipe.archetype, "SUNSCOURGED");
   assert.equal(restored.recipe.archetypeIntensity, "STRONG");
   assert.deepEqual(restored.map.tiles, map.tiles);
-  assert.deepEqual(restored.map.structure, JSON.parse(JSON.stringify(map.structure)));
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.map.structure)), JSON.parse(JSON.stringify(map.structure)));
   assert.equal(restored.scenario.factions.length, map.startLocations.length);
   assert.equal(restored.history.activeEntryId, "2");
   assert.equal(restored.history.entries[0].parentId, "1");
   assert.equal(restored.history.entries[0].operation, "SELECTIVE_CLIMATE");
   assert.equal(restored.history.entries[0].createdAt, "2026-07-17T00:02:00.000Z");
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.history.entries[0].map.structure)), JSON.parse(JSON.stringify(map.structure)));
+  assert.equal(restored.history.checkpoints?.[0].name, "Dry coast");
   assert.equal(restored.editorState?.stage, "ITERATE");
   assert.deepEqual(restored.editorState?.expandedSections, editorState.expandedSections);
   assert.deepEqual(restored.editorState?.stageScrollPositions, editorState.stageScrollPositions);
   assert.deepEqual(restored.editorState?.view, editorState.view);
+  assert.ok(restored.manifest.requiredCapabilities.includes("protection-v1"));
+  assert.deepEqual(restored.protection.tileMask?.channels.TOPOLOGY, projectProtection.tileMask?.channels.TOPOLOGY);
+  assert.deepEqual(restored.protection.semantic, projectProtection.semantic);
 
   const legacyRecipe = JSON.parse(JSON.stringify(recipe));
   delete legacyRecipe.archetypeIntensity;
   assert.equal(normalizeGenerationRecipe(legacyRecipe, DEFAULT_GENERATION_OPTIONS).archetypeIntensity, "STRONG");
 
-  const corrupted = JSON.parse(serialized);
-  corrupted.project.map.name = "silently changed";
-  assert.throws(() => parseExcogitareProject(JSON.stringify(corrupted)), /checksum failed/);
-  const future = JSON.parse(serialized);
-  future.schemaVersion = 2;
-  assert.throws(() => parseExcogitareProject(JSON.stringify(future)), /Unsupported Excogitare project schema version/);
+  const compact = parseExcogitareProject(serializeExcogitareProject(project, { historyPolicy: "CURRENT_AND_CHECKPOINTS", now: "2026-07-17T01:00:00.000Z" }));
+  assert.equal(compact.manifest.historyPolicy, "CURRENT_AND_CHECKPOINTS");
+  assert.equal(compact.history.entries.length, 0);
+  assert.equal(compact.history.checkpoints?.length, 1);
+
+  const legacy = serializeLegacyExcogitareProjectV1(project);
+  const migrated = parseExcogitareProject(legacy);
+  const migrationFixture = JSON.parse(readFileSync(new URL("./fixtures/excogitare-project-v1-migration.json", import.meta.url), "utf8"));
+  assert.equal(JSON.parse(legacy).schemaVersion, migrationFixture.sourceSchemaVersion);
+  assert.equal(migrated.schemaVersion, migrationFixture.expectedProjectSchemaVersion);
+  assert.equal(migrated.manifest.historyPolicy, migrationFixture.expectedHistoryPolicy);
+  assert.equal(migrated.history.entries.length, migrationFixture.expectedHistoryEntries);
+  assert.equal(migrated.history.checkpoints?.length, migrationFixture.expectedCheckpoints);
+  for (const field of migrationFixture.preserveFields) assert.ok(field in migrated, `migration should preserve ${field}`);
+});
+
+test("project archive rejects corruption, unsafe entries, duplicate paths, future contracts and excessive input", () => {
+  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "project-safety" });
+  const project = createExcogitareProject({ projectName: "Safety", map, recipe: map.recipe!, excogitareVersion: "test", now: "2026-07-17T00:00:00.000Z" });
+  const serialized = new Uint8Array(serializeExcogitareProject(project, { now: "2026-07-17T00:00:01.000Z" }));
+  const corruptedEntries = unzipSync(serialized);
+  corruptedEntries["map.json"][20] ^= 0x01;
+  assert.throws(() => parseExcogitareProject(zipSync(corruptedEntries)), /SHA-256 verification failed/);
+
+  const missingEntries = unzipSync(serialized);
+  delete missingEntries["map.json"];
+  assert.throws(() => parseExcogitareProject(zipSync(missingEntries)), /missing map.json/);
+
+  const unsupportedEntries = unzipSync(serialized);
+  const unsupportedManifest = JSON.parse(new TextDecoder().decode(unsupportedEntries["manifest.json"]));
+  unsupportedManifest.requiredCapabilities.push("future-world-simulation-v9");
+  unsupportedEntries["manifest.json"] = strToU8(JSON.stringify(unsupportedManifest));
+  assert.throws(() => parseExcogitareProject(zipSync(unsupportedEntries)), /unsupported capability future-world-simulation-v9/);
+
+  assert.throws(() => parseExcogitareProject(zipSync({ "../evil.json": strToU8("{}") })), /Unsafe project archive path/);
+  assert.throws(() => parseExcogitareProject(zipSync({ "extensions/run.js": strToU8("alert(1)") })), /Executable project content/);
+  project.extensions = { bundleEntries: { "extensions/a.json": { value: 1 }, "extensions/b.json": { value: 2 } } };
+  const duplicateDirectory = new Uint8Array(serializeExcogitareProject(project, { now: "2026-07-17T00:00:02.000Z" }));
+  const duplicateView = new DataView(duplicateDirectory.buffer);
+  let endOffset = duplicateDirectory.length - 22;
+  while (endOffset >= 0 && duplicateView.getUint32(endOffset, true) !== 0x06054b50) endOffset -= 1;
+  let centralOffset = duplicateView.getUint32(endOffset + 16, true);
+  const centralCount = duplicateView.getUint16(endOffset + 10, true);
+  for (let index = 0; index < centralCount; index += 1) {
+    const nameLength = duplicateView.getUint16(centralOffset + 28, true);
+    const extraLength = duplicateView.getUint16(centralOffset + 30, true);
+    const commentLength = duplicateView.getUint16(centralOffset + 32, true);
+    const nameBytes = duplicateDirectory.subarray(centralOffset + 46, centralOffset + 46 + nameLength);
+    if (new TextDecoder().decode(nameBytes) === "extensions/b.json") nameBytes.set(strToU8("extensions/a.json"));
+    centralOffset += 46 + nameLength + extraLength + commentLength;
+  }
+  assert.throws(() => parseExcogitareProject(duplicateDirectory), /Duplicate project archive entry/);
+  const tooMany = Object.fromEntries(Array.from({ length: 161 }, (_, index) => [`extensions/e${String(index).padStart(3, "0")}.json`, strToU8("{}") ]));
+  assert.throws(() => parseExcogitareProject(zipSync(tooMany)), /unsafe entry count/);
+  assert.throws(() => parseExcogitareProject(new Uint8Array(MAX_PROJECT_BYTES + 1)), /64 MB/);
+
+  const futureEntries = unzipSync(serialized);
+  const futureManifest = JSON.parse(new TextDecoder().decode(futureEntries["manifest.json"]));
+  futureManifest.bundleVersion = 3;
+  futureEntries["manifest.json"] = strToU8(JSON.stringify(futureManifest));
+  assert.throws(() => parseExcogitareProject(zipSync(futureEntries)), /unsupported bundle contract/);
+
+  assert.throws(() => parseExcogitareProject(JSON.stringify({ format: "EXCOGITARE_PROJECT", schemaVersion: 99, project })), /Unsupported Excogitare project schema version: 99/);
+});
+
+test("project archive preserves safe unknown optional data and uses standard SHA-256", () => {
+  assert.equal(sha256Hex(strToU8("abc")), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "project-extension" });
+  const project = createExcogitareProject({ projectName: "Extensions", map, recipe: map.recipe!, excogitareVersion: "test", now: "2026-07-17T00:00:00.000Z" });
+  (project.manifest as typeof project.manifest & { futureNotice?: string }).futureNotice = "retain me";
+  project.extensions = { vendorFlag: true, bundleEntries: { "extensions/vendor/example.json": { futureValue: 17, label: "retained" } } };
+  (project as typeof project & { futureRoot?: { enabled: boolean } }).futureRoot = { enabled: true };
+  const restored = parseExcogitareProject(serializeExcogitareProject(project, { now: "2026-07-17T00:00:01.000Z" }));
+  assert.equal(restored.extensions?.vendorFlag, true);
+  assert.deepEqual((restored.extensions?.bundleEntries as Record<string, unknown>)["extensions/vendor/example.json"], { futureValue: 17, label: "retained" });
+  assert.deepEqual((restored as typeof restored & { futureRoot?: unknown }).futureRoot, { enabled: true });
+  assert.equal((restored.manifest as typeof restored.manifest & { futureNotice?: string }).futureNotice, "retain me");
+  const second = parseExcogitareProject(serializeExcogitareProject(restored, { now: "2026-07-17T00:00:02.000Z" }));
+  assert.deepEqual((second.extensions?.bundleEntries as Record<string, unknown>)["extensions/vendor/example.json"], { futureValue: 17, label: "retained" });
+});
+
+test("bounded thirty-generation projects remain importable and compact history materially reduces the bundle", () => {
+  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "SMALL", players: 4, cityStates: 2, seed: "project-large-history" });
+  const recipe = map.recipe!;
+  const history = {
+    schemaVersion: 1 as const,
+    activeEntryId: "30",
+    entries: Array.from({ length: 30 }, (_, index) => ({ id: String(index + 1), parentId: index ? String(index) : undefined, operation: index ? "SELECTIVE_CONTENT" : "GENERATE", createdAt: `2026-07-17T00:${String(index).padStart(2, "0")}:00.000Z`, recipe, map, provenance: map.structure?.provenance ?? [] })),
+    checkpoints: [{ id: "large-checkpoint", name: "Large checkpoint", createdAt: 1_752_710_400_000, recipe, map, provenance: map.structure?.provenance ?? [] }],
+  };
+  const project = createExcogitareProject({ projectName: "Thirty generations", map, recipe, history, excogitareVersion: "test", now: "2026-07-17T00:00:00.000Z" });
+  const full = serializeExcogitareProject(project, { historyPolicy: "FULL", now: "2026-07-17T01:00:00.000Z" });
+  const compact = serializeExcogitareProject(project, { historyPolicy: "CURRENT_AND_CHECKPOINTS", now: "2026-07-17T01:00:00.000Z" });
+  assert.equal(parseExcogitareProject(full).history.entries.length, 30);
+  assert.equal(parseExcogitareProject(compact).history.entries.length, 0);
+  assert.ok(compact.byteLength < full.byteLength * 0.25, `${compact.byteLength} should be materially smaller than ${full.byteLength}`);
 });
 
 test("tile and semantic protection constrain selective replacement without mutating either input", () => {
@@ -344,4 +451,132 @@ test("tile and semantic protection constrain selective replacement without mutat
   assert.equal(result.map.structure?.evidenceState, "STALE");
   assert.notEqual(result.map.tiles, source.tiles);
   assert.notEqual(result.map.tiles, candidate.tiles);
+});
+
+test("Exact, Shape, Function, and Relationship protections compile materially different merges", () => {
+  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "GREAT_WATERSHEDS", size: "DUEL", players: 2, cityStates: 0, seed: "policy-source" });
+  const candidate = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "GREAT_WATERSHEDS", size: "DUEL", players: 2, cityStates: 0, seed: "policy-candidate" });
+  const object = protectableSemantics(source).find((item) => item.objectKind === "CONTINENT" && item.tileIndices.length > 8) ?? protectableSemantics(source).find((item) => item.tileIndices.length > 8);
+  assert.ok(object);
+  const signatures = new Set<string>();
+  for (const policy of ["EXACT", "SHAPE", "FUNCTION", "RELATIONSHIP"] as const) {
+    const state = protectSemanticObject(emptyProtectionState(), source, object!.semanticId, policy, false);
+    const result = applyProtectionState(source, candidate, state);
+    assert.equal(result.blocked, false, `${policy} unexpectedly blocked: ${result.conflicts.join(" ")}`);
+    assert.equal(result.report.findings[0].policy, policy);
+    signatures.add(result.map.tiles.map((tile) => `${tile.terrain}:${tile.elevation}:${tile.feature}:${tile.resource}:${tile.river}`).join("|"));
+  }
+  assert.equal(signatures.size, 4);
+});
+
+test("imported watersheds expose confidence and preserve continuous mountain-to-water function", () => {
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "GREAT_WATERSHEDS", size: "SMALL", players: 4, cityStates: 2, seed: "imported-watershed-source" });
+  const imported = parseCiv5Map(serializeCiv5Map(generated), "imported-watershed.Civ5Map");
+  const watershed = protectableSemantics(imported).find((object) => object.objectKind === "RIVER_SYSTEM" && object.outlet !== undefined);
+  assert.ok(watershed);
+  assert.equal(watershed!.inference.source, "IMPORTED");
+  assert.ok(watershed!.inference.confidence >= 0.7);
+  const state = protectSemanticObject(emptyProtectionState(), imported, watershed!.semanticId, "FUNCTION", true);
+  const candidate = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "GREAT_WATERSHEDS", size: "SMALL", players: 4, cityStates: 2, seed: "imported-watershed-candidate" });
+  const result = applyProtectionState(imported, candidate, state);
+  assert.equal(result.blocked, false, result.conflicts.join(" "));
+  assert.equal(result.report.findings[0].status, "SATISFIED");
+  assert.ok(result.report.seamRepairs >= 0);
+  const riverErrors = buildRepairIssues(result.map).filter((issue) => issue.category === "RIVERS" && issue.severity === "ERROR");
+  assert.equal(riverErrors.length, 0, riverErrors.map((issue) => issue.detail).join(" "));
+});
+
+test("protection constraints enter every engine before the exact post-generation merge", () => {
+  const configurations = [
+    ["EXCOGITARE", "CONTINENTS", "EXCOGITARE_FIELDS"],
+    ["ECCENTRIC", "WILD_REGIONS", "ECCENTRIC_GRAPH"],
+    ["PHYSICAL", "DYNAMIC_EARTH", "PHYSICAL_BOUNDARY"],
+    ["POLIS", "IMPERIAL_RING", "POLIS_STRATEGIC"],
+  ] as const;
+  for (const [engine, preset, adapter] of configurations) {
+    const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine, preset, size: "DUEL", players: engine === "POLIS" ? 4 : 2, cityStates: 0, seed: `constraint-${engine}` });
+    const index = source.tiles.findIndex((tile) => tile.terrain >= 2 && tile.elevation < 2);
+    assert.ok(index >= 0);
+    let state: ProtectionState = protectTiles(emptyProtectionState(), source.width, source.height, [index], ["TOPOLOGY", "ELEVATION", "CLIMATE", "FEATURES", "HYDROLOGY"], "Native anchor");
+    const semantic = protectableSemantics(source).filter((object) => object.tileIndices.length >= 4).sort((one, two) => one.tileIndices.length - two.tileIndices.length)[0];
+    assert.ok(semantic);
+    state = protectSemanticObject(state, source, semantic.semanticId, "SHAPE", false);
+    const constraints = compileProtectionConstraints(source, state);
+    const payload = compileGenerationConstraints(source, state)!;
+    assert.equal(constraints.engineAdapter, adapter);
+    assert.equal(payload.adapter, adapter);
+    assert.equal(constraints.candidateCount, 4);
+    assert.equal(payload.topology[index], 1);
+    assert.equal(payload.elevation[index], source.tiles[index].elevation);
+    assert.equal(payload.terrain[index], source.tiles[index].terrain);
+    assert.equal(payload.feature[index], source.tiles[index].feature);
+    assert.equal(payload.hydrologyMask[index], 1);
+    assert.equal(payload.semantics.length, 1);
+    const first = regenerateMapStage(source, source.generation!, "WORLD", 2, source.recipe, state);
+    const second = regenerateMapStage(source, source.generation!, "WORLD", 2, source.recipe, state);
+    assert.deepEqual(first.tiles, second.tiles);
+    assert.equal(first.tiles[index].terrain, source.tiles[index].terrain, `${engine} ignored its native terrain constraint`);
+    assert.equal(first.tiles[index].elevation, source.tiles[index].elevation, `${engine} ignored its native relief constraint`);
+    assert.equal(first.tiles[index].feature, source.tiles[index].feature, `${engine} ignored its native feature constraint`);
+    assert.ok((first.structure?.diagnostics.nativeConstraintTiles ?? 0) >= 1, `${engine} did not report native constraint consumption`);
+    assert.equal(first.structure?.diagnostics.nativeSemanticConstraints, 1, `${engine} did not report its semantic constraint`);
+    assert.ok((first.structure?.diagnostics.nativeHydrologyConstraints ?? 0) >= 1, `${engine} did not consume native hydrology guidance`);
+    assert.equal(scoreProtectionCandidate(source, first, state).score, scoreProtectionCandidate(source, second, state).score);
+    assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.severity === "ERROR"), []);
+  }
+});
+
+test("Polis compiles protected semantic relationships into its strategic graph pass", () => {
+  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "POLIS", preset: "IMPERIAL_RING", size: "DUEL", players: 4, cityStates: 0, seed: "native-polis-relationship" });
+  const regions = protectableSemantics(source).filter((object) => object.objectKind === "STRATEGIC_REGION" && object.tileIndices.length >= 4);
+  assert.ok(regions.length >= 2);
+  const state = protectSemanticObject(emptyProtectionState(), source, regions[0].semanticId, "RELATIONSHIP", false);
+  state.semantic[0].anchor.relatedSemanticIds = [regions[1].semanticId];
+  const payload = compileGenerationConstraints(source, state)!;
+  assert.equal(payload.adapter, "POLIS_STRATEGIC");
+  assert.equal(payload.semantics[0].relatedAnchors.length, 1);
+  const candidate = regenerateMapStage(source, source.generation!, "WORLD", 3, source.recipe, state);
+  assert.equal(candidate.structure?.diagnostics.nativeRelationshipConstraints, 1);
+  assert.ok((candidate.structure?.strategicGraph?.edges.length ?? 0) >= 1);
+  assert.deepEqual(buildRepairIssues(candidate).filter((issue) => issue.severity === "ERROR"), []);
+});
+
+test("Eccentric compiles protected semantic relationships into polygon paths", () => {
+  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "WILD_REGIONS", size: "DUEL", players: 2, cityStates: 0, seed: "native-eccentric-relationship" });
+  const landObjects = protectableSemantics(source).filter((object) => object.tileIndices.length >= 4 && source.tiles[object.tileIndices[0]]?.terrain >= 2);
+  assert.ok(landObjects.length >= 2);
+  const state = protectSemanticObject(emptyProtectionState(), source, landObjects[0].semanticId, "RELATIONSHIP", false);
+  state.semantic[0].anchor.relatedSemanticIds = [landObjects[1].semanticId];
+  const candidate = regenerateMapStage(source, source.generation!, "WORLD", 4, source.recipe, state);
+  assert.equal(candidate.structure?.diagnostics.nativeRelationshipConstraints, 1);
+  assert.equal(candidate.structure?.diagnostics.nativeGraphRelationshipPaths, 1);
+  assert.deepEqual(buildRepairIssues(candidate).filter((issue) => issue.severity === "ERROR"), []);
+});
+
+test("tile protection erasure and removal retain independent channel masks", () => {
+  const state = protectTiles(emptyProtectionState(), 4, 4, [5, 6], ["TOPOLOGY", "CONTENT"], "Keep valley");
+  const erased = eraseProtectedTiles(state, [5], ["CONTENT"]);
+  assert.equal(erased.tileMask!.channels.TOPOLOGY[5], 1);
+  assert.equal(erased.tileMask!.channels.CONTENT[5], 0);
+  assert.equal(erased.tileMask!.channels.CONTENT[6], 1);
+  const removed = removeProtection(erased, state.tileMask!.namedRegions[0].id);
+  assert.equal(removed.tileMask!.channels.TOPOLOGY.reduce((sum, value) => sum + value, 0), 0);
+  assert.equal(removed.tileMask!.channels.CONTENT.reduce((sum, value) => sum + value, 0), 0);
+});
+
+test("hard semantic conflicts are atomic and soft constraints report degradation", () => {
+  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "hard-source" });
+  const object = protectableSemantics(source).find((item) => item.tileIndices.length > 4)!;
+  const hard = protectSemanticObject(emptyProtectionState(), source, object.semanticId, "EXACT", true);
+  const wrongSize = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "TINY", players: 2, cityStates: 0, seed: "hard-candidate" });
+  const blocked = applyProtectionState(source, wrongSize, hard);
+  assert.equal(blocked.blocked, true);
+  assert.equal(blocked.map, wrongSize);
+
+  const soft = protectSemanticObject(emptyProtectionState(), source, object.semanticId, "RELATIONSHIP", false);
+  soft.semantic[0].anchor.relatedSemanticIds = ["missing-related-object"];
+  const candidate = generateMap({ ...DEFAULT_GENERATION_OPTIONS, size: "DUEL", players: 2, cityStates: 0, seed: "soft-candidate" });
+  const result = applyProtectionState(source, candidate, soft);
+  assert.equal(result.blocked, false);
+  assert.ok(["SATISFIED", "DEGRADED"].includes(result.report.findings[0].status));
 });

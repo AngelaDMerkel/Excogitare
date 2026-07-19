@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCiv5Map, serializeCiv5Map } from "../lib/civ5-map.ts";
+import { inspectCiv5MapStructure, parseCiv5Map, serializeCiv5Map, type Civ5Map } from "../lib/civ5-map.ts";
 import { createExcogitareProject, parseExcogitareProject, serializeExcogitareProject } from "../lib/excogitare-project.ts";
 import { generationRecipeFromOptions } from "../lib/generation-recipe.ts";
 import { DEFAULT_GENERATION_OPTIONS, generateMap, generateMapFromRecipe, MAP_PRESETS, randomGenerationOptions, resolveMapDimensions, type MapGenerationOptions, type MapPresetId } from "../lib/map-generator.ts";
 import { buildRepairIssues } from "../lib/map-repair.ts";
 import { compileNarrativeSkeleton, NARRATIVE_PROFILES, narrativeProfile } from "../lib/narrative-map-types.ts";
 
-const FUTURE_POLIS = ["THREE_REALMS", "THALASSIC_LEAGUE", "UNEQUAL_REALMS"] as const;
 const BENCHMARKS = ["LONELY_OCEANS", "SHATTERED_ARCHIPELAGO", "GREAT_WATERSHEDS", "ICEHOUSE_EARTH"] as const;
 const PHASE_FIVE = MAP_PRESETS.filter((preset) => preset.engine !== "POLIS").map((preset) => preset.id);
+const PHASE_SIX = MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => preset.id);
 
 function benchmarkOptions(id: MapPresetId, seed = `narrative-${id.toLowerCase()}`): MapGenerationOptions {
   const preset = MAP_PRESETS.find((item) => item.id === id)!;
@@ -36,13 +36,29 @@ function benchmarkOptions(id: MapPresetId, seed = `narrative-${id.toLowerCase()}
   };
 }
 
+function assertBinaryReady(map: Civ5Map, id: MapPresetId) {
+  const exported = serializeCiv5Map(map);
+  assert.deepEqual(inspectCiv5MapStructure(exported).filter((issue) => issue.severity === "ERROR"), [], `${id} produced an invalid binary container`);
+  const reparsed = parseCiv5Map(exported, `${id.toLowerCase()}.Civ5Map`);
+  assert.equal(reparsed.scenarioDataPresent, false, `${id} ordinary map export unexpectedly contained scenario data`);
+  assert.equal(reparsed.startLocations.length, 0, `${id} ordinary map export unexpectedly contained fixed scenario starts`);
+  assert.deepEqual(reparsed.tiles, map.tiles.map((tile) => {
+    const geography = { ...tile };
+    delete geography.improvement;
+    delete geography.route;
+    delete geography.owner;
+    return geography;
+  }), `${id} lost geography during export`);
+  assert.deepEqual(buildRepairIssues(reparsed).filter((issue) => issue.id !== "clean" && issue.severity !== "INFO"), [], `${id} requires Repair after binary round trip`);
+}
+
 test("the narrative catalogue is exhaustive, distinctive and honest about implementation", () => {
-  assert.equal(MAP_PRESETS.length, 30);
-  assert.equal(Object.keys(NARRATIVE_PROFILES).length, MAP_PRESETS.length + FUTURE_POLIS.length);
-  assert.deepEqual(new Set(Object.keys(NARRATIVE_PROFILES)), new Set([...MAP_PRESETS.map((preset) => preset.id), ...FUTURE_POLIS]));
+  assert.equal(MAP_PRESETS.length, 33);
+  assert.equal(Object.keys(NARRATIVE_PROFILES).length, MAP_PRESETS.length);
+  assert.deepEqual(new Set(Object.keys(NARRATIVE_PROFILES)), new Set(MAP_PRESETS.map((preset) => preset.id)));
   assert.equal(new Set(Object.values(NARRATIVE_PROFILES).map((profile) => profile.verb)).size, Object.keys(NARRATIVE_PROFILES).length);
-  assert.deepEqual(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation === "BENCHMARK").map((profile) => profile.id).sort(), [...PHASE_FIVE].sort());
-  assert.deepEqual(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation === "PROFILE_ONLY").map((profile) => profile.id).sort(), MAP_PRESETS.filter((preset) => preset.engine === "POLIS").map((preset) => preset.id).sort());
+  assert.deepEqual(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation === "BENCHMARK").map((profile) => profile.id).sort(), MAP_PRESETS.map((preset) => preset.id).sort());
+  assert.equal(Object.values(NARRATIVE_PROFILES).filter((profile) => profile.implementation !== "BENCHMARK").length, 0);
   for (const profile of Object.values(NARRATIVE_PROFILES)) {
     assert.ok(profile.premise.length > 35, `${profile.id} lacks a concrete premise`);
     assert.ok(profile.requiredMotifs.length > 0, `${profile.id} lacks required motifs`);
@@ -50,7 +66,6 @@ test("the narrative catalogue is exhaustive, distinctive and honest about implem
     assert.ok(profile.nearestConfusions.length > 0, `${profile.id} lacks nearest-confusion boundaries`);
     assert.ok(profile.blindRecognition.length > 25, `${profile.id} lacks a blind-recognition statement`);
   }
-  for (const id of FUTURE_POLIS) assert.equal(narrativeProfile(id).implementation, "FUTURE_RUNTIME");
 });
 
 test("compiled narrative skeletons are deterministic and disclose conflicting explicit controls", () => {
@@ -104,6 +119,7 @@ test("four benchmark identities survive generation, legality and retained assess
     assert.ok(["A", "B"].includes(first.structure?.narrativeAssessment?.grade ?? ""), `${id} fell below its retained recognition benchmark`);
     assert.equal(first.structure?.narrativeAssessment?.parameterDeviations.length, 0);
     assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), [], `${id} should not require Repair after Create`);
+    assertBinaryReady(first, id);
     generated.set(id, first);
   }
 
@@ -152,6 +168,7 @@ test("the twenty-two Phase 5 identities compile into recognizable legal final ma
     assert.ok(["A", "B"].includes(first.structure?.narrativeAssessment?.grade ?? ""), `${id} fell below its retained recognition benchmark (${first.structure?.narrativeAssessment?.score})`);
     assert.equal(first.structure?.narrativeAssessment?.parameterDeviations.length, 0);
     assert.deepEqual(buildRepairIssues(first).filter((issue) => issue.id !== "clean"), [], `${id} should not require Repair after Create`);
+    assertBinaryReady(first, id);
   }
 });
 
@@ -197,12 +214,26 @@ test("benchmark identities survive representative Scale and World Character rein
   }
 });
 
-test("Phase 6 Polis Map Types retain intent without claiming a completed specialized compiler", () => {
-  const map = generateMap({ ...DEFAULT_GENERATION_OPTIONS, preset: "IMPERIAL_RING", engine: "POLIS", size: "DUEL", players: 2, cityStates: 1, seed: "profile-only-honesty" });
-  assert.equal(map.structure?.narrativeSkeleton?.profileId, "IMPERIAL_RING");
-  assert.equal(map.structure?.narrativeAssessment?.grade, "UNASSESSED");
-  assert.equal(map.structure?.narrativeAssessment?.implementation, "PROFILE_ONLY");
-  assert.ok(map.structure?.narrativeAssessment?.motifs.every((finding) => finding.status === "UNAVAILABLE"));
+test("all seven Phase 6 Polis identities compile into distinct retained strategic programs", () => {
+  const signatures = new Set<string>();
+  for (const id of PHASE_SIX) {
+    const options = benchmarkOptions(id, `phase-six-${id.toLowerCase()}`);
+    options.size = "SMALL";
+    options.players = id === "THREE_REALMS" ? 6 : id === "UNEQUAL_REALMS" ? 8 : 6;
+    options.cityStates = 4;
+    const map = generateMap(options);
+    const graph = map.structure?.strategicGraph;
+    assert.ok(graph, `${id} lacks a retained strategic graph`);
+    assert.equal(graph.mapType, id);
+    assert.equal(graph.version, 2);
+    assert.equal(graph.victoryFeasibility.length, 5);
+    assert.ok(graph.metrics.minimumStartDistance >= 5);
+    assert.ok(["A", "B"].includes(map.structure?.narrativeAssessment?.grade ?? ""), `${id} fell below its recognition benchmark`);
+    assert.deepEqual(buildRepairIssues(map).filter((issue) => issue.id !== "clean"), [], `${id} should not require Repair after Create`);
+    assertBinaryReady(map, id);
+    signatures.add(`${graph.realmRoles.map((role) => role.role).join("/")}:${graph.edges.map((edge) => edge.kind).sort().join("/")}:${graph.metrics.realmContactPairs}`);
+  }
+  assert.equal(signatures.size, PHASE_SIX.length);
 });
 
 test("project files retain narrative evidence while Civ5Map exports remain game-only", () => {

@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5Tile } from "./civ5-map.ts";
+import type { ProtectionState } from "./authoring-schema.ts";
 import { cloneGenerationStructure, markGenerationStructureStale } from "./generation-structure.ts";
 import { cloneGenerationRecipe, generationRecipeFromOptions, type GenerationRecipe } from "./generation-recipe.ts";
 import { applyArchetypeContentEcology, applyWorldArchetype } from "./world-archetype.ts";
@@ -13,6 +14,7 @@ import {
   type DominantTerrain,
   type MapGenerationOptions,
 } from "./map-generator.ts";
+import { compileGenerationConstraints, compileProtectionConstraints, scoreProtectionCandidate } from "./map-protection.ts";
 
 export type RegenerationStage = "WORLD" | "CLIMATE" | "RIVERS" | "CONTENT" | "STARTS";
 export type StructureOperation = "RAISE_PLATE" | "CARVE_BASIN" | "RIDGE" | "CLIMATE" | "WATERSHED";
@@ -98,30 +100,43 @@ export function generateBatchCandidate(options: MapGenerationOptions, index: num
   return scoreBatchCandidate(generateMap({ ...options, seed }), seed, index + 1);
 }
 
-export function regenerateMapStage(map: Civ5Map, options: MapGenerationOptions, stage: RegenerationStage, variation: number, recipe?: GenerationRecipe) {
-  const passOptions = { ...options, seed: `${options.seed}:${stage.toLowerCase()}:${variation}` };
-  const passRecipe = recipe ? { ...cloneGenerationRecipe(recipe)!, effort: "STANDARD" as const, settings: { ...recipe.settings, seed: passOptions.seed } } : undefined;
-  if (stage === "WORLD") return passRecipe ? generateMapFromRecipe(passRecipe) : generateMap(passOptions);
-  if (stage === "RIVERS") return regenerateMapRivers(map, passOptions, variation);
-  if (stage === "CONTENT") return regenerateMapContent(map, passOptions, variation);
-  if (stage === "STARTS") return balanceMapStarts(map, passOptions);
-
-  const climate = passRecipe ? generateMapFromRecipe({ ...passRecipe, archetype: "NARRATIVE_DEFAULT", archetypeIntensity: "STRONG" }) : generateMap(passOptions);
-  const tiles = map.tiles.map((tile, index) => {
-    if (tile.terrain < 2) return { ...tile };
-    const x = index % map.width;
-    const y = Math.floor(index / map.width);
-    const sourceX = Math.min(climate.width - 1, Math.floor(x / Math.max(1, map.width) * climate.width));
-    const sourceY = Math.min(climate.height - 1, Math.floor(y / Math.max(1, map.height) * climate.height));
-    const source = climate.tiles[sourceY * climate.width + sourceX];
-    return { ...tile, terrain: source.terrain >= 2 ? source.terrain : 2, feature: source.terrain >= 2 ? source.feature : 255 };
-  });
-  return enforceGeneratedPlacementLegality({ ...map, tiles, generation: { ...passOptions, dominantTerrains: [...passOptions.dominantTerrains] }, recipe: generationRecipeFromOptions(passOptions), structure: markGenerationStructureStale(map.structure, "Climate was selectively regenerated.", ["CLIMATE"]) });
+export function regenerateMapStage(map: Civ5Map, options: MapGenerationOptions, stage: RegenerationStage, variation: number, recipe?: GenerationRecipe, protection?: ProtectionState) {
+  const nativeConstraints = protection ? compileGenerationConstraints(map, protection) : undefined;
+  const buildCandidate = (candidate: number) => {
+    const protectedSearch = Boolean(protection && (protection.tileMask || protection.semantic.length));
+    const candidateVariation = protectedSearch ? variation * 10 + candidate : variation;
+    const passOptions = { ...options, seed: `${options.seed}:${stage.toLowerCase()}:${variation}${protectedSearch ? `:protected-${candidate}` : ""}` };
+    const passRecipe = recipe ? { ...cloneGenerationRecipe(recipe)!, effort: "STANDARD" as const, settings: { ...recipe.settings, seed: passOptions.seed } } : undefined;
+    if (stage === "WORLD") return passRecipe ? generateMapFromRecipe(passRecipe, undefined, { constraints: nativeConstraints }) : generateMap(passOptions, undefined, { constraints: nativeConstraints });
+    if (stage === "RIVERS") return regenerateMapRivers(map, passOptions, candidateVariation);
+    if (stage === "CONTENT") return regenerateMapContent(map, passOptions, candidateVariation);
+    if (stage === "STARTS") return balanceMapStarts(map, passOptions);
+    const climate = passRecipe ? generateMapFromRecipe({ ...passRecipe, archetype: "NARRATIVE_DEFAULT", archetypeIntensity: "STRONG" }, undefined, { constraints: nativeConstraints }) : generateMap(passOptions, undefined, { constraints: nativeConstraints });
+    const tiles = map.tiles.map((tile, index) => {
+      if (tile.terrain < 2) return { ...tile };
+      const x = index % map.width;
+      const y = Math.floor(index / map.width);
+      const sourceX = Math.min(climate.width - 1, Math.floor(x / Math.max(1, map.width) * climate.width));
+      const sourceY = Math.min(climate.height - 1, Math.floor(y / Math.max(1, map.height) * climate.height));
+      const source = climate.tiles[sourceY * climate.width + sourceX];
+      return { ...tile, terrain: source.terrain >= 2 ? source.terrain : 2, feature: source.terrain >= 2 ? source.feature : 255 };
+    });
+    return enforceGeneratedPlacementLegality({ ...map, tiles, generation: { ...passOptions, dominantTerrains: [...passOptions.dominantTerrains] }, recipe: generationRecipeFromOptions(passOptions), structure: markGenerationStructureStale(map.structure, "Climate was selectively regenerated.", ["CLIMATE"]) });
+  };
+  const constraints = protection ? compileProtectionConstraints(map, protection) : undefined;
+  if (!constraints || constraints.candidateCount === 1) return buildCandidate(1);
+  let selected: { map: Civ5Map; score: number; candidate: number } | undefined;
+  for (let candidate = 1; candidate <= constraints.candidateCount; candidate += 1) {
+    const generated = buildCandidate(candidate);
+    const score = scoreProtectionCandidate(map, generated, protection!).score;
+    if (!selected || score > selected.score || (score === selected.score && candidate < selected.candidate)) selected = { map: generated, score, candidate };
+  }
+  return selected!.map;
 }
 
-export function buildArchetypeRefinementCandidate(map: Civ5Map, options: MapGenerationOptions, recipe: GenerationRecipe, variation: number) {
+export function buildArchetypeRefinementCandidate(map: Civ5Map, options: MapGenerationOptions, recipe: GenerationRecipe, variation: number, protection?: ProtectionState) {
   if (recipe.archetype === "EXISTING") return { ...snapshotMap(map), recipe: cloneGenerationRecipe(recipe) };
-  const regenerated = regenerateMapStage(map, options, "CLIMATE", variation, recipe);
+  const regenerated = regenerateMapStage(map, options, "CLIMATE", variation, recipe, protection);
   const coated = enforceGeneratedPlacementLegality(applyWorldArchetype(regenerated, recipe.archetype, recipe.archetypeIntensity ?? "STRONG"));
   if (recipe.archetypeIntensity !== "TRANSFORMATIVE") return { ...coated, recipe: cloneGenerationRecipe(recipe) };
   const content = applyArchetypeContentEcology(regenerateMapContent(coated, options, variation), recipe.archetype);

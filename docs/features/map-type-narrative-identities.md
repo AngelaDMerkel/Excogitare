@@ -2,10 +2,10 @@
 
 ## Contract
 
-- Status: In progress — Phase 5 is verified for all twenty-six non-Polis identities. The four current and three future Polis identities remain Phase 6 work.
+- Status: Implemented — all thirty-three runtime identities have deterministic retained programs and scored assessment; automated Phase 6 verification is complete. Continuous Identity Lab evidence remains necessary before human blind recognition can be called verified.
 - User outcome: A generated map should communicate its selected Map Type through composition and relationships between features. If the Map Type label is hidden, a knowledgeable user should usually be able to recognize the premise from the map.
 - Scope: Narrative definitions for every Map Type currently exposed by Excogitare, including primary motifs, character interpretations and failure conditions. The definitions guide later generation, interface, diagnostics and testing work.
-- Current limitation: Every identity now has an authoritative runtime profile and retained skeleton, but only Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World have specialized engine realization and scored component assessment. Profile-only output is explicitly unassessed.
+- Current limitation: Every identity has an authoritative runtime profile, retained program and scored component assessment. Recognition remains a deterministic heuristic; Identity Lab evidence is still required to prove human blind recognition.
 - Failure behavior: Hard Civ V legality, accessibility, exact tile budgets and requested explicit settings take precedence over narrative goals. When an explicit combination makes a strong identity infeasible, generation should preserve legality, report the weakened premise and avoid pretending that the identity passed.
 - Exclusions: Map Type does not replace Generation Engine, World Character, World Modifier, map size, geometry, projection, water, mountains, climate, rainfall, players or placement controls.
 
@@ -1006,8 +1006,8 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 - [x] Narrative premises, recognizable geography, character interpretations and failure conditions are specified.
 - [x] Engine, Character, Modifier and explicit-control responsibilities are separated conceptually.
 - [x] Authoritative runtime narrative profiles implemented.
-- [ ] Engine-specific narrative passes implemented.
-- [x] Identity diagnostics and weakened-premise reporting implemented for the four benchmarks; Profile-only types remain visibly unassessed.
+- [x] Engine-specific narrative passes implemented for all thirty-three types.
+- [x] Identity diagnostics and weakened-premise reporting implemented for all thirty-three types.
 - [x] Interface presentation implemented without recluttering Create.
 - [x] Randomise, workers, history and selective regeneration verified for the retained Phase 4 substrate.
 - [x] Validation, Repair and export consequences verified for the four benchmarks.
@@ -1049,3 +1049,12 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 - The reviewed Phase 0 fixture changes deliberately because its formerly Profile-only Excogitare, Eccentric and Physical characterization cases and Pangaea Scenario case now have real narrative terrain, objects and scored evidence. The four Phase 4 benchmark fixtures preserve their approved identity behavior. Dimensions, requested water, start counts, export round trips and validation-error invariants remain intact.
 - Phase 5 does not advance Polis. Imperial Ring, Opposing Fronts, Contested Heartland and Rival Continents remain honestly Profile-only; Three Realms, Thalassic League and Unequal Realms remain approved future runtime profiles until Phase 6 integrates Match Intent.
 - Final verification passes 112 domain tests and 20 rendered-shell tests. TypeScript `--noEmit`, ESLint, `git diff --check`, the vinext production build, the Next.js GitHub Pages build and the static-export verifier all pass. The rebuilt `node:24-alpine` image `excogitare:1.3.0` is running at `http://localhost:3001` and returns HTTP 200. No new manual Civ V load was performed; generated fixtures pass the existing writer round-trip, validation and Repair suites, while Civ V remains the final runtime authority.
+
+## Phase 6 implementation evidence
+
+- Imperial Ring, Opposing Fronts, Contested Heartland and Rival Continents no longer share Profile-only fallback behavior. Their graph programs respectively enforce lateral ring travel and a shared centre, two coherent sides with plural breaches, many-to-many heartland approaches, and two blocs connected through plural expensive hinges.
+- Three Realms, Thalassic League and Unequal Realms are selectable runtime Map Types. Three Realms retains exactly three teams and all three mutual realm-contact pairs; Thalassic League places coastal starts in a redundant naval network; Unequal Realms retains explicit Tall, Wide, War and Turtle roles and is excluded from ordinary Randomise.
+- Match Intent changes topology directionally. Human/AI composition affects legibility pressure; Strong AI widens routes and never removes redundancy; Science or Time emphasis expands safe capacity; Domination adds alternative routes; Diplomacy changes city-state contestability. Fixed-team intent changes realm assignment, while competitive strictness changes feasibility thresholds rather than terrain yields.
+- Every engine now retains five separate Match Intent findings. Polis evaluates its authored graph, route widths, cycles, roles and city-state placement. Excogitare, Eccentric and Physical report final-map starts, resource access, nearby production, city-state contestability and territorial capacity without falsely claiming a strategic compiler.
+- The strategic graph schema retains its Map Type, normalized intent summary, role groups, route metrics and victory evidence through workers, history and downloaded `.excogitare` files. Old graph records are migrated defensively during cloning. Civ5Map export remains game-only and does not claim to preserve this private evidence.
+- Default deterministic fixtures for all seven Polis types receive A or B narrative grades, obey five-hex start separation and return no Repair findings. The reviewed Phase 0 fixture changes only the intended Imperial Ring map/content digest and adds Match Intent evidence to every retained structure.

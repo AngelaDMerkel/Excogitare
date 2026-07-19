@@ -2,7 +2,7 @@
 
 ## Contract
 
-- **Status:** Partial. Tile-channel and retained-object protection constrain selective regeneration and round-trip through project files; the full semantic compiler and overlay remain open.
+- **Status:** Verified. The authoring, inference, native engine compilation, candidate search, exact merge, reporting and project workflow are implemented and covered by deterministic all-engine regressions.
 - **User outcome:** A user can preserve exact authored tiles or the identity and function of a geographic system while regenerating everything else, with conflicts explained before the current map changes.
 - **Scope:** Channel masks, named regions, Drag to Preserve, semantic objects, stable lineage, Exact/Shape/Function/Relationship policies, imported inference, all-engine constraint compilation, undo and history.
 - **Dependencies:** [`generation-substrate.md`](generation-substrate.md), Create Edit/Iterate, retained structures, all four engines and project files.
@@ -32,14 +32,25 @@ Protected illegal content blocks only touched operations and relevant export whi
 
 ## Completion gates
 
-- [ ] ProtectionState, channel masks, semantic schemas and migrations implemented.
-- [ ] Paint, erase, brush, regions, overlay, undo and history work.
-- [ ] Stable semantic IDs and lineage confidence survive revisions.
-- [ ] Exact, Shape, Function and Relationship behave materially differently.
-- [ ] Preserve this Watershed works across all applicable engines.
-- [ ] Imported inference previews extent/confidence and supports manual fallback.
-- [ ] Engines consume constraints before construction, not only after generation.
-- [ ] Hard failures are atomic and soft degradation is disclosed.
-- [ ] Project download/reimport retains every constraint; Civ5Map remains clean.
-- [ ] Validation, Repair, determinism, builds and Alpine runtime pass.
-- [ ] Documentation and completion claims reconcile with evidence.
+- [x] ProtectionState, channel masks and semantic schemas implemented and rejected safely when malformed.
+- [x] Drag selection, erase, named regions, overlay and independent protection undo/redo work.
+- [x] Stable semantic IDs and lineage confidence survive revisions.
+- [x] Exact, Shape, Function and Relationship behave materially differently.
+- [x] Preserve this Watershed reconstructs and retains a complete directed Civ V river-edge component.
+- [x] Imported inference previews extent/confidence and supports exact named-region fallback.
+- [x] Engines consume constraints before construction, not only after generation.
+- [x] Hard failures are atomic and soft degradation is disclosed.
+- [x] Project download/reimport retains every constraint; Civ5Map remains clean.
+- [x] Validation, Repair, determinism, builds and Alpine runtime pass.
+- [x] Documentation and completion claims reconcile with evidence.
+
+## Engine boundary
+
+All four engines use deterministic four-candidate searches and receive the same versioned, typed-array constraint payload before constructing a candidate. Their adapters remain deliberately different:
+
+- Excogitare conditions its continuous land field before the water threshold, then constrains relief and drainage guidance.
+- Eccentric votes protected extents into polygon land allocation and compiles protected relationships as paths through the polygon graph before climates, ranges and rivers are built.
+- Physical conditions sea-level classification, relief and outlet-directed drainage before biomes and river encoding.
+- Polis pins protected starts and semantic anchors, adds protected relationship edges to its strategic graph, and treats retained territories and routes as land-budget constraints.
+
+Candidate scoring still chooses among lawful deterministic alternatives. The later merge remains necessary as an exact Civ V byte-level guarantee for channels such as resources, scenario records and river seams; it is no longer the first or only point at which the engines see protection. Direct pre-merge regressions verify adapter consumption, semantic relationships, deterministic output and Repair-clean results.

@@ -11,7 +11,7 @@
 - **Characterization:** exact current behavior that may change only through deliberate fixture review.
 - **Improvement:** a repeatable weak narrative baseline expected to change as its approved identity is implemented.
 
-The exact corpus contains one deterministic Duel result for each engine, Standard recognition baselines for Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World, safe/Game-Breaking boundary definitions, and a generated Scenario characterization. The Scenario case intentionally records that current generated exports retain slots, starts, ownership, improvements and routes but do not yet provide the approved full city-record round trip.
+The exact corpus contains one deterministic Duel result for each engine, Standard recognition baselines for Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World, safe/Game-Breaking boundary definitions, and a project-side Scenario-intent characterization. The Scenario case records that starts, ownership, improvements and routes remain in authored project state while the ordinary Civ5Map export contains geography only.
 
 ## Existing synthetic regression coverage
 
@@ -64,6 +64,14 @@ Review found exact water targets, zero validation errors and retained narrative 
 The Excogitare, Eccentric and Physical characterization cases and the Pangaea Scenario case deliberately change because those formerly Profile-only Map Types now compile authoritative narrative terrain before starts and content. Their tile, structure and serialized Civ5Map digests therefore change together. The Polis characterization remains Profile-only; its structure changes only through the shared exact-mountain and protected-route accessibility pass. The four Phase 4 Improvement cases retain their approved identities and exact water levels, while some structure digests change because the shared realizer now preserves the owning engine's complete geographic-object catalogue.
 
 Review confirmed that all nine cases retain exact dimensions, requested water, requested major and city-state counts except Lonely Oceans' intentional zero city states, parse/serialize start records and zero validation errors. The three newly compiled characterization cases score 86, 96 and 98; the Scenario Pangaea scores 98. Existing benchmark scores remain 98, 88, 100 and 96. This is a deliberate identity improvement, not a hash-only refresh.
+
+## Phase 6 reviewed fixture update
+
+The Polis characterization deliberately changes because Imperial Ring is no longer Profile-only. Its graph now retains the Map Type, normalized Match Intent, realm roles, route redundancy, route width, city-state contestability and five victory-feasibility findings. Its two-player Duel fixture has the maximum possible one-edge capital graph, two contested regions, exact requested water and population, no validation errors and a narrative score of 82 (B). One resource tile moves under the newly active objective-value narrative pass, so the tile and serialized Civ5Map digests change together; no writer format or scenario contract changed. All nine retained-structure digests change because every engine now records the same five-part Match Intent assessment boundary; the eight non-Polis tile and Civ5Map digests remain unchanged. This is the reviewed evidence footprint of Phase 6 rather than a hash-only refresh.
+
+## Geography-only writer correction
+
+The fixture is deliberately regenerated after representative Excogitare exports failed to load in Civilization V. Comparison with installed Firaxis-authored maps showed that the compact generated scenario envelope lacked required type dictionaries and opaque game-option payloads; its successful self-parse was not compatibility evidence. Generated Civ5Map hashes therefore change because ordinary exports now end after the geography grid, and all reparsed Scenario-only counts become zero. In-memory and `.excogitare` project intent remains unchanged. A separate regression recognizes the exact legacy Excogitare 1.3.2 envelope and removes it on re-export while excluding unrelated authored scenarios.
 
 ## Review rule
 

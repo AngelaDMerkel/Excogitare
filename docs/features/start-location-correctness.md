@@ -2,10 +2,10 @@
 
 ## Contract
 
-- Status: Verified
-- User outcome: Generated and imported maps disclose missing major starts, while generated or automatically rebalanced starts never begin fewer than five hexes apart.
-- Scope: Create, Polis, validation, imported-map Repair, Competitive whole-layout balancing, Randomise, ordinary size recommendations, generated scenario export, export capability checks, tests and documentation.
-- Exclusions: Do not replace an existing binary scenario section when it exposes no writable player slots. A geography-only file may receive a new scenario section. Do not alter engine geography, climate, rivers, resources or terrain.
+- Status: Partial. In-memory generation and imported-scenario correction are verified; ordinary Create exports deliberately leave start assignment to Civ V.
+- User outcome: Generated project plans and imported scenarios disclose missing major starts, while generated or automatically rebalanced starts never begin fewer than five hexes apart. Ordinary geography maps use Civ V's runtime assignment and are not misdiagnosed as broken scenarios.
+- Scope: Create, Polis, validation, imported-map Repair, Competitive whole-layout balancing, Randomise, ordinary size recommendations, project persistence, imported-scenario export capability checks, tests and documentation.
+- Exclusions: Ordinary Create `.Civ5Map` files do not retain generated starts. Do not fabricate a scenario section for geography-only files or replace an existing scenario section when it exposes no writable player slots.
 - Risks: Sparse geography may not fit every requested minor power. Fewer city states are preferable to illegal spacing.
 
 ## Requirements and evidence
@@ -20,10 +20,11 @@
 | START-06 | Polis and ordinary generation reduce impossible populations rather than crowding starts. | Sparse-map capacity regressions and stored actual counts. | Verified |
 | START-07 | Repair claims match export capability. | Parsed slot metadata and round-trip assertions. | Verified |
 | START-08 | Every generated Colossal map either contains the requested legal major starts or explicitly reduces an impossible request; zero major starts is never a successful generation. | All-engine Colossal regression with ordinary player counts. | Verified |
-| START-09 | Repair can select and apply missing-start reconstruction to generated and geography-only maps, while imported maps with existing slotless scenario data remain immutable. | Geography-only Repair/export regression plus existing-scenario zero-slot negative case. | Verified |
-| START-10 | Exporting a generated map writes major and city-state scenario slots and coordinates so the exported file retains the generated start layout when reopened or loaded by Civ V. | Generate/export/reparse regression using Colossal and the attached Great Peninsulas failure case. | Verified |
-| START-11 | Every generated and repaired major/city-state pair remains at least five hexes apart, including after binary export and reimport. | Pairwise major/minor spacing assertions before and after export. | Verified |
-| START-12 | Fresh and repaired exports use Civ V's WorldBuilder scenario/version marker rather than a parser-only synthetic marker; geography-only exports do not falsely declare scenario content. | Raw header assertions for `0x8C` scenario and `0x0C` geography-only exports, plus comparison with installed Firaxis/WorldBuilder version 11 and 12 files. | Verified |
+| START-09 | Repair can reconstruct missing starts for design review and project persistence, but only existing imported scenario slots may retain them in a Civ5Map export. | Geography-only non-persistence and existing-slot round-trip regressions. | Verified |
+| START-10 | Ordinary generated map export omits synthetic scenario slots and explicitly discloses that Civ V will assign runtime starts. | Geography-only marker, EOF and reparse regression. | Verified |
+| START-11 | Every generated and repaired major/city-state pair remains at least five hexes apart inside Excogitare and downloaded projects. | Pairwise major/minor spacing assertions before project export. | Verified |
+| START-12 | Fresh Create exports use a geography-only version marker. Existing imported scenarios retain their original valid marker and opaque payload. | Raw header and byte-preservation assertions. | Verified |
+| START-13 | Applying any selected Repair profile is transactional: the final corrected terrain, cities and complete start layout are revalidated together, and no major, city-state or city may remain on water, a mountain, a natural wonder, an occupied city tile or another start. | Synthetic conflicting terrain/start repair, Competitive whole-layout repair, binary export/reimport and post-Repair validation regressions. | Verified |
 
 ## Completion gates
 
@@ -33,7 +34,7 @@
 - [x] Interface and interaction
 - [n/a] New rendering/layers — existing start markers are reused.
 - [x] Editing/import/export round trip
-- [x] Repair and validation
+- [x] Repair and validation — final-state replanning and atomic failure covered.
 - [x] Feature-specific verification, type checking, lint, builds and Alpine runtime
 - [x] Full regression suite
 - [x] Documentation and claims
@@ -43,15 +44,18 @@
 
 - Five hexes is a hard global minimum.
 - Duel through Huge city-state recommendations become 2, 4, 6, 8, 10 and 12.
-- Missing starts in imported maps with an existing but slotless scenario section remain a blocking error. Generated and geography-only maps are writable and must not be subjected to that limitation.
+- Missing starts in imported maps with an existing but slotless scenario section remain a blocking fixed-Scenario error. Generated maps retain their designed starts in project state; geography-only imports rely on Civ V runtime placement and are not converted into scenarios.
+- A complete-layout mutation must be planned against the terrain state that will actually be exported, not against a pre-repair snapshot that another selected mutation invalidates.
 
 ## Verification evidence
 
 - Repair fixtures verify missing-start errors, writable-slot reconstruction, zero-slot refusal, overcrowding correction and Competitive whole-layout movement.
 - Engine tests cover Excogitare, Eccentric, Physical and Polis, including sparse geography and stored actual population counts.
-- Export/reimport tests verify generated and reconstructed scenario starts survive the `.Civ5Map` binary round trip.
-- The attached `peninsula-realm-1t4c9pc-18g28ve.Civ5Map` was reproduced as a geography-only 137×137 export with six header players and zero scenario slots; Repair now proposes and round-trips six legal major plus six city-state records.
+- Generated starts survive `.excogitare` project round trips. Ordinary `.Civ5Map` exports intentionally omit them and rely on Civ V's normal runtime placement.
+- The attached `peninsula-realm-1t4c9pc-18g28ve.Civ5Map` is a geography-only 137×137 map with no scenario slots. Repair now identifies that as normal runtime start assignment rather than offering an unsafe scenario conversion.
 - The invalid repaired sample declared scenario/version byte `0x1C`. Installed Firaxis and WorldBuilder files use `0x8C` for version 12 scenario maps (`0x8B` for version 11), while the working geography-only Great Peninsulas source uses `0x0C`. Repair now identifies the malformed marker as a Safe structural correction and the writer derives the marker from the actual presence of scenario data.
+- Applying Competitive start replacement alongside a terrain correction now discards the stale proposal and plans again against the final tile grid. If the requested population cannot be placed legally, the complete transaction leaves the original map unchanged.
+- The supplied failed exports demonstrated that a compact marker-8 section with bounded coordinates is not enough to make a valid Scenario. The generated writer has therefore been removed from ordinary and Repair export paths.
 - `tsc --noEmit`, ESLint, the production Vinext build, the GitHub Pages build/verification and rendered-interface tests pass.
 - The Node 24 Alpine image rebuilt and serves HTTP 200 from the replacement container on port 3001.
-- The complete application regression run passes 76 of 76 tests, including all-engine Colossal placement, generated-scenario export, geography-only headers, and malformed-marker Repair.
+- The former generated-scenario export evidence was invalid because it tested Excogitare's parser against Excogitare's writer. Representative Civ V loads rejected the output; the regression boundary is being replaced with geography-only export and imported-scenario preservation tests.

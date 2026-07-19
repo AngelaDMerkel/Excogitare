@@ -1,3 +1,5 @@
+import type { GenerationConstraintPayload } from "./generation-constraints.ts";
+
 export type GenerationPassDefinition = {
   id: string;
   version: number;
@@ -46,7 +48,7 @@ export type GenerationProgress = {
 };
 
 export type GenerationProgressListener = (stage: string, progress: GenerationProgress) => void;
-export type GenerationControl = { isCancelled?: () => boolean };
+export type GenerationControl = { isCancelled?: () => boolean; constraints?: GenerationConstraintPayload };
 
 export class GenerationCancelledError extends Error {
   constructor() {

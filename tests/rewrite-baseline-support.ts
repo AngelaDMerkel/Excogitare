@@ -29,7 +29,7 @@ export const REWRITE_BASELINE_CASES: BaselineCase[] = [
   { id: "identity-broken-island-chains", class: "IMPROVEMENT", purpose: "Correlated island-arc benchmark expected to improve", options: { engine: "ECCENTRIC", preset: "SHATTERED_ARCHIPELAGO", size: "STANDARD", players: 8, cityStates: 8, seed: "rewrite-benchmark-island-chains", waterPercent: 78, mountainPercent: 16 } },
   { id: "identity-great-watersheds", class: "IMPROVEMENT", purpose: "Hierarchical drainage benchmark expected to improve", options: { engine: "ECCENTRIC", preset: "GREAT_WATERSHEDS", size: "STANDARD", players: 8, cityStates: 8, seed: "rewrite-benchmark-watersheds", waterPercent: 35, mountainPercent: 15, riverDensity: "DENSE" } },
   { id: "identity-glacial-world", class: "IMPROVEMENT", purpose: "Planetary cold and frontier-value benchmark expected to improve", options: { engine: "PHYSICAL", preset: "ICEHOUSE_EARTH", size: "STANDARD", players: 8, cityStates: 8, seed: "rewrite-benchmark-glacial-world", waterPercent: 40, mountainPercent: 15, climate: "COOL", physicalSeasonality: "EXTREME" } },
-  { id: "scenario-round-trip", class: "CHARACTERIZATION", purpose: "Current generated scenario slots, city limitation, ownership, improvements and routes", options: { engine: "EXCOGITARE", preset: "PANGAEA", size: "DUEL", players: 4, cityStates: 4, modifier: "DOOMSDAY", seed: "rewrite-baseline-scenario" }, scenario: true },
+  { id: "scenario-round-trip", class: "CHARACTERIZATION", purpose: "Project-side scenario intent with geography-only Civ5Map export", options: { engine: "EXCOGITARE", preset: "PANGAEA", size: "DUEL", players: 4, cityStates: 4, modifier: "DOOMSDAY", seed: "rewrite-baseline-scenario" }, scenario: true },
 ];
 
 function digest(value: ArrayBuffer | Uint8Array | string) {

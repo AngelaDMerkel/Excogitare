@@ -148,9 +148,9 @@
       },
       "digests": {
         "normalizedRecipe": "025dea1ed6f6935cd5eefa606d5b3dc16f8ccb6cdba687e5adb97633fe6504ad",
-        "civ5Map": "dc5a4bb0412da61bf6117216dcb13b6dfc790029c3635734981daa6a4312938c",
+        "civ5Map": "dba580ebf485ebc3b5c895881c1437137fea78ee039f78ee91c2dcb24b2d49e4",
         "tiles": "397846cd26e7f819ba81bbe9ebedd5ba6e468467f20b2b93e6d42a5a8befc78f",
-        "structure": "5d58a43bff74faded279b725c53ed531b69ef5c6dae301cbaa049a1385491a20"
+        "structure": "71c91ca1a92ce53343095950dd5d39362c620b1cd2bf55c438cb7b3fc9792f69"
       },
       "summary": {
         "width": 40,
@@ -168,10 +168,10 @@
         "cityStateStarts": 2,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 2,
-        "parsedCityStateStarts": 2,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 10,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -218,9 +218,9 @@
       },
       "digests": {
         "normalizedRecipe": "57bfcc048536c57a4142831b6ccb915985221b1c6040ce5c44edbeb28e3386c3",
-        "civ5Map": "d6f39c1870f14d50fd66e609810782a6e2f00ede93c9abe294c745f0a7c6b6a8",
+        "civ5Map": "d4351323df25901e97334639ff7621e30dca4716ef18b7c4cdfe54c51ee31508",
         "tiles": "accb05050a1beae7b8f392840c4536ef0f3c5de7ab177a492a6b61250cb860c4",
-        "structure": "efb12ded8c228506baabfee29ddf6860f0584f511748c2882188a9497865ce8d"
+        "structure": "816c4547e71ae1a96c72283f0ab60a02946183eb0bd543631f698bf3c51dce97"
       },
       "summary": {
         "width": 40,
@@ -238,10 +238,10 @@
         "cityStateStarts": 2,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 2,
-        "parsedCityStateStarts": 2,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 10,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -327,9 +327,9 @@
       },
       "digests": {
         "normalizedRecipe": "89545574269ed07cebeac8805e5fade089af04530482c787d344e428486b2548",
-        "civ5Map": "470400c5a035c4446c68012762b3f339cc08bce797caa2f38a1ff791d7efd734",
+        "civ5Map": "72fb9a13f9e89623f6415469a7b90bbaec34a87dd1d67e8823cdc0cf90fa51d8",
         "tiles": "afc1c7b14a8d447b5921b2713f4dfa34b77d79b41ec47773e994111bb828c7a1",
-        "structure": "ac7538abf20dd206bda9d43b192454f2c48556e8a91d1151aa73a8fcc83298bb"
+        "structure": "ce87d679e8c4b9ae41e878a990de9ae465113d4676fffd119721a3d6311a377f"
       },
       "summary": {
         "width": 40,
@@ -347,10 +347,10 @@
         "cityStateStarts": 2,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 2,
-        "parsedCityStateStarts": 2,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 10,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -435,9 +435,9 @@
       },
       "digests": {
         "normalizedRecipe": "a39e6e53dfe3efcdc50b3362d98f38290478778eea91923f6b8e195dbf00e710",
-        "civ5Map": "3b345f0cf3af6fd3f728e6849edb1d4b7641f6c1d74cab0c171cbdbff46cdd53",
-        "tiles": "d9bfd67b3977a37aa71d46a37b0ac5d46f163b9e0243fb5028452f177c656585",
-        "structure": "6cd1b67139f56fce0f5f5c786288fccc150869dccc242e9c6cdbabd78172ade6"
+        "civ5Map": "79667c1a3ca9dc47fc299755fd3aff09dcce35fcca82109c56539668fae63791",
+        "tiles": "76c06bc9dd14d1ba2fd4eaa730c0c4173928383cff3949b5e40e54c5a348c565",
+        "structure": "215c8c7d6d2d5d54a6590a795a0b41322bb031f9abb21a9df6e0b20ba67c6ade"
       },
       "summary": {
         "width": 40,
@@ -447,7 +447,7 @@
         "waterTiles": 528,
         "mountainTiles": 69,
         "riverTiles": 17,
-        "resourceTiles": 55,
+        "resourceTiles": 56,
         "wonderTiles": 5,
         "improvementTiles": 10,
         "routeTiles": 0,
@@ -455,10 +455,10 @@
         "cityStateStarts": 2,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 2,
-        "parsedCityStateStarts": 2,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 10,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -469,28 +469,39 @@
         },
         "diagnostics": {
           "averageFrontLength": 19,
+          "averageNodeDegree": 1,
+          "averageRouteWidth": 3,
           "averageStartDistance": 18,
           "characterBarrierPressure": 124,
           "characterChokepointDensity": 61,
           "characterRouteWander": 135,
+          "cityStateContestability": 1,
           "cityStates": 2,
+          "cityStatesPerPlayer": 1,
           "contestedRegions": 2,
+          "crossRealmRoutes": 1,
           "fronts": 1,
           "landRoutes": 1,
+          "landTilesPerPlayer": 216,
           "localRiverTiles": 17,
           "majorRiverTiles": 0,
           "majorStarts": 2,
+          "minimumNodeDegree": 1,
           "minimumStartDistance": 18,
           "minorRiverTiles": 0,
           "mountainRanges": 3,
           "narrativeMotifsFailed": 0,
-          "narrativeMotifsMet": 0,
+          "narrativeMotifsMet": 2,
           "narrativeMotifsWeak": 0,
-          "narrativeScore": 0,
+          "narrativeScore": 82,
+          "navalDependence": 0,
           "navalRoutes": 0,
           "protectedTiles": 104,
+          "realmContactPairs": 1,
           "riverBasins": 0,
           "riverSystems": 1,
+          "routeRedundancy": 0,
+          "safeTilesPerPlayer": 35,
           "scaleDrainageHierarchy": 128,
           "scaleLocalDetail": 72,
           "scaleMajorSystemFrequency": 135,
@@ -518,9 +529,9 @@
       },
       "digests": {
         "normalizedRecipe": "138fbe73bd30378bc78b059c09b113b59940a8cbdc6775db35dd0ebf5483ba30",
-        "civ5Map": "1cc01b0f4966e90814a555f8ea4036b9d9a441b53e4271796f1e459bbe0735fc",
+        "civ5Map": "9f41b357409e383760e7238a1c6f6c2157628b6172ef3cddf78106136ffed7a9",
         "tiles": "b79251e8e5a5ccc7f498cae8d982c809615e6529bd33f117229d89b2482a2539",
-        "structure": "2bd24e8dd933363431846d30ec808527e8f1897029590369a9ddbd01054d7db6"
+        "structure": "465812c7ec1accb7e725523ecbaa2e1bfb953f8c28e10ffb24edc3a1d6d1d7e6"
       },
       "summary": {
         "width": 80,
@@ -538,10 +549,10 @@
         "cityStateStarts": 0,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 8,
+        "parsedMajorStarts": 0,
         "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 32,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -627,9 +638,9 @@
       },
       "digests": {
         "normalizedRecipe": "2884b53267262dcca59ea8bc93dddd4717c8d36b2bf9821bacbf41bd1f619c70",
-        "civ5Map": "9645037dc62662957ace797ea6981791988deb7296404a2430ef6d1ccb7cb302",
+        "civ5Map": "ae2f7acdb09ea209cb4683695d7f37745629a06b3dc76c8bb5d05555592c16f4",
         "tiles": "069dd653c7a970b52ce4f666de45c433892c71df8004d4f01ab93705837d5b1d",
-        "structure": "cda808808612b1a8b986172f5f362559d720fb4079defb4073f4c218594a7851"
+        "structure": "424aefeceae9211d9258f20dcd0aa92a9a66e968709d12a1c447696812a10c14"
       },
       "summary": {
         "width": 80,
@@ -647,10 +658,10 @@
         "cityStateStarts": 8,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 8,
-        "parsedCityStateStarts": 8,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 42,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -738,9 +749,9 @@
       },
       "digests": {
         "normalizedRecipe": "65caec09330e633b18f921add42740d9ac9b5c832ec48239eb2b510a1a7ba074",
-        "civ5Map": "8bcf2f8f5b3b1fd5886de2749e5fff569b4f451ce691fa68c5ecb26eb66048ee",
+        "civ5Map": "46db81ee92c3bcdcdad6b8402eb88f251192e167f64aeb0d72536b4ee8bc6d88",
         "tiles": "537e37656f3d5d3bd47f7571386e4504c376544ea1ce34751081714ff2f03b42",
-        "structure": "a1576f7e8b8985118346c29dccb1b3ffb9757f55b3f449e51afc9a483b6f1edc"
+        "structure": "be2cdefe03f1b1081463dc528115d12b17ecfcdb3e11596893b97b2f99a686fc"
       },
       "summary": {
         "width": 80,
@@ -758,10 +769,10 @@
         "cityStateStarts": 8,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 8,
-        "parsedCityStateStarts": 8,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 42,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -851,9 +862,9 @@
       },
       "digests": {
         "normalizedRecipe": "a31eea212b5aa6d71906e168c542f62b5785c4e4055889133d97a8aaa54d2e35",
-        "civ5Map": "7bf8ffd539303f8a8370f918a72f8ee1e9d0ce538c0521eb33c391c2ad304dbe",
+        "civ5Map": "4c0e8cef1dbaf8e6f99e6874e86133523a8bee329a4d773303b8e72414cd7058",
         "tiles": "b3a11fd94de280e854179a99083ffee9219f787a0f547e695ba204f8b80eeb96",
-        "structure": "626294200b8cc6ee3dd5918bc49e39204f95c2314bde11800cf708046ee06e6a"
+        "structure": "b7a0967d8ed41db15e9b139097871f3ee11afbaf57101c54c8c8de10621d0114"
       },
       "summary": {
         "width": 80,
@@ -871,10 +882,10 @@
         "cityStateStarts": 8,
         "citiesBeforeRoundTrip": 0,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 8,
-        "parsedCityStateStarts": 8,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
         "parsedOwnedTiles": 0,
-        "parsedImprovementTiles": 42,
+        "parsedImprovementTiles": 0,
         "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
@@ -948,7 +959,7 @@
     {
       "id": "scenario-round-trip",
       "class": "CHARACTERIZATION",
-      "purpose": "Current generated scenario slots, city limitation, ownership, improvements and routes",
+      "purpose": "Project-side scenario intent with geography-only Civ5Map export",
       "options": {
         "engine": "EXCOGITARE",
         "preset": "PANGAEA",
@@ -960,9 +971,9 @@
       },
       "digests": {
         "normalizedRecipe": "8c0d6b7b18c2c87001c0e1ce77949b00e58dbf7754a9cb00dd6521df7b00f576",
-        "civ5Map": "509e4a74bf5b0991ba0d7cc798f51bc56928f8389668aff51b370369f8a8c6f2",
+        "civ5Map": "0624ac1ad23827ca2429c96d37921b35a87b4efc33bd42ab184d0556990f33f4",
         "tiles": "e3e26751718bb1dc3b4d6fe7523156b5f34125752f4e381b282c3b9afa13f3e1",
-        "structure": "d260ae7babb02f85bfe679c213e0f632b04b2b7a7143e50525a60038ad3e078b"
+        "structure": "54f5c52cbdaddb855435560a0f87891e48cd45e5f51c50ec81363e78010efb9e"
       },
       "summary": {
         "width": 40,
@@ -980,11 +991,11 @@
         "cityStateStarts": 4,
         "citiesBeforeRoundTrip": 1,
         "citiesAfterRoundTrip": 0,
-        "parsedMajorStarts": 4,
-        "parsedCityStateStarts": 4,
-        "parsedOwnedTiles": 1,
-        "parsedImprovementTiles": 12,
-        "parsedRouteTiles": 16,
+        "parsedMajorStarts": 0,
+        "parsedCityStateStarts": 0,
+        "parsedOwnedTiles": 0,
+        "parsedImprovementTiles": 0,
+        "parsedRouteTiles": 0,
         "validationErrors": 0,
         "validationWarnings": 1,
         "objectsByKind": {

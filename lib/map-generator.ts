@@ -13,6 +13,8 @@ import { generationOptionsFromRecipe, generationRecipeFromOptions, type Generati
 import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
 import { GENERATION_PASS_DEFINITIONS, GenerationPassSession, effortCandidateCount, generationPassEvidence, type GenerationControl, type GenerationProgressListener } from "./generation-pass-graph.ts";
 import { applyNarrativeContent, attachNarrativeAssessment, compileNarrativeSkeleton, narrativeCandidateScore, narrativeProfile, realizeNarrativeGeography } from "./narrative-map-types.ts";
+import { attachMatchIntentAssessment } from "./match-intent.ts";
+import { applyConstrainedLandBudget, applyConstrainedRelief, applyConstrainedSurface, constraintMatchesDimensions, nativeConstraintDiagnostics, type GenerationConstraintPayload } from "./generation-constraints.ts";
 
 export const MAP_SIZES = [
   { id: "DUEL", label: "Duel", width: 40, height: 24, recommendedPlayers: 2, recommendedCityStates: 2, gameBreaking: false },
@@ -61,7 +63,10 @@ export type MapPresetId =
   | "IMPERIAL_RING"
   | "OPPOSING_FRONTS"
   | "CONTESTED_HEARTLAND"
-  | "RIVAL_CONTINENTS";
+  | "RIVAL_CONTINENTS"
+  | "THREE_REALMS"
+  | "THALASSIC_LEAGUE"
+  | "UNEQUAL_REALMS";
 export type MultiplayerBalance = "STANDARD" | "TOURNAMENT" | "TEAMS";
 export type TeamLayout = "CLUSTERED" | "FRONTLINES" | "DISTRIBUTED";
 export type ClimateSetting = "COOL" | "TEMPERATE" | "HOT";
@@ -195,12 +200,17 @@ export const MAP_PRESETS: ReadonlyArray<{ id: MapPresetId; label: string; descri
   { id: "OPPOSING_FRONTS", label: "Opposing Fronts", description: "Players or teams occupy defended sides of the world, separated by several readable invasion corridors.", water: 28, mountains: 20, engine: "POLIS", climateRealism: false },
   { id: "CONTESTED_HEARTLAND", label: "Contested Heartland", description: "Safe starting territories open toward a valuable central crossroads with multiple flanking routes.", water: 22, mountains: 18, engine: "POLIS", climateRealism: false },
   { id: "RIVAL_CONTINENTS", label: "Rival Continents", description: "Balanced continental blocs face one another across naval lanes, islands, and a small number of strategic crossings.", water: 54, mountains: 14, engine: "POLIS", climateRealism: false },
+  { id: "THREE_REALMS", label: "Three Realms", description: "Three strategic realms each border both rivals and compete through shared theatres shaped by the intended victories.", water: 32, mountains: 16, engine: "POLIS", climateRealism: false },
+  { id: "THALASSIC_LEAGUE", label: "Thalassic League", description: "Coastal powers contest a redundant network of ports, sea lanes, islands, and diplomatically valuable city states.", water: 62, mountains: 12, engine: "POLIS", climateRealism: false },
+  { id: "UNEQUAL_REALMS", label: "Unequal Realms", description: "Deliberately asymmetric Tall, Wide, War, and Turtle territories create different but viable strategic obligations.", water: 34, mountains: 17, engine: "POLIS", climateRealism: false },
 ];
 
 export function polisPatternForPreset(preset: MapPresetId): PolisConflictPattern {
   if (preset === "OPPOSING_FRONTS") return "OPPOSING_FRONTS";
   if (preset === "CONTESTED_HEARTLAND") return "CROSSROADS";
   if (preset === "RIVAL_CONTINENTS") return "RIVAL_CONTINENTS";
+  if (preset === "THREE_REALMS" || preset === "UNEQUAL_REALMS") return "CROSSROADS";
+  if (preset === "THALASSIC_LEAGUE") return "RIVAL_CONTINENTS";
   return "RADIAL";
 }
 
@@ -353,7 +363,7 @@ function randomItem<T>(items: readonly T[], random: () => number) {
 
 export function randomGenerationOptions(random: () => number = Math.random, includeGameBreakingOptions = false): MapGenerationOptions {
   const style = randomItem(["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"] as const, random);
-  const presetConfig = randomItem(MAP_PRESETS, random);
+  const presetConfig = randomItem(MAP_PRESETS.filter((preset) => preset.id !== "UNEQUAL_REALMS"), random);
   const preset = presetConfig.id;
   const sizeConfig = randomItem(MAP_SIZES.filter((size) => includeGameBreakingOptions || !size.gameBreaking), random);
   const size = sizeConfig.id;
@@ -367,7 +377,10 @@ export function randomGenerationOptions(random: () => number = Math.random, incl
   const dominantTerrains = DOMINANT_TERRAINS.filter(() => random() < 0.36).map((terrain) => terrain.id);
   const seedPart = () => Math.floor(random() * 0x100000000).toString(36).padStart(7, "0");
   const playerMaximum = Math.min(22, sizeConfig.recommendedPlayers + 2);
-  const players = 2 + Math.floor(random() * Math.max(1, playerMaximum - 1));
+  let players = 2 + Math.floor(random() * Math.max(1, playerMaximum - 1));
+  if (preset === "THREE_REALMS") players = Math.max(3, players - players % 3);
+  if (preset === "THALASSIC_LEAGUE") players = Math.max(3, players);
+  if ((preset === "OPPOSING_FRONTS" || preset === "RIVAL_CONTINENTS") && players % 2) players = Math.max(2, players - 1);
   const cityStates = Math.floor(random() * (sizeConfig.recommendedCityStates + 1));
   return {
     ...DEFAULT_GENERATION_OPTIONS,
@@ -442,6 +455,16 @@ export function randomGenerationRecipe(random: () => number = Math.random, inclu
   recipe.scale = randomItem(["GLOBAL", "CONTINENTAL", "REGIONAL", "PROVINCIAL", "LOCAL"] as const, random);
   recipe.archetype = randomCompatibleArchetype(options, random);
   recipe.archetypeIntensity = randomItem(["HINT", "STRONG"] as const, random);
+  const humans = Math.floor(random() * (options.players + 1));
+  const ai = Math.floor(random() * (options.players - humans + 1));
+  recipe.matchIntent.humanPlayers = humans;
+  recipe.matchIntent.aiPlayers = ai;
+  recipe.matchIntent.flexiblePlayers = options.players - humans - ai;
+  recipe.matchIntent.aiAccommodation = randomItem(["NORMAL", "STRONG"] as const, random);
+  recipe.matchIntent.teamIntent = options.balance === "TEAMS" ? "FIXED_TEAMS" : "FLEXIBLE";
+  recipe.matchIntent.competitiveStrictness = options.balance === "TOURNAMENT" ? "TOURNAMENT" : randomItem(["CASUAL", "BALANCED"] as const, random);
+  const victories = [...recipe.matchIntent.enabledVictories].sort(() => random() - 0.5);
+  recipe.matchIntent.emphasizedVictories = victories.slice(0, Math.floor(random() * 3));
   return recipe;
 }
 
@@ -1124,6 +1147,7 @@ function placeStartLocations(
   teamSize: 2 | 3 | 4,
   teamLayout: TeamLayout,
   random: () => number,
+  blockedTileIndices: ReadonlySet<number> = new Set<number>(),
 ) {
   type StartCandidate = { point: [number, number]; quality: number; workable: number; regionSize: number; rank: number };
   const candidates: StartCandidate[] = [];
@@ -1134,7 +1158,7 @@ function placeStartLocations(
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
       const tile = tiles[index];
-      if (tile.terrain < 2 || tile.elevation === 2) continue;
+      if (tile.terrain < 2 || tile.elevation === 2 || tile.wonder !== 255 || blockedTileIndices.has(index)) continue;
       const adjacent = neighbors(x, y, width, height, wraps);
       const workable = adjacent.filter(([nx, ny]) => {
         const neighbor = tiles[ny * width + nx];
@@ -1262,6 +1286,7 @@ function placeCityStateLocations(
   minimumSpacing: number,
   distribution: "EVEN" | "REGIONAL",
   coastalPreference: CoastalPreference,
+  blockedTileIndices: ReadonlySet<number> = new Set<number>(),
 ) {
   if (count <= 0) return [];
   const occupied = new Set(majorStarts.map((start) => `${start.x},${start.y}`));
@@ -1273,7 +1298,7 @@ function placeCityStateLocations(
       if (occupied.has(`${x},${y}`)) continue;
       const index = y * width + x;
       const tile = tiles[index];
-      if (tile.terrain < 2 || tile.elevation === 2) continue;
+      if (tile.terrain < 2 || tile.elevation === 2 || tile.wonder !== 255 || blockedTileIndices.has(index)) continue;
       if (regionSizes[index] < minimumRegionSize) continue;
       const coastal = neighbors(x, y, width, height, wraps).some(([nx, ny]) => tiles[ny * width + nx].terrain < 2);
       if (coastalPreference === "REQUIRE" && !coastal) continue;
@@ -1624,11 +1649,12 @@ export function balanceMapStarts(map: Civ5Map, options: MapGenerationOptions) {
   const random = randomFactory(seedHash(`${resolved.seed}:starts:${map.width}x${map.height}`));
   const playerCount = Math.max(2, Math.min(22, Math.round(resolved.players)));
   const cityStateCount = Math.max(0, Math.min(41, Math.round(resolved.cityStates)));
-  const majorStarts = placeStartLocations(tiles, map.width, map.height, playerCount, map.wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random);
+  const blockedTileIndices = new Set((map.cities ?? []).flatMap((city) => city.x >= 0 && city.y >= 0 && city.x < map.width && city.y < map.height ? [city.y * map.width + city.x] : []));
+  const majorStarts = placeStartLocations(tiles, map.width, map.height, playerCount, map.wraps, resolved.balance, resolved.teamSize, resolved.teamLayout, random, blockedTileIndices);
   if (resolved.startQuality !== "STANDARD" || resolved.strategicBalance || resolved.balance === "TOURNAMENT") {
     normalizeStarts(tiles, majorStarts, map.width, map.height, map.wraps, resolved.startQuality, resolved.balance === "TOURNAMENT");
   }
-  const cityStates = placeCityStateLocations(tiles, map.width, map.height, cityStateCount, majorStarts.length, map.wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference);
+  const cityStates = placeCityStateLocations(tiles, map.width, map.height, cityStateCount, majorStarts.length, map.wraps, majorStarts, random, resolved.cityStateMinSpacing, resolved.cityStateDistribution, resolved.cityStateCoastalPreference, blockedTileIndices);
   const startLocations = [...majorStarts, ...cityStates];
   return { ...map, tiles, players: majorStarts.length, startLocations, generation: { ...resolved, players: majorStarts.length, cityStates: cityStates.length, dominantTerrains: [...resolved.dominantTerrains] }, recipe: generationRecipeFromOptions({ ...resolved, players: majorStarts.length, cityStates: cityStates.length }), structure: markGenerationStructureStale(map.structure, "Start locations were rebalanced.", ["STARTS"]) };
 }
@@ -1672,7 +1698,7 @@ export function regenerateMapContent(map: Civ5Map, options: MapGenerationOptions
   return enforceGeneratedPlacementLegality(draft);
 }
 
-function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage: string) => void, scale: WorldScale = "GLOBAL", sourceRecipe?: GenerationRecipe): Civ5Map {
+function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage: string) => void, scale: WorldScale = "GLOBAL", sourceRecipe?: GenerationRecipe, constraints?: GenerationConstraintPayload): Civ5Map {
   const requestedEngine = String(options.engine);
   const resolved: MapGenerationOptions = { ...DEFAULT_GENERATION_OPTIONS, ...options, engine: requestedEngine === "FIELD" ? "EXCOGITARE" : requestedEngine === "REGION_GRAPH" ? "ECCENTRIC" : options.engine };
   if (resolved.modifier === "FANTASTICAL") resolved.style = "FANTASTICAL";
@@ -1690,6 +1716,17 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     ? { ...sourceRecipe, settings: { ...sourceRecipe.settings, seed: resolved.seed } }
     : { ...generationRecipeFromOptions(resolved), scale };
   const narrativeSkeleton = compileNarrativeSkeleton(resolved, narrativeRecipe, width, height, wraps);
+  const nativeConstraints = constraintMatchesDimensions(constraints, width, height) ? constraints : undefined;
+  const targetLandCount = width * height - Math.round(width * height * clamp(resolved.waterPercent / 100, 0, 0.9));
+  const reinforceNativeConstraints = <T extends { landMask: boolean[]; reliefValues: number[]; elevations: number[]; tiles: Civ5Tile[]; moistures: number[]; riverGuidance?: number[]; structure: GenerationStructure }>(geography: T) => {
+    if (!nativeConstraints) return geography;
+    applyConstrainedLandBudget(geography.landMask, targetLandCount, geography.reliefValues, nativeConstraints);
+    applyConstrainedRelief(geography.reliefValues, geography.elevations, geography.landMask, nativeConstraints);
+    applyConstrainedSurface(geography.tiles, geography.landMask, geography.elevations, nativeConstraints);
+    if (geography.riverGuidance) for (let index = 0; index < geography.riverGuidance.length; index += 1) if (nativeConstraints.hydrologyMask[index]) geography.riverGuidance[index] = Math.max(geography.riverGuidance[index], nativeConstraints.rivers[index] ? 1 : 0.58);
+    geography.structure = { ...geography.structure, diagnostics: { ...geography.structure.diagnostics, ...nativeConstraintDiagnostics(nativeConstraints) } };
+    return geography;
+  };
   const finishStructuredGeography = (geography: {
     landMask: boolean[];
     reliefValues: number[];
@@ -1738,7 +1775,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     applyNarrativeContent(tiles, [...RESOURCES], narrativeSkeleton, width, height);
     if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
     onProgress?.("Resolving drainage and rivers");
-    const scaleRiverGuidance = geography.riverGuidance?.map((value) => clamp(value * scaleProfile.drainageHierarchy));
+    const scaleRiverGuidance = geography.riverGuidance?.map((value, index) => nativeConstraints?.hydrologyMask[index] ? Math.max(value, nativeConstraints.rivers[index] ? 1 : 0.58) : clamp(value * scaleProfile.drainageHierarchy));
     const riverNetwork = generateRiverNetwork(tiles, geography.reliefValues, geography.moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity, scaleRiverGuidance);
     for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
     const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
@@ -1774,17 +1811,17 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   };
   if (resolved.engine === "ECCENTRIC") {
     onProgress?.("Compiling dense subregions and world grammars");
-    const geography = realizeNarrativeGeography(generateEccentricGeography(resolved, width, height, wraps, seed, random, scale), narrativeSkeleton, resolved, width, height, wraps, seed);
+    const geography = reinforceNativeConstraints(realizeNarrativeGeography(generateEccentricGeography(resolved, width, height, wraps, seed, random, scale, nativeConstraints), narrativeSkeleton, resolved, width, height, wraps, seed));
     return finishStructuredGeography(geography, `A seeded ${resolved.fantasticality.toLowerCase()} ${MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label.toLowerCase() ?? "eccentric"} map compiled by the Eccentric engine in ${geography.diagnostics.passes} geographic passes from ${geography.diagnostics.subregions} subregions, ${geography.diagnostics.polygons} polygons, ${geography.diagnostics.climatePalettes} biome palettes, ${geography.diagnostics.astronomyBasins} astronomy basins, and ${geography.diagnostics.continents} continents`);
   }
   if (resolved.engine === "PHYSICAL") {
     onProgress?.("Simulating plates, circulation, climate, and watersheds");
-    const geography = realizeNarrativeGeography(generatePhysicalGeography(resolved, width, height, wraps, seed, random, scale), narrativeSkeleton, resolved, width, height, wraps, seed);
+    const geography = reinforceNativeConstraints(realizeNarrativeGeography(generatePhysicalGeography(resolved, width, height, wraps, seed, random, scale, nativeConstraints), narrativeSkeleton, resolved, width, height, wraps, seed));
     return finishStructuredGeography(geography, `A seeded ${resolved.style.toLowerCase()} Physical world compiled in ${geography.structure.diagnostics.passes} passes from ${geography.structure.diagnostics.plates} moving plates, ${geography.structure.diagnostics.continents} continents, ${geography.structure.diagnostics.atmosphericCells} atmospheric cells, ${geography.structure.diagnostics.rainShadows} rain shadows, and ${geography.structure.diagnostics.watersheds} outlet-directed watersheds`);
   }
   if (resolved.engine === "POLIS") {
     onProgress?.("Compiling strategic graph and protected routes");
-    const geography = realizeNarrativeGeography(generatePolisGeography(resolved, width, height, wraps, seed, random, scale), narrativeSkeleton, resolved, width, height, wraps, seed);
+    const geography = reinforceNativeConstraints(realizeNarrativeGeography(generatePolisGeography(resolved, width, height, wraps, seed, random, scale, narrativeRecipe.matchIntent, nativeConstraints), narrativeSkeleton, resolved, width, height, wraps, seed));
     return finishStructuredGeography(geography, `A seeded gameplay-first world compiled by Polis from ${geography.diagnostics.strategicRegions} strategic regions, ${geography.diagnostics.fronts} fronts, ${geography.diagnostics.contestedRegions} contested objectives, and protected routes between every major start`);
   }
   const centerConfig: Record<MapPresetId, [number, [number, number]]> = {
@@ -1818,6 +1855,9 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     OPPOSING_FRONTS: [6, [0.1, 0.22]],
     CONTESTED_HEARTLAND: [7, [0.09, 0.2]],
     RIVAL_CONTINENTS: [4, [0.18, 0.32]],
+    THREE_REALMS: [3, [0.2, 0.3]],
+    THALASSIC_LEAGUE: [8, [0.08, 0.16]],
+    UNEQUAL_REALMS: [4, [0.18, 0.32]],
   };
   const [baseCenterCount, baseCenterRadius] = centerConfig[resolved.preset];
   const centerCount = Math.max(1, Math.round(baseCenterCount * scaleProfile.excogitare.centerFrequency));
@@ -1861,10 +1901,19 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     onProgress?.("Refining terrain fields");
     fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, character.excogitare.landRefinementPasses, 0.2, 0.07);
   }
+  if (nativeConstraints) {
+    const minimumField = Math.min(...fieldValues);
+    const maximumField = Math.max(...fieldValues);
+    for (let index = 0; index < fieldValues.length; index += 1) {
+      if (nativeConstraints.topology[index] === 1) fieldValues[index] = maximumField + 1;
+      else if (nativeConstraints.topology[index] === 0) fieldValues[index] = minimumField - 1;
+    }
+  }
   const waterPercent = clamp(resolved.waterPercent, 0, 90);
   const landThreshold = waterPercent === 0 ? Number.NEGATIVE_INFINITY : quantile(fieldValues, waterPercent / 100);
   const reliefBaseline = Number.isFinite(landThreshold) ? landThreshold : quantile(fieldValues, 0.15);
   for (let index = 0; index < landMask.length; index += 1) landMask[index] = waterPercent === 0 || fieldValues[index] > landThreshold;
+  applyConstrainedLandBudget(landMask, targetLandCount, fieldValues, nativeConstraints);
 
   let tiles: Civ5Tile[] = [];
   let reliefValues = new Array<number>(width * height);
@@ -1911,6 +1960,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const rainShift = resolved.rainfall === "WET" ? -0.1 : resolved.rainfall === "ARID" ? 0.12 : 0;
   const tempShift = resolved.climate === "HOT" ? 0.16 : resolved.climate === "COOL" ? -0.16 : 0;
   let elevations = landMask.map((land, index) => land ? (reliefValues[index] >= mountainThreshold ? 2 : reliefValues[index] >= hillThreshold ? 1 : 0) : 0);
+  applyConstrainedRelief(reliefValues, elevations, landMask, nativeConstraints);
   carveAccessiblePasses(landMask, elevations, width, height, wraps);
   restoreAccessibleMountainTarget(landMask, elevations, reliefValues, effectiveMountainPercent, width, height, wraps);
   const dominantTerrains = Array.isArray(resolved.dominantTerrains) ? resolved.dominantTerrains : [];
@@ -2002,6 +2052,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
       diagnostics: { continents: initialContinents.length, oceanBasins: initialBasins.length },
     },
   }, narrativeSkeleton, resolved, width, height, wraps, seed);
+  reinforceNativeConstraints(narrativeGeography);
   landMask = narrativeGeography.landMask;
   reliefValues = narrativeGeography.reliefValues;
   temperatures = narrativeGeography.temperatures ?? temperatures;
@@ -2029,7 +2080,8 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   applyNarrativeContent(tiles, [...RESOURCES], narrativeSkeleton, width, height);
   if (resolved.modifier === "DOOMSDAY") applyDoomsdayTheme(tiles, startLocations, width, height, wraps, random);
   onProgress?.("Resolving drainage and rivers");
-  const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random);
+  const nativeRiverGuidance = nativeConstraints ? Array.from(nativeConstraints.hydrologyMask, (value, index) => value ? nativeConstraints.rivers[index] ? 1 : 0.58 : 0) : undefined;
+  const riverNetwork = generateRiverNetwork(tiles, reliefValues, moistures, width, height, wraps, resolved.style, resolved.rainfall, random, undefined, resolved.riverDensity, nativeRiverGuidance);
   for (let index = 0; index < tiles.length; index += 1) tiles[index].river = riverNetwork[index];
   const presetName = MAP_PRESETS.find((preset) => preset.id === resolved.preset)?.label ?? "Generated World";
   const modifierName = WORLD_MODIFIERS.find((modifier) => modifier.id === resolved.modifier)?.label;
@@ -2043,7 +2095,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     objects: narrativeStructure.objects,
     mountainRanges,
     riverSystems: [],
-    diagnostics: { ...narrativeStructure.diagnostics, continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length, scaleOrdinal: scaleProfile.ordinal, scaleMajorSystemFrequency: Math.round(scaleProfile.majorSystemFrequency * 100), scaleLocalDetail: Math.round(scaleProfile.localDetail * 100), scaleDrainageHierarchy: Math.round(scaleProfile.drainageHierarchy * 100), scaleExcogitareCenters: centerCount, scaleExcogitarePlateFields: plateCenters.length },
+    diagnostics: { ...narrativeStructure.diagnostics, continents: continents.length, oceanBasins: basins.length, mountainRanges: mountainRanges.length, scaleOrdinal: scaleProfile.ordinal, scaleMajorSystemFrequency: Math.round(scaleProfile.majorSystemFrequency * 100), scaleLocalDetail: Math.round(scaleProfile.localDetail * 100), scaleDrainageHierarchy: Math.round(scaleProfile.drainageHierarchy * 100), scaleExcogitareCenters: centerCount, scaleExcogitarePlateFields: plateCenters.length, ...nativeConstraintDiagnostics(nativeConstraints) },
   };
   const legal = enforceGeneratedPlacementLegality({
     name: `${presetName} — ${resolved.seed}`,
@@ -2080,7 +2132,17 @@ function passForStage(stage: string) {
 }
 
 function generateMapWithRecipe(recipe: GenerationRecipe, onProgress?: GenerationProgressListener, control?: GenerationControl) {
-  const options = generationOptionsFromRecipe(recipe);
+  const baseOptions = generationOptionsFromRecipe(recipe);
+  const emphasized = new Set(recipe.matchIntent.emphasizedVictories);
+  const options: MapGenerationOptions = recipe.engine === "POLIS" ? baseOptions : {
+    ...baseOptions,
+    balance: recipe.matchIntent.teamIntent === "FIXED_TEAMS" ? "TEAMS" : baseOptions.balance,
+    teamLayout: emphasized.has("DOMINATION") && recipe.matchIntent.teamIntent === "FIXED_TEAMS" ? "FRONTLINES" : baseOptions.teamLayout,
+    startQuality: recipe.matchIntent.aiAccommodation === "STRONG" && baseOptions.startQuality === "STANDARD" ? "BALANCED" : baseOptions.startQuality,
+    strategicStartGuarantee: emphasized.has("SCIENCE") || recipe.matchIntent.aiAccommodation === "STRONG" ? true : baseOptions.strategicStartGuarantee,
+    luxuryStartGuarantee: emphasized.has("CULTURE") ? true : baseOptions.luxuryStartGuarantee,
+    cityStateDistribution: emphasized.has("DIPLOMACY") ? "EVEN" : baseOptions.cityStateDistribution,
+  };
   const session = new GenerationPassSession([...GENERATION_PASS_DEFINITIONS], options.seed, recipe, recipe.effort, onProgress, control);
   session.complete("NORMALIZE");
   session.progress("TOPOLOGY", "Preparing generation engine");
@@ -2113,21 +2175,26 @@ function generateMapWithRecipe(recipe: GenerationRecipe, onProgress?: Generation
       ensurePassDependencies(passId);
       if (completed().has(passId)) return;
       session.progress(passId, stage);
-    }, recipe.scale, recipe);
+    }, recipe.scale, recipe, control?.constraints);
   } else {
     let selected: { map: Civ5Map; score: number; candidate: number } | undefined;
     for (let candidate = 1; candidate <= session.candidateCount; candidate += 1) {
       session.progress("TOPOLOGY", `Building deterministic candidate ${candidate} of ${session.candidateCount}`, candidate);
-      const candidateMap = generateMapInternal({ ...options, seed: `${options.seed}:candidate-${candidate}` }, undefined, recipe.scale, recipe);
+      const candidateMap = generateMapInternal({ ...options, seed: `${options.seed}:candidate-${candidate}` }, undefined, recipe.scale, recipe, control?.constraints);
       session.checkCancelled();
       const starts = candidateMap.startLocations.filter((start) => !start.cityState).length;
       const water = candidateMap.tiles.filter((tile) => tile.terrain < 2).length / Math.max(1, candidateMap.tiles.length) * 100;
       const passable = candidateMap.tiles.filter((tile) => tile.terrain >= 2 && tile.elevation < 2).length;
-      const candidateAssessment = attachNarrativeAssessment(candidateMap, { ...recipe, settings: { ...recipe.settings, seed: `${options.seed}:candidate-${candidate}` } }).structure?.narrativeAssessment;
+      const candidateRecipe = { ...recipe, settings: { ...recipe.settings, seed: `${options.seed}:candidate-${candidate}` } };
+      const assessedCandidate = attachMatchIntentAssessment(attachNarrativeAssessment(candidateMap, candidateRecipe), candidateRecipe);
+      const candidateAssessment = assessedCandidate.structure?.narrativeAssessment;
+      const relevantVictories = assessedCandidate.structure?.matchAssessment?.victories.filter((finding) => finding.state === "EMPHASIZED") ?? [];
+      const matchScore = relevantVictories.length ? relevantVictories.reduce((sum, finding) => sum + finding.score, 0) / relevantVictories.length : 0;
       const score = (starts === Math.max(2, Math.min(22, options.players)) ? 10000 : starts * 100)
         - Math.abs(water - options.waterPercent) * 5
         + passable / Math.max(1, candidateMap.tiles.length) * 100
-        + (candidateAssessment ? narrativeCandidateScore(candidateAssessment) * 2 : 0);
+        + (candidateAssessment ? narrativeCandidateScore(candidateAssessment) * 2 : 0)
+        + matchScore;
       if (!selected || score > selected.score || (score === selected.score && candidate < selected.candidate)) selected = { map: candidateMap, score, candidate };
     }
     if (!selected) throw new Error("Generation did not produce a candidate map.");
@@ -2136,7 +2203,7 @@ function generateMapWithRecipe(recipe: GenerationRecipe, onProgress?: Generation
     session.complete("TOPOLOGY", [`Selected deterministic candidate ${selectedCandidate} of ${session.candidateCount}.`], selectedCandidate);
   }
   const surfaced = applyWorldArchetype(generated, recipe.archetype, recipe.archetypeIntensity);
-  const map = attachNarrativeAssessment(enforceGeneratedPlacementLegality(recipe.archetypeIntensity === "TRANSFORMATIVE" ? applyArchetypeContentEcology(surfaced, recipe.archetype) : surfaced), recipe);
+  const map = attachMatchIntentAssessment(attachNarrativeAssessment(enforceGeneratedPlacementLegality(recipe.archetypeIntensity === "TRANSFORMATIVE" ? applyArchetypeContentEcology(surfaced, recipe.archetype) : surfaced), recipe), recipe);
   if (!completed().has("TOPOLOGY")) session.complete("TOPOLOGY", [], selectedCandidate);
   for (const passId of ["RELIEF", "CLIMATE", "ACCESSIBILITY", "STARTS", "CONTENT", "HYDROLOGY"] as const) {
     if (!completed().has(passId)) {

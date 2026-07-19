@@ -1,0 +1,17 @@
+{
+  "sourceFormat": "EXCOGITARE_PROJECT",
+  "sourceSchemaVersion": 1,
+  "expectedProjectSchemaVersion": 1,
+  "expectedHistoryPolicy": "FULL",
+  "expectedHistoryEntries": 2,
+  "expectedCheckpoints": 1,
+  "preserveFields": [
+    "map",
+    "recipe",
+    "protection",
+    "scenario",
+    "history",
+    "editorState",
+    "derived"
+  ]
+}

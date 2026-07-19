@@ -31,6 +31,7 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.match(html, /Show map legend/);
   assert.match(html, />Explore</);
   assert.match(html, />Create</);
+  assert.match(html, />Scenario</);
   assert.match(html, />Repair</);
   assert.match(html, />Lab</);
   assert.match(html, />Lua</);
@@ -38,6 +39,26 @@ test("server-renders the Civ5 map viewer shell", async () => {
   assert.doesNotMatch(html, /Files stay on this device/);
   assert.match(html, /Open map/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/i);
+});
+
+test("Scenario exposes five authored stages, compatibility labels and explicit export disclosure", async () => {
+  const [viewer, workspace, model, feature] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/scenario-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/scenario-authoring.ts", import.meta.url), "utf8"),
+    readFile(new URL("../docs/features/scenario-workspace.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(viewer, /"VIEW", "CREATE", "SCENARIO", "REPAIR", "LAB", "SCRIPT"/);
+  assert.match(viewer, /showScenarioExportConfirmation/);
+  assert.match(viewer, /Retained only in the Excogitare project/);
+  assert.match(viewer, /sendScenarioToRepair/);
+  assert.match(workspace, /"SETUP" \| "FACTIONS" \| "WORLD" \| "OBJECTIVES" \| "VALIDATE"/);
+  assert.match(workspace, /ScenarioStageTabs/);
+  assert.match(workspace, /CapabilityBadge/);
+  assert.match(workspace, /Map-linked layer brush/);
+  assert.match(model, /MINIMUM_START_DISTANCE/);
+  assert.match(model, /fixed player records/);
+  assert.match(feature, /Setup → Factions → World → Objectives → Validate/);
 });
 
 test("social artwork is a high-resolution render of a generated Excogitare map", async () => {
@@ -129,6 +150,44 @@ test("phone-sized screens reduce the application to generation, map, and downloa
   assert.match(css, /\.mobile-map-actions \{[\s\S]{0,500}display: grid;/);
 });
 
+test("durable projects expose a transactional ZIP lifecycle without claiming browser persistence", async () => {
+  const [source, css, projectModel, schema, readme, feature] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/excogitare-project.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/authoring-schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/features/excogitare-project-files.md", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /className={`project-status\$\{projectDirty \? " is-unsaved" : projectLastSavedAt \? " is-downloaded" : ""\}`}/);
+  assert.match(source, />New project<\/button>/);
+  assert.match(source, />Save project<\/button>/);
+  assert.match(source, />Open project<\/button>/);
+  assert.match(source, /window\.addEventListener\("beforeunload", warnIfUnsaved\)/);
+  assert.match(source, /await file\.arrayBuffer\(\)/);
+  const transactionalParse = source.indexOf("parseExcogitareProject(await file.arrayBuffer())");
+  const transactionalInstall = source.indexOf("replaceMap(restoredMap)", transactionalParse);
+  assert.ok(transactionalParse >= 0 && transactionalInstall > transactionalParse);
+  assert.match(source, /name="project-history-policy"/);
+  assert.match(source, /projectHistoryPolicy === "FULL"/);
+  assert.match(source, /projectHistoryPolicy === "CURRENT_AND_CHECKPOINTS"/);
+  assert.match(source, /application\/vnd\.excogitare\.project\+zip/);
+  assert.match(css, /\.project-status\.is-unsaved/);
+  assert.match(css, /\.project-save-modal/);
+  assert.match(css, /\.project-history-policy/);
+  assert.match(projectModel, /zipSync\(entries, \{ level: 6 \}\)/);
+  assert.match(projectModel, /unzipSync\(bytes\)/);
+  assert.match(projectModel, /hashAlgorithm: "SHA-256"/);
+  assert.match(projectModel, /function inspectArchive/);
+  assert.match(projectModel, /function migrateLegacyProject/);
+  assert.match(projectModel, /MAX_PROJECT_ENTRIES = 160/);
+  assert.match(projectModel, /MAX_PROJECT_UNCOMPRESSED_BYTES = 64 \* 1024 \* 1024/);
+  assert.match(schema, /historyPolicy\?: "FULL" \| "CURRENT_AND_CHECKPOINTS"/);
+  assert.match(readme, /Downloaded files are the only durable project contract/);
+  assert.match(readme, /DEFLATE-compressed ZIP bundle/);
+  assert.match(feature, /Downloaded files are the only durable persistence contract/);
+});
+
 test("Create stages expose keyboard navigation, persistent stage context and branch provenance", async () => {
   const [viewer, workflow, schema] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
@@ -150,6 +209,18 @@ test("Create stages expose keyboard navigation, persistent stage context and bra
   assert.match(viewer, /stageScrollPositions:/);
   assert.match(viewer, /unknown Create stage recovered to Design/);
   assert.match(schema, /stageScrollPositions\?: Record<string, number>/);
+});
+
+test("Drag to Preserve selects geography without panning and exposes semantic fidelity", async () => {
+  const [source, protection] = await Promise.all([
+    readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/map-protection.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /preserveDragRef = useRef<\{ x: number; y: number \} \| null>/);
+  assert.match(source, /editTool === "PRESERVE"/);
+  assert.match(source, /Drag across the geography to define the protected region/);
+  assert.match(source, /Preserve this watershed/);
+  assert.match(protection, /semantic protections satisfied/);
 });
 
 test("GitHub Pages has an independent static export and deployment workflow", async () => {
@@ -186,7 +257,7 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /context\.drawImage\(renderCanvas, 0, 0\)/);
   assert.match(source, /transparentBackground = false/);
   assert.match(source, /getContext\("2d", \{ alpha: true \}\)/);
-  assert.match(source, /repairHighlights, politicalOwnership, true\)/);
+  assert.match(source, /repairHighlights, new Set<number>\(\), politicalOwnership, true\)/);
   assert.match(source, /exported with transparent background/);
   assert.match(source, /const baseName = mapExportBaseName\(targetMap\)/);
   assert.doesNotMatch(source, /sourceFile\?\.fileName\.replace\(\/\\\.civ5map/);
@@ -239,6 +310,10 @@ test("layer redraws preserve the existing canvas backing buffer", async () => {
   assert.match(source, /Chokepoint density/);
   assert.match(source, /Contested resources/);
   assert.match(source, /Polis strategic audit/);
+  assert.match(source, /Competitive strictness/);
+  assert.match(source, /victory-feasibility-list/);
+  assert.match(source, /Match Intent feasibility/);
+  assert.match(source, /match-feasibility-assessment/);
   assert.match(source, /hard constraints intact/);
   assert.match(source, /protectedTileIndices\.length/);
   assert.match(source, /Strategy graph/);
@@ -313,6 +388,7 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
   assert.match(source, /className="workspace-context-identity"/);
   assert.match(source, /className="workspace-context-status" role="status"/);
   assert.match(source, /className="workspace-masthead"/);
+  assert.match(source, /\{mode !== "CREATE" && \([\s\S]{0,120}<header className="workspace-masthead">/);
   assert.match(source, /className="current-map-disclosure"/);
   assert.match(source, /mode === "VIEW" \? \([\s\S]{0,180}className="explore-map-identity"/);
   assert.ok(source.indexOf("</header>") < source.indexOf('className="workspace-context-bar"'));
@@ -338,9 +414,13 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
   assert.match(source, /name="world-design-step"/);
   assert.match(source, /className="advanced-controls"/);
   assert.match(source, /className="generation-summary action-recipe-summary"/);
+  assert.match(source, /className="refinement-action-grid"[\s\S]{0,1500}<strong>Surface &amp; climate<\/strong><span>Preview/);
+  assert.match(source, /<strong>Resources &amp; sites<\/strong><span>Regenerate/);
+  assert.match(source, /<strong>Players &amp; starts<\/strong><span>Rebalance/);
   assert.match(source, /id="map-display-panel"/);
   assert.match(source, />Display<\/button>/);
-  assert.match(css, /\.workspace-navigation \{[\s\S]{0,180}position: absolute/);
+  assert.match(css, /\.topbar \{[\s\S]{0,180}grid-template-columns: minmax\(175px, 200px\)/);
+  assert.match(css, /\.workspace-navigation \{[\s\S]{0,180}justify-self: center/);
   assert.match(css, /\.workspace-stage-tabs \{[\s\S]{0,220}display: flex/);
   assert.match(css, /\.viewer-app\.workspace-create \{ --workspace-accent: #dfbe72/);
   assert.match(css, /\.viewer-app\.workspace-repair \{ --workspace-accent: #d18a68/);
@@ -354,6 +434,12 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
   assert.match(css, /\.advanced-controls/);
   assert.match(css, /\.engine-carousel > button \{[\s\S]{0,180}flex: 0 0 100%/);
   assert.match(css, /\.world-recipe-card \{ display: grid; gap: 8px; \}/);
+  assert.match(css, /\.refinement-action-grid \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /\.refinement-action-grid button \{[^}]*display: flex;[^}]*justify-content: space-between/);
+  assert.match(css, /\.recipe-fields \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.control-field select \{[^}]*padding-right: 28px;[^}]*text-overflow: ellipsis/);
+  assert.match(source, /<option value="GLOBAL">Global<\/option>/);
+  assert.match(source, /<option value="STANDARD">Standard<\/option><option value="THOROUGH">Thorough<\/option>/);
   assert.doesNotMatch(css, /\.world-model-picker button:not\(\.is-active\) small/);
   assert.equal((source.match(/className="generation-summary/g) ?? []).length, 1);
   assert.match(readme, /## Workspaces[\s\S]{0,2000}Design[\s\S]{0,100}Iterate[\s\S]{0,100}Edit[\s\S]{0,100}Review/);
@@ -364,10 +450,11 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
   assert.match(readme, /compact \*\*Current map\*\* disclosure/);
 });
 
-test("Identity Lab retains blind reviews and documents its narrative JSON handoff", async () => {
-  const [source, css, model, readme, feature, narratives] = await Promise.all([
+test("Identity Lab runs continuous four-choice blind reviews and documents its versioned JSON handoff", async () => {
+  const [source, css, continuousModel, legacyModel, readme, feature, narratives] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/identity-lab-continuous.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/identity-lab.ts", import.meta.url), "utf8"),
     readFile(new URL("../README.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/features/identity-lab.md", import.meta.url), "utf8"),
@@ -376,16 +463,23 @@ test("Identity Lab retains blind reviews and documents its narrative JSON handof
   assert.match(source, /className="development-badge">Development<\/span>/);
   assert.match(css, /\.development-badge \{[^}]*background: #245f91;/);
   assert.match(source, /Identity hidden/);
-  assert.match(source, /Submit guess and reveal/);
+  assert.match(source, /Which Map Type does this world express\?/);
+  assert.match(source, /Submit and continue/);
+  assert.match(source, /End and export/);
+  assert.match(source, /No answer, target, engine or score is revealed between trials/);
+  assert.match(css, /\.lab-four-choice \{[^}]*grid-template-columns: repeat\(2/);
   assert.match(source, /mode === "LAB" \? "Interactive blind identity candidate"/);
   assert.match(source, /mode !== "LAB" && <div className="mobile-map-actions"/);
-  assert.match(source, /IDENTITY_LAB_STORAGE_KEY/);
-  assert.match(source, /Export JSON/);
+  assert.match(source, /CONTINUOUS_IDENTITY_LAB_STORAGE_KEY/);
+  assert.match(source, /Download JSON/);
   assert.match(source, /Import JSON/);
   assert.match(source, /How to read the JSON/);
-  for (const preset of ["LONELY_OCEANS", "SHATTERED_ARCHIPELAGO", "GREAT_WATERSHEDS", "ICEHOUSE_EARTH"]) assert.match(model, new RegExp(`preset: "${preset}"`));
-  assert.match(model, /excogitare\.identity-lab/);
-  assert.match(model, /docs\/features\/map-type-narrative-identities\.md/);
+  assert.match(continuousModel, /CONTINUOUS_IDENTITY_LAB_SCHEMA_VERSION = 2/);
+  assert.match(continuousModel, /choices: \[MapPresetId, MapPresetId, MapPresetId, MapPresetId\]/);
+  assert.match(continuousModel, /prefetchedContinuousIdentityLabTrial/);
+  assert.match(continuousModel, /importLegacyIdentityLabSession/);
+  assert.match(continuousModel, /docs\/features\/map-type-narrative-identities\.md/);
+  assert.match(legacyModel, /IDENTITY_LAB_SCHEMA_VERSION = 1/);
   assert.match(readme, /## Lab[\s\S]*### Reading Identity Lab JSON/);
   assert.match(readme, /summary\.confusions/);
   assert.match(feature, /Evidence-to-implementation loop/);
@@ -415,17 +509,15 @@ test("dense controls expose unclipped contextual help on hover and focus", async
 });
 
 test("World Character explains its selected engine-specific consequences", async () => {
-  const [source, profiles, css] = await Promise.all([
+  const [source, profiles] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/world-character.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(source, /<legend>World character<\/legend>/);
-  assert.match(source, /className="world-character-explanation" aria-live="polite"/);
-  assert.match(source, /describeWorldCharacter\(generationOptions\.engine, generationOptions\.style\)/);
+  assert.match(source, /data-tooltip=\{`\$\{note\}\. \$\{describeWorldCharacter\(generationOptions\.engine, value\)\}`\}/);
+  assert.doesNotMatch(source, /className="world-character-explanation"/);
   for (const engine of ["EXCOGITARE", "ECCENTRIC", "PHYSICAL", "POLIS"]) assert.match(profiles, new RegExp(`${engine}: \\{`));
   for (const style of ["REALISTIC", "FANTASTICAL", "MUNDANE", "BRUTAL"]) assert.match(profiles, new RegExp(`${style}:`));
-  assert.match(css, /\.world-character-explanation \{/);
 });
 
 test("generation effort discloses memory cost and Review explains stale evidence", async () => {
@@ -461,7 +553,7 @@ test("export confirmation is a modal rather than a sidebar prompt", async () => 
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, />Cancel<\/button>/);
   assert.match(source, />Open report<\/button>/);
-  assert.match(source, />Export anyway<\/button>/);
+  assert.match(source, /hasBlockingStructureError \? "Structural repair required" : "Export anyway"/);
   assert.match(css, /\.export-confirmation-backdrop \{\s*position: fixed;\s*inset: 0;\s*z-index: 100;/);
 });
 
@@ -522,8 +614,8 @@ test("Map Type identity status and component recognition are visible without cro
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/narrative-map-types.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(source, /Recognition benchmark active/);
-  assert.match(source, /Narrative profile retained · specialized compiler pending/);
+  assert.match(source, /Recognition benchmark/);
+  assert.match(source, /Compiler pending/);
   assert.match(source, /narrativeAssessment\.motifs\.map/);
   assert.match(source, /Weakened identity and control conflicts/);
   assert.match(source, /Nearest confusions/);

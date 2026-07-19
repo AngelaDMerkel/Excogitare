@@ -14,7 +14,7 @@ Excogitare presents Explore, Create, Repair and Lua as peer workspaces rather th
 
 Explore has no nested stages. Lua remains visibly Experimental and retains its entry warning. Switching workspaces must preserve the current map, canvas position, generation state, edits and the last selected stage in every workspace. Create remains non-linear: its stages are navigation, not mandatory wizard gates. Randomise and Generate remain available within the Create workflow.
 
-The workspace switcher and stage navigation must also be visually unmistakable. The four workspaces retain written labels and receive restrained identity accents: teal for Explore, gold for Create, copper for Repair and red for Lua. Stages live in a dedicated contextual strip beneath the primary header rather than a miniature row inside the workspace capsule. The sidebar begins with the current workspace and task; full map metadata remains prominent in Explore and becomes a compact disclosure elsewhere.
+The workspace switcher and stage navigation must also be visually unmistakable. The four workspaces retain written labels and receive restrained identity accents: teal for Explore, gold for Create, copper for Repair and red for Lua. Stages live in a dedicated contextual strip beneath the primary header rather than a miniature row inside the workspace capsule. Create begins directly with its principal action because the contextual strip already identifies both workspace and stage; other working spaces may retain a task masthead where it contributes distinct context. Full map metadata remains prominent in Explore and becomes a compact disclosure elsewhere.
 
 ## Acceptance criteria
 
@@ -27,12 +27,12 @@ The workspace switcher and stage navigation must also be visually unmistakable. 
 7. Switching workspace or stage does not reset map, history, zoom, pan, layers, selection or generation options.
 8. README wording accurately describes the workspace model and identifies Repair and Lua stage coverage without overstating Lua compatibility.
 9. The active workspace has more visual weight than inactive peers, the contextual strip names the workspace and current stage, and status text conveys useful state without depending upon colour alone.
-10. Create, Repair and Lua use task-specific sidebar mastheads and do not repeat the full Explore map heading and description above their working controls.
+10. Create does not repeat its workspace/stage context in a sidebar masthead; Repair and Lua may use task-specific mastheads, and no working space repeats the full Explore map heading and description above its controls.
 
 ## Failure behavior and exclusions
 
 - A blocked Lua entry leaves the current workspace untouched until the user accepts the Experimental warning.
-- Repair may create a scenario section for a geography-only map, but it will not replace an existing scenario section merely to invent player records; the workspace reorganization does not weaken that safeguard.
+- Repair does not convert a geography-only map into a scenario merely to invent player records. It may edit supported records only when an imported scenario already provides fixed writable capacity.
 - Lua Script, Generate and Diagnostics reorganize the existing compatibility workspace. They do not constitute complete Civ V Lua-host compatibility.
 - This feature does not change map generation, repair algorithms, file formats, rendering or export behavior.
 
@@ -41,7 +41,7 @@ The workspace switcher and stage navigation must also be visually unmistakable. 
 1. Contract, acceptance criteria, failures and exclusions: **verified**.
 2. Navigation state/defaults: **verified**; each workspace retains its own stage, Repair avoids rerunning an unchanged session, and Randomise, deterministic generation, workers and cloning are behaviorally unchanged.
 3. Domain behavior: **verified**; existing Create, Repair and Lua operations remain connected, and Repair Validate reruns the repair rules against the selected corrected preview.
-4. Interface placement and modal behavior: **verified**; the top-level switcher has distinct labelled workspace identities, the contextual stage strip is physically separate beneath the header, each sidebar begins with a task masthead, full map metadata remains in Explore, working spaces use a compact disclosure, duplicate Create tabs remain removed, and Lua retains its confirmation modal.
+4. Interface placement and modal behavior: **verified**; the top-level switcher has distinct labelled workspace identities, the contextual stage strip is physically separate beneath the header, Create does not duplicate it with a task masthead, full map metadata remains in Explore, working spaces use a compact disclosure, duplicate Create tabs remain removed, and Lua retains its confirmation modal.
 5. Rendering/layers: not applicable except preservation during navigation.
 6. Editing/history/selective regeneration: **verified**; navigation state is independent of the map, view, layers, history and editor selection, and returning to an unchanged Repair session preserves its correction state.
 7. Import/export/round trip: no format change; existing actions must remain available.
@@ -52,7 +52,7 @@ The workspace switcher and stage navigation must also be visually unmistakable. 
 
 ## Evidence
 
-- `app/civ5-map-viewer.tsx` owns workspace/stage state, the distinct top-level switcher, contextual stage/status strip, task mastheads, compact map disclosure, Repair stage behavior, Lua stage behavior, accessible selection state and unchanged-session restoration.
+- `app/civ5-map-viewer.tsx` owns workspace/stage state, the distinct top-level switcher, contextual stage/status strip, conditional non-Create task mastheads, compact map disclosure, Repair stage behavior, Lua stage behavior, accessible selection state and unchanged-session restoration.
 - `app/globals.css` supplies labelled workspace identity accents, the full-width contextual strip, task hierarchy, responsive geometry, selected/focus treatment, validation summaries and empty states without reintroducing the removed Create sidebar tab strip.
 - `tests/rendered-html.test.mjs` checks hierarchy, identity accents, contextual-strip placement, stage labels, mastheads, compact map disclosure, state defaults, panel relationships, restoration wiring, documentation and the absence of the duplicate Create tabs.
 - `pnpm exec tsc --noEmit`, `pnpm run lint`, `pnpm run test` and `pnpm run test:pages` passed on 2026-07-16.

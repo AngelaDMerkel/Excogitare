@@ -75,7 +75,13 @@ function closestMapSize(map: Civ5Map) {
 
 function balancedReplacementStarts(map: Civ5Map, majorCount: number, cityStateCount: number) {
   const size = closestMapSize(map);
-  const balanced = balanceMapStarts(map, {
+  const planningMap = {
+    ...map,
+    tiles: map.tiles.map((tile) => tile.terrain >= map.terrains.length
+      ? { ...tile, terrain: 0, elevation: 0, feature: 255, resource: 255, resourceAmount: 0, wonder: 255 }
+      : { ...tile }),
+  };
+  const balanced = balanceMapStarts(planningMap, {
     ...DEFAULT_GENERATION_OPTIONS,
     size: size.id,
     seed: `repair-starts:${map.name}:${map.width}x${map.height}`,
@@ -98,6 +104,38 @@ function balancedReplacementStarts(map: Civ5Map, majorCount: number, cityStateCo
   const players = starts.filter((start) => !start.cityState).length;
   const cityStates = starts.filter((start) => start.cityState).length;
   return { starts, players, cityStates, complete: players === Math.max(2, majorCount) && cityStates === Math.max(0, cityStateCount) };
+}
+
+function populationPlacementProblems(map: Civ5Map) {
+  let problems = 0;
+  const occupiedStarts = new Set<number>();
+  const occupiedCities = new Set<number>();
+  for (const city of map.cities ?? []) {
+    const inBounds = city.x >= 0 && city.y >= 0 && city.x < map.width && city.y < map.height;
+    if (!inBounds) {
+      problems += 1;
+      continue;
+    }
+    const index = city.y * map.width + city.x;
+    if (!isPassableLand(map, map.tiles[index]) || map.tiles[index].wonder !== 255 || occupiedCities.has(index)) problems += 1;
+    occupiedCities.add(index);
+  }
+  for (const start of map.startLocations) {
+    const inBounds = start.x >= 0 && start.y >= 0 && start.x < map.width && start.y < map.height;
+    if (!inBounds) {
+      problems += 1;
+      continue;
+    }
+    const index = start.y * map.width + start.x;
+    if (!isPassableLand(map, map.tiles[index]) || map.tiles[index].wonder !== 255 || occupiedStarts.has(index) || occupiedCities.has(index)) problems += 1;
+    occupiedStarts.add(index);
+  }
+  for (let one = 0; one < map.startLocations.length; one += 1) {
+    for (let two = one + 1; two < map.startLocations.length; two += 1) {
+      if (hexDistance([map.startLocations[one].x, map.startLocations[one].y], [map.startLocations[two].x, map.startLocations[two].y], map.width, map.wraps) < MINIMUM_START_DISTANCE) problems += 1;
+    }
+  }
+  return problems;
 }
 
 function flexibleReplacementStarts(map: Civ5Map, majorCount: number, cityStateCount: number) {
@@ -335,37 +373,49 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
     const size = closestMapSize(map);
     const geographyOnlyFile = map.source === "file" && !map.scenarioDataPresent;
     const generatedMap = map.source !== "file";
-    const canCreateScenario = generatedMap || geographyOnlyFile;
-    const writablePlayerSlots = map.source === "file" ? map.scenarioPlayerSlots ?? 0 : Math.max(0, map.players);
-    const targetPlayers = writablePlayerSlots > 0 ? writablePlayerSlots : map.players >= 2 ? map.players : size.recommendedPlayers;
-    const targetCityStates = map.source === "file" && (map.scenarioCityStateSlots ?? 0) > 0
-      ? Math.min(map.scenarioCityStateSlots!, size.recommendedCityStates)
-      : generatedMap && map.generation
-        ? Math.min(map.generation.cityStates, size.recommendedCityStates)
-        : canCreateScenario
-          ? Math.min(targetPlayers, size.recommendedCityStates)
-          : Math.min(storedCityStates.length, size.recommendedCityStates);
-    const candidateReplacement = writablePlayerSlots >= 2 || canCreateScenario
-      ? canCreateScenario
-        ? flexibleReplacementStarts(map, targetPlayers, targetCityStates)
-        : balancedReplacementStarts(map, targetPlayers, targetCityStates)
-      : undefined;
-    const replacement = candidateReplacement && (canCreateScenario || candidateReplacement.complete) ? candidateReplacement : undefined;
-    const blockedByScenario = map.source === "file" && map.scenarioDataPresent && writablePlayerSlots < 2;
-    add({
-      id: "missing-start-locations",
-      category: "STARTS",
-      severity: "ERROR",
-      confidence: "CERTAIN",
-      title: "Map has no start locations",
-      detail: replacement
-        ? `${geographyOnlyFile ? "Create a new scenario section with" : "Create"} ${replacement.players} legal major-civilization starts and ${replacement.cityStates} city-state starts, all at least ${MINIMUM_START_DISTANCE} hexes apart${replacement.players < targetPlayers || replacement.cityStates < targetCityStates ? "; the population was reduced to fit the available geography" : ""}.`
-        : blockedByScenario
-          ? "A playable map requires major-civilization starts. This file contains scenario data but exposes no writable scenario player slots, so Excogitare cannot safely invent records without replacing unrelated scenario content. Add scenario players in Civ V WorldBuilder, then run Repair again."
-          : `A playable map requires major-civilization starts, but no legal layout with at least ${MINIMUM_START_DISTANCE} hexes between starts could be constructed from this terrain.`,
-      mutation: replacement ? { kind: "REPLACE_STARTS", starts: replacement.starts, players: replacement.players } : undefined,
-      minimumProfile: "SAFE",
-    });
+    if (geographyOnlyFile) {
+      add({
+        id: "runtime-start-locations",
+        category: "STARTS",
+        severity: "INFO",
+        confidence: "CERTAIN",
+        title: "Starts assigned by Civilization V",
+        detail: "This is an ordinary geography map without scenario player records. Civilization V will assign starting plots when the game is created; Repair will not convert it into a scenario merely to embed preview starts.",
+        minimumProfile: "SAFE",
+      });
+    } else {
+      const canCreateScenario = generatedMap;
+      const writablePlayerSlots = map.source === "file" ? map.scenarioPlayerSlots ?? 0 : Math.max(0, map.players);
+      const targetPlayers = writablePlayerSlots > 0 ? writablePlayerSlots : map.players >= 2 ? map.players : size.recommendedPlayers;
+      const targetCityStates = map.source === "file" && (map.scenarioCityStateSlots ?? 0) > 0
+        ? Math.min(map.scenarioCityStateSlots!, size.recommendedCityStates)
+        : generatedMap && map.generation
+          ? Math.min(map.generation.cityStates, size.recommendedCityStates)
+          : canCreateScenario
+            ? Math.min(targetPlayers, size.recommendedCityStates)
+            : Math.min(storedCityStates.length, size.recommendedCityStates);
+      const candidateReplacement = writablePlayerSlots >= 2 || canCreateScenario
+        ? canCreateScenario
+          ? flexibleReplacementStarts(map, targetPlayers, targetCityStates)
+          : balancedReplacementStarts(map, targetPlayers, targetCityStates)
+        : undefined;
+      const replacement = candidateReplacement && (canCreateScenario || candidateReplacement.complete) ? candidateReplacement : undefined;
+      const blockedByScenario = map.source === "file" && map.scenarioDataPresent && writablePlayerSlots < 2;
+      add({
+        id: "missing-start-locations",
+        category: "STARTS",
+        severity: "ERROR",
+        confidence: "CERTAIN",
+        title: "Map has no start locations",
+        detail: replacement
+          ? `Create ${replacement.players} legal major-civilization starts and ${replacement.cityStates} city-state starts, all at least ${MINIMUM_START_DISTANCE} hexes apart${replacement.players < targetPlayers || replacement.cityStates < targetCityStates ? "; the population was reduced to fit the available geography" : ""}.`
+          : blockedByScenario
+            ? "A playable fixed scenario requires major-civilization starts. This file contains scenario data but exposes no writable scenario player slots, so Excogitare cannot safely invent records without replacing unrelated scenario content. Add scenario players in Civ V WorldBuilder, then run Repair again."
+            : `A fixed scenario requires major-civilization starts, but no legal layout with at least ${MINIMUM_START_DISTANCE} hexes between starts could be constructed from this terrain.`,
+        mutation: replacement ? { kind: "REPLACE_STARTS", starts: replacement.starts, players: replacement.players } : undefined,
+        minimumProfile: "SAFE",
+      });
+    }
   }
 
   const occupiedStarts = new Set<number>();
@@ -374,9 +424,9 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
     const inBounds = start.x >= 0 && start.y >= 0 && start.x < map.width && start.y < map.height;
     const index = inBounds ? start.y * map.width + start.x : 0;
     const duplicate = inBounds && occupiedStarts.has(index);
-    const invalid = !inBounds || !isPassableLand(map, map.tiles[index]) || duplicate;
+    const invalid = !inBounds || !isPassableLand(map, map.tiles[index]) || map.tiles[index].wonder !== 255 || reservedCities.has(index) || duplicate;
     if (invalid) {
-      const target = nearestValidTile(map, index, (tile, candidateIndex) => isPassableLand(map, tile) && tile.wonder === 255 && !occupiedStarts.has(candidateIndex), occupiedStarts);
+      const target = nearestValidTile(map, index, (tile, candidateIndex) => isPassableLand(map, tile) && tile.wonder === 255 && !occupiedStarts.has(candidateIndex) && !reservedCities.has(candidateIndex), occupiedStarts);
       if (target !== null) occupiedStarts.add(target);
       add({ id: `start-${startIndex}`, category: "STARTS", severity: "ERROR", confidence: "CERTAIN", title: duplicate ? "Overlapping start locations" : "Invalid start location", detail: target === null ? "No safe passable location was found for this start." : "Move the start to the nearest unoccupied passable land tile.", x: start.x, y: start.y, tileIndex: inBounds ? index : undefined, mutation: target === null ? undefined : { kind: "MOVE_START", startIndex, x: target % map.width, y: Math.floor(target / map.width) }, minimumProfile: "SAFE" });
     } else {
@@ -384,7 +434,7 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
       const component = passableComponents.find((candidate) => candidate.has(index));
       const minimumReachable = Math.min(12, largestPassableComponent.size);
       if (component && component.size < minimumReachable) {
-        const target = nearestValidTile(map, index, (tile, candidateIndex) => isPassableLand(map, tile) && tile.wonder === 255 && largestPassableComponent.has(candidateIndex) && !occupiedStarts.has(candidateIndex), occupiedStarts);
+        const target = nearestValidTile(map, index, (tile, candidateIndex) => isPassableLand(map, tile) && tile.wonder === 255 && largestPassableComponent.has(candidateIndex) && !occupiedStarts.has(candidateIndex) && !reservedCities.has(candidateIndex), occupiedStarts);
         if (target !== null) occupiedStarts.add(target);
         add({ id: `start-access-${startIndex}`, category: "STARTS", severity: "ERROR", confidence: "HIGH", title: "Start trapped in an inaccessible pocket", detail: target === null ? `Only ${component.size} passable tiles are reachable and no safe relocation was found.` : `Only ${component.size} passable tiles are reachable without crossing mountains or water; move the start into the main accessible land region.`, x: start.x, y: start.y, tileIndex: index, mutation: target === null ? undefined : { kind: "MOVE_START", startIndex, x: target % map.width, y: Math.floor(target / map.width) }, minimumProfile: "STANDARD" });
       }
@@ -443,6 +493,7 @@ export function buildRepairIssues(map: Civ5Map): RepairIssue[] {
 export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedIds: ReadonlySet<string>) {
   const result: Civ5Map = { ...map, tiles: map.tiles.map((tile) => ({ ...tile })), startLocations: map.startLocations.map((start) => ({ ...start })), cities: map.cities?.map((city) => ({ ...city })) };
   let changed = false;
+  let selectedCompleteLayout = false;
   for (const issue of issues) {
     if (!selectedIds.has(issue.id) || !issue.mutation) continue;
     changed = true;
@@ -466,6 +517,7 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
     else if (mutation.kind === "REPLACE_STARTS") {
       result.startLocations = mutation.starts.map((start) => ({ ...start }));
       result.players = mutation.players;
+      selectedCompleteLayout = true;
     }
     else if (mutation.kind === "MOVE_CITY") {
       const city = result.cities?.find((candidate) => candidate.id === mutation.id && candidate.x === mutation.fromX && candidate.y === mutation.fromY);
@@ -477,6 +529,19 @@ export function applyRepairIssues(map: Civ5Map, issues: RepairIssue[], selectedI
     } else if (mutation.kind === "NORMALIZE_SCENARIO_MARKER") {
       result.scenarioMarker = mutation.marker;
     } else if (mutation.kind === "SET_PLAYERS") result.players = mutation.players;
+  }
+  const beforePopulationProblems = populationPlacementProblems(map);
+  let afterPopulationProblems = populationPlacementProblems(result);
+  if (selectedCompleteLayout || afterPopulationProblems > beforePopulationProblems) {
+    const majorCount = result.startLocations.filter((start) => !start.cityState).length;
+    const cityStateCount = result.startLocations.filter((start) => start.cityState).length;
+    const replacement = majorCount >= 2 ? balancedReplacementStarts(result, majorCount, cityStateCount) : undefined;
+    if (replacement?.complete) {
+      result.startLocations = replacement.starts.map((start) => ({ ...start }));
+      result.players = replacement.players;
+      afterPopulationProblems = populationPlacementProblems(result);
+    }
+    if (afterPopulationProblems > 0) return map;
   }
   if (changed) result.structure = markGenerationStructureStale(map.structure, "Repair changed authored map data.");
   return result;

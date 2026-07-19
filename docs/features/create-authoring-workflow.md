@@ -22,6 +22,12 @@ No operation changes stage implicitly. Selecting any number of history entries r
 
 Create's stage navigation, tab panel, operation status and branching history cards are focused components backed by one authoritative viewer store. Domain state is not duplicated inside the components: switching stages changes presentation while the recipe, editor, review, history and canvas state remain mounted. Each stage has a clear principal action, shallow progressive disclosure and compact summaries. Tooltips may add detail but never contain the only warning or blocked consequence.
 
+The Create sidebar does not repeat the active workspace and stage already named by the contextual strip. Persistent copy is reserved for labels, selected values, compact state and actionable warnings. Secondary explanations—including narrative descriptions, control semantics and compiler detail—use the shared hover/focus help system. Engine-card descriptions remain visible because they are part of the approved carousel comparison, while crash, compatibility and destructive-action warnings remain inline.
+
+Paired recipe fields use equal, shrink-safe columns. Their persistent option labels stay short enough for the sidebar; dimensions, candidate counts and other secondary measurements belong to hover/focus help. A neighboring badge or warning may make a row taller, but it must not move the next row's controls out of alignment or allow native select indicators to overlap text.
+
+Refine's selective-pass actions are compact full-width rows rather than three compressed tiles. Each row names the affected layer and uses an honest verb: climate opens a Difference preview, content regenerates resources and sites, and starts performs a rebalance. Hover/focus help states what is retained and when a preview must be accepted.
+
 Generation progress and cancellation remain visible without replacing the current map. Export confirmation remains a modal. Unsaved project state is distinct from unsaved tile edits.
 
 ## Mobile boundary
@@ -42,6 +48,7 @@ Failed generation, refinement, protection or history restoration leaves the curr
 - [x] Refine, Edit and Review retain their local state across workspace switching; each stage also retains scroll and disclosure state.
 - [x] Progress, cancellation, errors and export confirmation remain clear and atomic.
 - [x] Keyboard, focus, hover-help and responsive behavior are verified.
+- [x] Create avoids a duplicate workspace masthead and moves non-critical explanatory prose to hover/focus help without hiding warnings.
 - [x] Mobile exposes only the approved three-action safe workflow and Randomise resets to Standard effort and safe budgets.
 - [x] Existing Explore, Repair, Lua, Lab and Civ5Map automated regressions pass at the current boundary.
 - [x] Documentation, production/Pages builds, Alpine runtime and partial-claim reconciliation pass.
@@ -53,7 +60,8 @@ Failed generation, refinement, protection or history restoration leaves the curr
 - `.excogitare` round trips preserve the active stage, canvas view, expanded sections, per-stage scroll positions and history provenance. Unknown stages recover to Design with a disclosed message.
 - Generation, selective regeneration, semantic-protection conflicts, history restoration and checkpoint restoration report failures without installing a partial result or changing stage. Worker completion remains the atomic installation boundary.
 - The rendered-shell suite verifies keyboard semantics, focusable tabs, live status, hover/focus help, responsive mobile limits and component wiring. The project/history domain tests verify immutable snapshots and persistence.
-- TypeScript, ESLint, the 18 rendered-shell tests and 99 domain/regression tests pass. Both the vinext production build and GitHub Pages static export pass. The Node 24 Alpine image builds, runs as `excogitare:1.3.0` on local port 3001 and returns HTTP 200.
+- The 2026-07-18 density pass removes Create's redundant task masthead, keeps engine comparison copy and warnings inline, and moves secondary recipe, climate, architecture and Match Intent explanations into keyboard-accessible hover/focus help. The action recipe remains concise while its complete value is available through the same help surface.
+- The original workflow verification covered TypeScript, ESLint, domain/regression tests, production and Pages builds. The 2026-07-18 density pass reran TypeScript, scoped ESLint, all 23 rendered-shell tests and the vinext production build; the Node 24 Alpine image rebuilt, replaced the local `excogitare:1.3.0` container on port 3001 and returned HTTP 200.
 
 ## Explicit boundaries
 

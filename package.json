@@ -11,12 +11,13 @@
     "build:pages": "EXCOGITARE_PAGES=true next build --webpack",
     "test:pages": "pnpm run build:pages && node scripts/verify-pages-build.mjs",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start --host 0.0.0.0",
-    "test": "pnpm run build && node --test tests/rendered-html.test.mjs && node --experimental-strip-types --test tests/civ5-map.test.ts tests/generation-substrate.test.ts tests/identity-lab.test.ts tests/lua-runtime.test.ts tests/map-design.test.ts tests/narrative-map-types.test.ts tests/rewrite-baseline.test.ts",
+    "test": "pnpm run build && node --test tests/rendered-html.test.mjs && node --experimental-strip-types --test tests/civ5-map.test.ts tests/generation-substrate.test.ts tests/identity-lab.test.ts tests/lua-runtime.test.ts tests/map-design.test.ts tests/narrative-map-types.test.ts tests/polis-match-intent.test.ts tests/rewrite-baseline.test.ts tests/scenario-workspace.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
+    "fflate": "0.7.4",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",

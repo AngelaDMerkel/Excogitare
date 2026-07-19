@@ -2,13 +2,15 @@
 
 ## Contract
 
-- **Status:** Specified.
-- **User outcome:** A user can turn generated or imported geography into an authored fixed Scenario through **Setup → Factions → World → Objectives → Validate**, while clearly seeing which data can actually survive a Civ5Map export.
+- **Status:** Partial. The five-stage workspace, map-linked authoring model, project round trip, compatibility ledger, validation and Repair handoff exist. Generated scenario Civ5Map writing is withdrawn after representative files failed to load in Civilization V.
+- **User outcome:** A user can author and retain a Scenario draft in an `.excogitare` project and conservatively edit records already present in an imported scenario. New fixed scenarios are not offered as game-ready Civ5Map files.
 - **Scope:** Workspace navigation, ScenarioDraft, faction/entity authoring, semantic objectives, compatibility labels, validation, Repair handoff and confirmed export.
 - **Dependencies:** [`excogitare-project-files.md`](excogitare-project-files.md), Civ5Map parsing/writing, start correctness, validation/Repair and semantic objects.
 - **Exclusions:** Unsupported units, diplomacy, events and rule fields remain Project only. Lua/modinfo compilation is a separate future compatibility claim.
 
 ## Stage ownership
+
+The workspace follows **Setup → Factions → World → Objectives → Validate**.
 
 - **Setup:** name, description, ruleset/mod profile, fixed/flexible intent, slot capacity and source-format compatibility.
 - **Factions:** civilization, leader, major/city-state status, playable/Human/AI/Flexible intent, team/color, start or starting city and slot ordering.
@@ -34,14 +36,24 @@ Validate covers slots, teams, identifiers, start legality and five-hex separatio
 
 ## Completion gates
 
-- [ ] Scenario workspace and five stages preserve state and view.
-- [ ] ScenarioDraft and compatibility schemas migrate and round-trip in projects.
-- [ ] Imported records initialize the draft without mutating source bytes.
-- [ ] Every family exposes honest Read/Edit/Write/Game-verified capability.
-- [ ] First-boundary faction, start, city, ownership, improvement and route editing works.
-- [ ] Project-only data is retained and disclosed rather than silently discarded.
-- [ ] Validators cover slots, links, identifiers, starts, objectives and record sizes.
-- [ ] Repair handoff is explicit and export confirmation is modal.
+- [x] Scenario workspace and five stages preserve state and view.
+- [x] ScenarioDraft and compatibility schemas migrate and round-trip in projects.
+- [x] Imported records initialize the draft without mutating source bytes.
+- [x] Every family exposes honest Read/Edit/Write/Game-verified capability.
+- [ ] New-scenario faction, start, city, ownership, improvement and route writing loads successfully in Civ V. Existing imported records remain editable in place.
+- [x] Project-only data is retained and disclosed rather than silently discarded.
+- [x] Validators cover slots, links, identifiers, starts, objectives and record sizes.
+- [x] Repair handoff is explicit and export confirmation is modal.
 - [ ] Representative exports preserve unrelated bytes and load in Civ V.
-- [ ] Existing import, Repair, generation, project and export regressions pass.
-- [ ] Documentation, builds, Alpine runtime and final claims reconcile.
+- [x] Existing import, Repair, generation, project and export regressions pass.
+- [x] Documentation, builds, Alpine runtime and final claims reconcile.
+
+## Implemented evidence
+
+- Violet peer-workspace navigation and Setup, Factions, World, Objectives and Validate stages operate against one persistent ScenarioDraft without resetting the viewport.
+- Generated and imported maps initialize project-side factions, starts, existing cities, ownership, declared improvements and routes. Imported fixed player/city/type blocks cannot be resized through the interface or exporter.
+- Generated Scenario drafts remain project-only at the game-file boundary. The former compact writer omitted required Firaxis type dictionaries and opaque victory/game-option payloads; its self-round-trip tests were not game compatibility evidence.
+- The World layer brush can apply or clear ownership, improvement and route families independently across a bounded hex radius; individual sparse records remain directly editable.
+- Fixed imported player records update civilization, leader, team colour, team, playable state and coordinates in place. Existing city records update name, owner, population and tile link. Tile metadata updates ownership, declared improvements and roads/railroads.
+- Export preflights the actual imported source buffer when one exists, structurally inspects and reparses the encoded result, blocks errors, and discloses Project-only omissions in a modal.
+- Scenario and project tests, the complete typed regression suite, rendered-shell checks, lint, type checking, production build, GitHub Pages export and Node 24 Alpine container pass. These prove implementation integrity, not Civilization V runtime acceptance.

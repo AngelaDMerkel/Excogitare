@@ -4,6 +4,7 @@ import type { MapGenerationOptions } from "./map-generator.ts";
 import type { WorldScale } from "./generation-recipe.ts";
 import { worldCharacterProfile } from "./world-character.ts";
 import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
+import { applyConstrainedLandBudget, applyConstrainedRelief, applyConstrainedSurface, nativeConstraintDiagnostics, type GenerationConstraintPayload } from "./generation-constraints.ts";
 
 type Point = { x: number; y: number };
 type Plate = Point & { vx: number; vy: number; continental: boolean };
@@ -396,7 +397,7 @@ function contiguousClimateObjects(assignments: Int32Array, labels: string[], wid
   return result;
 }
 
-export function generatePhysicalGeography(options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number, random: () => number, scale: WorldScale = "GLOBAL"): PhysicalGeography {
+export function generatePhysicalGeography(options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number, random: () => number, scale: WorldScale = "GLOBAL", constraints?: GenerationConstraintPayload): PhysicalGeography {
   const area = width * height;
   const profile = physicalProfile(options);
   const character = worldCharacterProfile(options.style);
@@ -431,7 +432,15 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   }
 
   const landCount = area - Math.round(area * clamp(options.waterPercent / 100, 0, 0.9));
-  const landMask = exactTopMask(hypsometry.map((value, index) => value + hashNoise(index % width, Math.floor(index / width), seed + 313) * 0.00001), landCount);
+  const seaLevelScores = hypsometry.map((value, index) => value + hashNoise(index % width, Math.floor(index / width), seed + 313) * 0.00001);
+  if (constraints?.topology.length === area) {
+    for (let index = 0; index < area; index += 1) {
+      if (constraints.topology[index] === 1) seaLevelScores[index] = Math.max(seaLevelScores[index], 2 + constraints.elevation[index] * 0.1);
+      else if (constraints.topology[index] === 0) seaLevelScores[index] = Math.min(seaLevelScores[index], -1);
+    }
+  }
+  const landMask = exactTopMask(seaLevelScores, landCount);
+  applyConstrainedLandBudget(landMask, landCount, seaLevelScores, constraints);
   let reliefValues = hypsometry.map((value, index) => value + convergence[index] * 0.58 * character.physical.convergenceRelief - divergence[index] * 0.16 * character.physical.divergenceRelief);
   const baseErosionPasses = options.erosionStrength === "STRONG" ? 4 : options.erosionStrength === "LIGHT" ? 1 : 2;
   const erosionPasses = Math.max(1, Math.round((baseErosionPasses + profile.erosionShift + character.physical.erosionPassDelta) * scaleProfile.physical.erosionDetail));
@@ -458,6 +467,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   const mountains = new Set(rankedLand.slice(0, mountainCount));
   const hills = new Set(rankedLand.slice(mountainCount, mountainCount + Math.round(landIndices.length * hillShare)));
   const elevations = landMask.map((_land, index) => mountains.has(index) ? 2 : hills.has(index) ? 1 : 0);
+  applyConstrainedRelief(reliefValues, elevations, landMask, constraints);
 
   const waterDistance = distanceFromWater(landMask, width, height, wraps);
   const continentalityScale = Math.max(6, Math.min(width, height) * 0.24 * character.physical.oceanModeration);
@@ -502,6 +512,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   basins.forEach((basin, owner) => basin.tileIndices.forEach((index) => { basinByTile[index] = owner; }));
   const runoff = atmosphere.precipitation.map((rain, index) => landMask[index] ? clamp(rain * 5.2 + moistures[index] * 0.18 - smoothedTemperatures[index] * 0.055, 0.001, 1) : 0);
   const drainage = buildDrainage(landMask, reliefValues, runoff, basinByTile, basins.length, width, height, wraps);
+  if (constraints?.hydrologyMask.length === area) for (let index = 0; index < area; index += 1) if (constraints.hydrologyMask[index]) drainage.guidance[index] = Math.max(drainage.guidance[index], constraints.rivers[index] ? 1 : 0.58);
 
   const biomeAssignments = new Int32Array(area).fill(-1);
   const climateLabels = ["Glacial", "Tundra", "Arid", "Grassland", "Seasonal Forest", "Rainforest", "Steppe"];
@@ -523,6 +534,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     else if (land && elevations[index] === 0 && terrain === 4 && moistures[index] < 0.2 && random() > 0.96) feature = 4;
     return { terrain, resource: 255, feature, river: 0, elevation: elevations[index], continent: land ? continentByTile[index] + 1 : 0, wonder: 255, resourceAmount: 0 };
   });
+  applyConstrainedSurface(tiles, landMask, elevations, constraints);
 
   const plateObjects = objectsFromAssignments("TECTONIC_PLATE", owners, plates.length, "Plate").map((object, index) => ({ ...object, attributes: { continental: plates[index].continental, motionX: Number(plates[index].vx.toFixed(3)), motionY: Number(plates[index].vy.toFixed(3)) } }));
   const atmosphericCells = objectsFromAssignments("ATMOSPHERIC_CELL", windCells, 3, "Atmospheric Cell").map((object, index) => ({ ...object, attributes: { circulation: ["tropical", "temperate", "polar"][index], rotation: options.physicalRotation } }));
@@ -587,6 +599,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
       characterActivity: Math.round(character.physical.activity * 100),
       characterClimateVariance: Math.round(character.physical.climateVariance * 100),
       characterMoistureEfficiency: Math.round(character.physical.moistureEfficiency * 100),
+      ...nativeConstraintDiagnostics(constraints),
     },
   };
   return { landMask, reliefValues, temperatures: smoothedTemperatures, moistures, elevations, riverGuidance: drainage.guidance, tiles, structure };

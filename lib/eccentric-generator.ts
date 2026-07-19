@@ -5,6 +5,7 @@ import type { MapGenerationOptions } from "./map-generator.ts";
 import type { WorldScale } from "./generation-recipe.ts";
 import { worldCharacterProfile } from "./world-character.ts";
 import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
+import { applyConstrainedLandBudget, applyConstrainedRelief, applyConstrainedSurface, nativeConstraintDiagnostics, type GenerationConstraintPayload } from "./generation-constraints.ts";
 
 type Point = { x: number; y: number };
 type PolygonEdge = { one: number; two: number; coastal: boolean; contrast: number };
@@ -719,6 +720,7 @@ export function generateEccentricGeography(
   seed: number,
   random: () => number,
   scale: WorldScale = "GLOBAL",
+  constraints?: GenerationConstraintPayload,
 ): EccentricGeography {
   const area = width * height;
   const character = worldCharacterProfile(options.style);
@@ -782,12 +784,38 @@ export function generateEccentricGeography(
       }
     }
   }
+  let nativeRelationshipPaths = 0;
+  if (constraints?.topology.length === area) {
+    const forcedLand = new Array<number>(polygonCount).fill(0);
+    const forcedWater = new Array<number>(polygonCount).fill(0);
+    for (let index = 0; index < area; index += 1) {
+      if (constraints.topology[index] === 1) forcedLand[hexPolygons[index]] += 1;
+      else if (constraints.topology[index] === 0) forcedWater[hexPolygons[index]] += 1;
+    }
+    for (let polygon = 0; polygon < polygonCount; polygon += 1) {
+      if (forcedLand[polygon] > forcedWater[polygon]) polygonLand[polygon] = true;
+      else if (forcedWater[polygon] > forcedLand[polygon]) polygonLand[polygon] = false;
+    }
+    for (const semantic of constraints.semantics) for (const related of semantic.relatedAnchors) {
+      const start = hexPolygons[semantic.anchorIndex];
+      const end = hexPolygons[related.index];
+      const sourceLand = constraints.topology[semantic.anchorIndex];
+      const relatedLand = constraints.topology[related.index];
+      if (start === end || sourceLand < 0 || sourceLand !== relatedLand) continue;
+      const path = graphPathBetween(polygonAdjacency, polygonCenters, start, end, width, wraps, seed + 433 + nativeRelationshipPaths * 37);
+      if (!path.length) continue;
+      for (const polygon of path) polygonLand[polygon] = sourceLand === 1;
+      nativeRelationshipPaths += 1;
+    }
+  }
   const landMask = Array.from(hexPolygons, (polygon) => polygonLand[polygon]);
   const protectedWater = new Set<number>();
   for (let index = 0; index < area; index += 1) if (riftPolygons.has(hexPolygons[index]) || polarWaterPolygons.has(hexPolygons[index])) protectedWater.add(index);
   const decorations = decorateSmallWatersAndIslands(landMask, subregions, subregionAdjacency, hexPolygons, riftPolygons, profile, targetWater, width, height, wraps, seed + 457);
   for (const index of decorations.protectedWater) protectedWater.add(index);
   reconcileWaterMask(landMask, targetWater, subregions, subregionCount, width, height, wraps, seed + 503, protectedWater);
+  const topologyScores = landMask.map((land, index) => Number(land) + hashNoise(index % width, Math.floor(index / width), seed + 509) * 0.001);
+  applyConstrainedLandBudget(landMask, targetLand, topologyScores, constraints);
   const { ids: continentIds, count: continentCount, sizes: continentSizes } = connectedComponents(landMask, width, height, wraps);
   const waterComponents = connectedComponents(landMask.map((land) => !land), width, height, wraps);
 
@@ -895,6 +923,7 @@ export function generateEccentricGeography(
   const mountainThreshold = effectiveMountainPercent <= 0 ? Number.POSITIVE_INFINITY : quantile(landRelief, 1 - clamp(effectiveMountainPercent / 100, 0, 0.42));
   const hillThreshold = quantile(landRelief, 1 - clamp((effectiveMountainPercent + hillPercent) / 100, 0, 0.74));
   const elevations = landMask.map((land, index) => land ? reliefValues[index] >= mountainThreshold ? 2 : reliefValues[index] >= hillThreshold ? 1 : 0 : 0);
+  applyConstrainedRelief(reliefValues, elevations, landMask, constraints);
 
   // Pass 7: optional realism adds west-to-east rain shadows without erasing the regional palette.
   if (options.regionClimateLogic === "ORDERED" || options.climateRealism) {
@@ -939,6 +968,7 @@ export function generateEccentricGeography(
     if (!land) terrain = adjacentLand ? 1 : 0;
     return { terrain, resource: 255, feature, river: 0, elevation: elevations[index], continent: land ? continentIds[index] + 1 : 0, wonder: 255, resourceAmount: 0 };
   });
+  applyConstrainedSurface(tiles, landMask, elevations, constraints);
 
   const riverGuidance = new Array<number>(area).fill(0);
   for (let index = 0; index < area; index += 1) {
@@ -952,6 +982,7 @@ export function generateEccentricGeography(
       else if (subregions[neighbor] !== subregion) guidance = Math.max(guidance, 0.58);
     }
     riverGuidance[index] = guidance;
+    if (constraints?.hydrologyMask[index]) riverGuidance[index] = Math.max(riverGuidance[index], constraints.rivers[index] ? 1 : 0.58);
   }
 
   const climateAssignments = new Int32Array(area).fill(-1);
@@ -1030,6 +1061,8 @@ export function generateEccentricGeography(
     majorRiverCorridorTiles: riverGuidance.filter((value) => value >= 0.85).length,
     minorRiverCorridorTiles: riverGuidance.filter((value) => value >= 0.45 && value < 0.85).length,
     geographicIdentities: identities.length,
+    ...(constraints ? { nativeGraphRelationshipPaths: nativeRelationshipPaths } : {}),
+    ...nativeConstraintDiagnostics(constraints),
   };
   const structure: GenerationStructure = {
     engine: "ECCENTRIC",

@@ -1,10 +1,11 @@
 import type { Civ5Map, Civ5StartLocation } from "./civ5-map.ts";
+import { isPassableLand } from "./civ5-rules.ts";
 import { RIVER_DATA_MASK, RIVER_EDGE_MASK } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 
 export type ValidationIssue = {
   severity: "ERROR" | "WARNING" | "INFO";
-  category: "STRUCTURE" | "STARTS" | "RESOURCES" | "RIVERS" | "SCENARIO";
+  category: "STRUCTURE" | "STARTS" | "CITIES" | "RESOURCES" | "RIVERS" | "SCENARIO";
   message: string;
   x?: number;
   y?: number;
@@ -80,7 +81,10 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
   const occupied = new Set<string>();
   const playerIds = new Set<number>();
   const majorStarts = map.startLocations.filter((start) => !start.cityState);
-  if (!majorStarts.length) issues.push({ severity: "ERROR", category: "STARTS", message: "The map has no major-civilization start locations." });
+  const ordinaryGeographyFile = map.source === "file" && map.scenarioDataPresent === false;
+  if (!majorStarts.length) issues.push(ordinaryGeographyFile
+    ? { severity: "INFO", category: "STARTS", message: "This ordinary map file does not embed scenario starts; Civ V will assign starting plots when the game is created." }
+    : { severity: "ERROR", category: "STARTS", message: "The map has no major-civilization start locations." });
   for (const start of map.startLocations) {
     if (start.x < 0 || start.y < 0 || start.x >= map.width || start.y >= map.height) {
       issues.push({ severity: "ERROR", category: "STARTS", message: `Player ${start.player + 1} starts outside the map.` });
@@ -92,7 +96,7 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
     if (playerIds.has(start.player)) issues.push({ severity: "WARNING", category: "SCENARIO", message: `Player identifier ${start.player + 1} is duplicated.` });
     playerIds.add(start.player);
     const tile = map.tiles[start.y * map.width + start.x];
-    if (tile && (tile.terrain < 2 || tile.elevation === 2)) issues.push({ severity: "ERROR", category: "STARTS", message: `Player ${start.player + 1} has an impassable start.`, x: start.x, y: start.y });
+    if (tile && (!isPassableLand(map, tile) || tile.wonder !== 255)) issues.push({ severity: "ERROR", category: "STARTS", message: `Player ${start.player + 1} has an impassable or occupied start.`, x: start.x, y: start.y });
     if (start.cityState && start.playable) issues.push({ severity: "WARNING", category: "SCENARIO", message: `City state ${start.player + 1} is marked playable.`, x: start.x, y: start.y });
   }
   const closePairs: Array<{ one: Civ5StartLocation; two: Civ5StartLocation; distance: number }> = [];
@@ -106,7 +110,20 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
     const closest = closePairs.reduce((best, pair) => pair.distance < best.distance ? pair : best);
     issues.push({ severity: "ERROR", category: "STARTS", message: `${closePairs.length} start-location pair${closePairs.length === 1 ? " is" : "s are"} closer than the required ${MINIMUM_START_DISTANCE} hexes; the closest pair is ${closest.distance} hexes apart.`, x: closest.two.x, y: closest.two.y });
   }
-  if (majorStarts.length !== map.players) issues.push({ severity: "WARNING", category: "SCENARIO", message: `The header declares ${map.players} players but stores ${majorStarts.length} major starts.` });
+  if (!ordinaryGeographyFile && majorStarts.length !== map.players) issues.push({ severity: "WARNING", category: "SCENARIO", message: `The header declares ${map.players} players but stores ${majorStarts.length} major starts.` });
+
+  const cityTiles = new Set<string>();
+  for (const city of map.cities ?? []) {
+    if (city.x < 0 || city.y < 0 || city.x >= map.width || city.y >= map.height) {
+      issues.push({ severity: "ERROR", category: "CITIES", message: `${city.name || `City ${city.id}`} lies outside the map.` });
+      continue;
+    }
+    const key = `${city.x},${city.y}`;
+    const tile = map.tiles[city.y * map.width + city.x];
+    if (!city.recordValid || city.duplicate || cityTiles.has(key)) issues.push({ severity: "ERROR", category: "CITIES", message: `${city.name || `City ${city.id}`} has an invalid or duplicate scenario tile link.`, x: city.x, y: city.y });
+    if (tile && (!isPassableLand(map, tile) || tile.wonder !== 255)) issues.push({ severity: "ERROR", category: "CITIES", message: `${city.name || `City ${city.id}`} occupies water, a mountain, or a natural wonder.`, x: city.x, y: city.y });
+    cityTiles.add(key);
+  }
 
   let invalidResources = 0;
   let invalidWonders = 0;

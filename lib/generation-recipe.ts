@@ -159,9 +159,10 @@ export function generationOptionsFromRecipe(recipe: GenerationRecipe): MapGenera
 }
 
 function cloneMatchIntent(intent: MatchIntent): MatchIntent {
+  const { seats, ...rest } = intent;
   return {
-    ...intent,
-    seats: intent.seats?.map((seat) => ({ ...seat })),
+    ...rest,
+    ...(seats ? { seats: seats.map((seat) => ({ ...seat })) } : {}),
     enabledVictories: [...intent.enabledVictories],
     emphasizedVictories: [...intent.emphasizedVictories],
   };
@@ -204,6 +205,15 @@ export function normalizeGenerationRecipe(value: unknown, legacyDefaults: MapGen
   normalized.matchIntent.humanPlayers = Math.max(0, Math.round(normalized.matchIntent.humanPlayers));
   normalized.matchIntent.aiPlayers = Math.max(0, Math.round(normalized.matchIntent.aiPlayers));
   normalized.matchIntent.flexiblePlayers = Math.max(0, Math.round(normalized.matchIntent.flexiblePlayers));
+  normalized.matchIntent.teamIntent = (["FREE_FOR_ALL", "FIXED_TEAMS", "FLEXIBLE"] as const).includes(normalized.matchIntent.teamIntent) ? normalized.matchIntent.teamIntent : "FLEXIBLE";
+  normalized.matchIntent.competitiveStrictness = (["CASUAL", "BALANCED", "TOURNAMENT", "ASYMMETRIC"] as const).includes(normalized.matchIntent.competitiveStrictness) ? normalized.matchIntent.competitiveStrictness : "BALANCED";
+  normalized.matchIntent.aiAccommodation = (["NORMAL", "STRONG"] as const).includes(normalized.matchIntent.aiAccommodation) ? normalized.matchIntent.aiAccommodation : "NORMAL";
+  if (normalized.matchIntent.seats) {
+    normalized.matchIntent.seats = normalized.matchIntent.seats.slice(0, 22).map((seat) => ({ control: (["HUMAN", "AI", "FLEXIBLE"] as const).includes(seat.control) ? seat.control : "FLEXIBLE", team: seat.team === undefined ? undefined : Math.max(0, Math.min(21, Math.round(seat.team))) }));
+    normalized.matchIntent.humanPlayers = normalized.matchIntent.seats.filter((seat) => seat.control === "HUMAN").length;
+    normalized.matchIntent.aiPlayers = normalized.matchIntent.seats.filter((seat) => seat.control === "AI").length;
+    normalized.matchIntent.flexiblePlayers = normalized.matchIntent.seats.filter((seat) => seat.control === "FLEXIBLE").length;
+  }
   normalized.cityStates = Math.max(0, Math.min(41, Math.round(normalized.cityStates)));
   return normalized;
 }

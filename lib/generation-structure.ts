@@ -40,6 +40,8 @@ export type StrategicNode = {
   owner?: number;
   team?: number;
   regionId?: string;
+  role?: string;
+  control?: "HUMAN" | "AI" | "FLEXIBLE";
 };
 
 export type StrategicEdge = {
@@ -51,8 +53,27 @@ export type StrategicEdge = {
   width: number;
 };
 
+export type VictoryFeasibilityFinding = {
+  victory: "DOMINATION" | "SCIENCE" | "CULTURE" | "DIPLOMACY" | "TIME";
+  state: "DISABLED" | "ENABLED" | "EMPHASIZED";
+  status: "SUPPORTED" | "WEAK" | "BLOCKED";
+  score: number;
+  evidence: string[];
+  metrics: Record<string, number>;
+};
+
+export type MatchFeasibilityAssessment = {
+  schemaVersion: 1;
+  engine: GenerationStructure["engine"];
+  summary: string;
+  victories: VictoryFeasibilityFinding[];
+  metrics: Record<string, number>;
+  limitations: string[];
+};
+
 export type StrategicGraph = {
-  version: 1;
+  version: 2;
+  mapType: string;
   pattern: string;
   symmetry: string;
   nodes: StrategicNode[];
@@ -60,6 +81,18 @@ export type StrategicGraph = {
   protectedTileIndices: number[];
   relaxations: string[];
   metrics: Record<string, number>;
+  matchIntent: {
+    humanPlayers: number;
+    aiPlayers: number;
+    flexiblePlayers: number;
+    teamIntent: string;
+    competitiveStrictness: string;
+    aiAccommodation: string;
+    enabledVictories: string[];
+    emphasizedVictories: string[];
+  };
+  realmRoles: Array<{ team: number; role: string; playerIds: number[] }>;
+  victoryFeasibility: VictoryFeasibilityFinding[];
 };
 
 export type GenerationStructure = {
@@ -70,6 +103,7 @@ export type GenerationStructure = {
   riverSystems: LinearGeography[];
   diagnostics: Record<string, number>;
   strategicGraph?: StrategicGraph;
+  matchAssessment?: MatchFeasibilityAssessment;
   narrativeSkeleton?: NarrativeSkeleton;
   narrativeAssessment?: NarrativeAssessment;
   semanticLineage?: SemanticLineage[];
@@ -288,7 +322,13 @@ export function cloneGenerationStructure(structure: GenerationStructure | undefi
       protectedTileIndices: [...structure.strategicGraph.protectedTileIndices],
       relaxations: [...structure.strategicGraph.relaxations],
       metrics: { ...structure.strategicGraph.metrics },
+      version: 2,
+      mapType: structure.strategicGraph.mapType ?? structure.narrativeSkeleton?.profileId ?? structure.strategicGraph.pattern,
+      matchIntent: structure.strategicGraph.matchIntent ? { ...structure.strategicGraph.matchIntent, enabledVictories: [...structure.strategicGraph.matchIntent.enabledVictories], emphasizedVictories: [...structure.strategicGraph.matchIntent.emphasizedVictories] } : { humanPlayers: 0, aiPlayers: 0, flexiblePlayers: structure.strategicGraph.nodes.filter((node) => node.kind === "MAJOR_START").length, teamIntent: "FLEXIBLE", competitiveStrictness: "BALANCED", aiAccommodation: "NORMAL", enabledVictories: ["DOMINATION", "SCIENCE", "CULTURE", "DIPLOMACY", "TIME"], emphasizedVictories: [] },
+      realmRoles: (structure.strategicGraph.realmRoles ?? []).map((role) => ({ ...role, playerIds: [...role.playerIds] })),
+      victoryFeasibility: (structure.strategicGraph.victoryFeasibility ?? []).map((finding) => ({ ...finding, evidence: [...finding.evidence], metrics: { ...finding.metrics } })),
     } : undefined,
+    matchAssessment: structure.matchAssessment ? { ...structure.matchAssessment, victories: structure.matchAssessment.victories.map((finding) => ({ ...finding, evidence: [...finding.evidence], metrics: { ...finding.metrics } })), metrics: { ...structure.matchAssessment.metrics }, limitations: [...structure.matchAssessment.limitations] } : undefined,
     narrativeSkeleton: structure.narrativeSkeleton ? {
       ...structure.narrativeSkeleton,
       regions: structure.narrativeSkeleton.regions.map((region) => ({ ...region })),

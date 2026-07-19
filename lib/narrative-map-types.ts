@@ -9,6 +9,7 @@ const COMPILED_IDENTITIES = new Set<MapPresetId>([
   "CONTINENTS", "PANGAEA", "ARCHIPELAGO", "INLAND_SEAS", "EARTHSEA", "RIFT_REALMS", "LABYRINTH", "WILD_REGIONS",
   "LIVING_WORLD", "TECTONIC_CONTINENTS", "GREAT_WATERSHEDS", "SHATTERED_BASINS", "MYTHIC_REGIONS", "ENCIRCLING_LANDS", "ASTRAL_PANGAEA", "RIFTWORLD", "LONELY_OCEANS", "PENINSULA_REALM", "SHATTERED_ARCHIPELAGO",
   "DYNAMIC_EARTH", "COLLIDING_PLATES", "ANCIENT_CRATONS", "ISLAND_ARC_EARTH", "SUPERCONTINENT_INTERIOR", "MONSOON_CONTINENTS", "ICEHOUSE_EARTH",
+  "IMPERIAL_RING", "OPPOSING_FRONTS", "CONTESTED_HEARTLAND", "RIVAL_CONTINENTS", "THREE_REALMS", "THALASSIC_LEAGUE", "UNEQUAL_REALMS",
 ]);
 
 type NarrativeEnvelope = {
@@ -50,12 +51,15 @@ const NARRATIVE_ENVELOPES: Record<MapPresetId, NarrativeEnvelope> = {
   OPPOSING_FRONTS: { water: [10, 42], mountains: [14, 32], preferredWater: 28, preferredMountains: 20 },
   CONTESTED_HEARTLAND: { water: [8, 38], mountains: [10, 28], preferredWater: 22, preferredMountains: 18 },
   RIVAL_CONTINENTS: { water: [42, 66], mountains: [8, 24], preferredWater: 54, preferredMountains: 14 },
+  THREE_REALMS: { water: [18, 48], mountains: [10, 26], preferredWater: 32, preferredMountains: 16 },
+  THALASSIC_LEAGUE: { water: [52, 75], mountains: [6, 22], preferredWater: 62, preferredMountains: 12 },
+  UNEQUAL_REALMS: { water: [12, 55], mountains: [8, 30], preferredWater: 34, preferredMountains: 17 },
 };
 
 type ProfileSeed = Pick<NarrativeProfile, "id" | "label" | "engine" | "verb" | "premise" | "requiredMotifs" | "forbiddenMotifs" | "nearestConfusions" | "blindRecognition"> & Partial<Omit<NarrativeProfile, "schemaVersion" | "id" | "label" | "engine" | "verb" | "premise" | "requiredMotifs" | "forbiddenMotifs" | "nearestConfusions" | "blindRecognition">>;
 
 function profile(seed: ProfileSeed): NarrativeProfile {
-  const implementation = seed.id === "THREE_REALMS" || seed.id === "THALASSIC_LEAGUE" || seed.id === "UNEQUAL_REALMS" ? "FUTURE_RUNTIME" : COMPILED_IDENTITIES.has(seed.id as MapPresetId) ? "BENCHMARK" : "PROFILE_ONLY";
+  const implementation = COMPILED_IDENTITIES.has(seed.id as MapPresetId) ? "BENCHMARK" : "PROFILE_ONLY";
   const envelope = NARRATIVE_ENVELOPES[seed.id as MapPresetId];
   const water = seed.parameterEnvelope?.water ?? envelope?.water ?? [15, 80] as const;
   const mountains = seed.parameterEnvelope?.mountains ?? envelope?.mountains ?? [4, 28] as const;
@@ -294,6 +298,31 @@ function compileCatalogSkeleton(
     }
     for (let index = 0; index < ring.length; index += 1) link("HIGHLAND_RING", "RIDGE_PATH", ring[index], ring[(index + 1) % ring.length], 0.05, 0.85);
     targets.oceanless = 1; targets.interiorBasins = 1; targets.highlandRing = count;
+  } else if (["IMPERIAL_RING", "OPPOSING_FRONTS", "CONTESTED_HEARTLAND", "RIVAL_CONTINENTS", "THREE_REALMS", "THALASSIC_LEAGUE", "UNEQUAL_REALMS"].includes(id)) {
+    const count = id === "THREE_REALMS" ? 3 : id === "UNEQUAL_REALMS" ? 4 : id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS" ? 2 : 6;
+    const realmPoints = id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS"
+      ? [{ x: 0.22, y: 0.5 }, { x: 0.78, y: 0.5 }]
+      : id === "THREE_REALMS"
+        ? [{ x: 0.5, y: 0.16 }, { x: 0.2, y: 0.74 }, { x: 0.8, y: 0.74 }]
+        : id === "UNEQUAL_REALMS"
+          ? [{ x: 0.25, y: 0.25 }, { x: 0.72, y: 0.24 }, { x: 0.26, y: 0.74 }, { x: 0.73, y: 0.73 }]
+          : Array.from({ length: count }, (_value, index) => ({ x: 0.5 + Math.cos(index / count * Math.PI * 2) * 0.34, y: 0.5 + Math.sin(index / count * Math.PI * 2) * 0.32 }));
+    const roles = id === "UNEQUAL_REALMS" ? ["TALL", "WIDE", "WAR", "TURTLE"] : realmPoints.map((_point, index) => `REALM_${index + 1}`);
+    const realms = realmPoints.map((point, index) => add(roles[index], id === "THALASSIC_LEAGUE" ? "VALUE" : "LAND", point, id === "UNEQUAL_REALMS" && roles[index] === "WIDE" ? 0.22 : 0.14, 1.1));
+    if (id === "THREE_REALMS") for (let one = 0; one < 3; one += 1) for (let two = one + 1; two < 3; two += 1) link("MUTUAL_BORDER", "LAND_PATH", realms[one], realms[two], (one + two) % 2 ? 0.22 : -0.22, 1);
+    else if (id === "THALASSIC_LEAGUE") for (let index = 0; index < realms.length; index += 1) {
+      link("SEA_LANE", "WATER_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.34 : -0.34, 1);
+      link("REDUNDANT_SEA_LANE", "WATER_PATH", realms[index], realms[(index + 2) % realms.length], index % 2 ? -0.18 : 0.18, 0.8);
+    } else if (id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS") {
+      link("PRIMARY_HINGE", id === "RIVAL_CONTINENTS" ? "WATER_PATH" : "LAND_PATH", realms[0], realms[1], 0.24, 1);
+      link("SECONDARY_HINGE", id === "RIVAL_CONTINENTS" ? "WATER_PATH" : "LAND_PATH", realms[0], realms[1], -0.24, 0.9);
+    } else {
+      for (let index = 0; index < realms.length; index += 1) link(id === "IMPERIAL_RING" ? "LATERAL_RING" : id === "CONTESTED_HEARTLAND" ? "MANY_APPROACHES" : "ROLE_CONTACT", "LAND_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.16 : -0.16, 0.9);
+    }
+    add(id === "THALASSIC_LEAGUE" ? "DIPLOMATIC_PORT" : "SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.5 }, 0.08, 1.5);
+    targets.realms = realms.length;
+    targets.requiredConnections = relationships.length;
+    targets.roleContracts = id === "UNEQUAL_REALMS" ? 4 : 0;
   } else return false;
   return true;
 }
@@ -425,7 +454,7 @@ function nearestLand(index: number, mask: boolean[], elevations: number[], width
 }
 
 export function realizeNarrativeGeography<T extends NarrativeGeography>(geography: T, skeleton: NarrativeSkeleton, options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number): T {
-  if (skeleton.implementation !== "BENCHMARK") return { ...geography, structure: { ...geography.structure, narrativeSkeleton: skeleton } };
+  if (skeleton.implementation !== "BENCHMARK" || narrativeProfile(skeleton.profileId).engine === "POLIS") return { ...geography, structure: { ...geography.structure, narrativeSkeleton: skeleton } };
   const area = width * height;
   const landCount = area - Math.round(area * clamp(options.waterPercent / 100, 0, 0.9));
   let landMask = [...geography.landMask];
@@ -774,6 +803,41 @@ function catalogNarrativeFindings(map: Civ5Map, skeleton: NarrativeSkeleton, pro
   return { motifs, antiMotifs };
 }
 
+function polisNarrativeFindings(map: Civ5Map, profile: NarrativeProfile) {
+  const graph = map.structure?.strategicGraph;
+  if (!graph) return { motifs: profile.requiredMotifs.map((motif) => finding(motif.id, motif.label, 0, "The retained Polis strategic graph is missing.")), antiMotifs: profile.forbiddenMotifs.map((motif) => finding(motif.id, `Avoid ${motif.label.toLowerCase()}`, 0, "The retained Polis strategic graph is missing.")) };
+  const majors = graph.nodes.filter((node) => node.kind === "MAJOR_START");
+  const teams = new Set(majors.map((node) => node.team)).size;
+  const objectives = graph.nodes.filter((node) => node.kind === "OBJECTIVE" || node.kind === "CONTESTED").length;
+  const degree = majors.length ? graph.edges.length * 2 / majors.length : 0;
+  const redundancy = graph.metrics.routeRedundancy ?? Math.max(0, graph.edges.length - majors.length + 1);
+  const naval = graph.metrics.navalRoutes ?? 0;
+  const land = graph.metrics.landRoutes ?? 0;
+  const roles = new Set(graph.realmRoles.map((role) => role.role));
+  const evidence = `${majors.length} starts, ${teams} realms, ${graph.edges.length} routes (${land} land and ${naval} naval), ${redundancy} redundant graph cycles, and ${objectives} contested objectives.`;
+  let motifScores: number[];
+  let antiScore = 0.86;
+  switch (graph.mapType) {
+    case "IMPERIAL_RING": {
+      const feasibleDegree = Math.min(2.5, Math.max(1, majors.length - 1));
+      motifScores = [land >= Math.max(1, majors.length - 1) ? 0.9 : land / Math.max(1, majors.length - 1), objectives >= 1 && degree >= feasibleDegree ? 0.9 : 0.55];
+      antiScore = degree >= feasibleDegree ? 0.9 : 0.35;
+      break;
+    }
+    case "OPPOSING_FRONTS": motifScores = [teams === 2 ? 1 : 0, graph.metrics.crossRealmRoutes >= 2 ? 0.95 : 0.35]; antiScore = graph.metrics.crossRealmRoutes >= 2 ? 0.95 : 0.2; break;
+    case "CONTESTED_HEARTLAND": motifScores = [objectives >= 2 ? 0.95 : 0.55, degree >= 3 ? 0.92 : degree / 3]; antiScore = redundancy >= 2 ? 0.9 : 0.4; break;
+    case "RIVAL_CONTINENTS": motifScores = [teams === 2 ? 1 : 0, graph.metrics.crossRealmRoutes >= 2 && naval >= 1 ? 0.95 : 0.5]; antiScore = graph.metrics.crossRealmRoutes >= 2 ? 0.92 : 0.25; break;
+    case "THREE_REALMS": motifScores = [teams === 3 ? 1 : 0, graph.metrics.realmContactPairs >= 3 ? 1 : graph.metrics.realmContactPairs / 3]; antiScore = graph.metrics.realmContactPairs >= 3 ? 0.95 : 0.2; break;
+    case "THALASSIC_LEAGUE": motifScores = [naval >= majors.length ? 0.95 : naval / Math.max(1, majors.length), redundancy >= Math.max(2, Math.floor(majors.length / 2)) ? 0.9 : 0.5]; antiScore = graph.metrics.minimumNodeDegree >= 2 ? 0.9 : 0.3; break;
+    case "UNEQUAL_REALMS": motifScores = [roles.has("TALL") && roles.has("WIDE") && roles.has("WAR") && roles.has("TURTLE") ? 1 : roles.size / 4, graph.matchIntent.competitiveStrictness === "ASYMMETRIC" ? 0.95 : 0.78]; antiScore = graph.realmRoles.length >= 4 ? 0.92 : 0.3; break;
+    default: motifScores = profile.requiredMotifs.map(() => 0.5);
+  }
+  return {
+    motifs: profile.requiredMotifs.map((motif, index) => finding(motif.id, motif.label, motifScores[index] ?? motifScores.at(-1) ?? 0.5, evidence)),
+    antiMotifs: profile.forbiddenMotifs.map((motif) => finding(motif.id, `Avoid ${motif.label.toLowerCase()}`, antiScore, evidence)),
+  };
+}
+
 export function assessNarrative(map: Civ5Map, recipe: GenerationRecipe): NarrativeAssessment {
   const profile = narrativeProfile(recipe.mapType);
   const skeleton = map.structure?.narrativeSkeleton;
@@ -824,6 +888,10 @@ export function assessNarrative(map: Civ5Map, recipe: GenerationRecipe): Narrati
     motifs.push(finding("frontier-value", "Valuable cold frontier provinces", Math.min(1, coldResources / Math.max(1, warmResources)), `${coldResources} cold-region resources versus ${warmResources} temperate-region resources.`, coldResources, `≥ warm value ${warmResources}`));
     antiMotifs.push(finding("straight-polar-bands", "Avoid straight polar biome bands", Math.min(1, sheets / 1.5), `${sheets} retained irregular ice-sheet regions shape the cold field.`));
     antiMotifs.push(finding("worthless-cold", "Avoid worthless frozen reaches", coldResources > 0 ? 0.9 : 0, `${coldResources} resources remain in frozen land.`));
+  } else if (profile.engine === "POLIS") {
+    const polis = polisNarrativeFindings(map, profile);
+    motifs.push(...polis.motifs);
+    antiMotifs.push(...polis.antiMotifs);
   } else {
     const catalog = catalogNarrativeFindings(map, skeleton, profile);
     motifs.push(...catalog.motifs);

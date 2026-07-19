@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-- **Status:** In progress; Phases 1–5 are verified, including the generation substrate, five-stage Create shell, Scale/Archetype systems and all twenty-six non-Polis narrative compilers. Match Intent-aware Polis, continuous Lab, complete semantic policies and Scenario remain open; protected regeneration and the project-file boundary have partial runtime implementations.
+- **Status:** In progress; Phases 1–9 are verified, including first-class durable project files. Scenario authoring and final hardening remain open.
 - **Purpose:** Coordinate the Narrative Map Type implementation, generation-model expansion and Create/Lab workflow changes as one deliberate rewrite rather than a sequence of controls attached to incompatible assumptions.
 - **Current limitation:** This document is a plan. Except where it explicitly describes the present baseline, none of the proposed models or workflows should be described as implemented.
 - **Primary references:** [`map-type-narrative-identities.md`](map-type-narrative-identities.md), [`world-character.md`](world-character.md), [`workspace-navigation.md`](workspace-navigation.md), [`identity-lab.md`](identity-lab.md), the current generator and retained-structure modules, and the Civ V legality/Repair rules.
@@ -1063,12 +1063,19 @@ Phase 5 is verified. Every non-Polis identity now emits its own retained regions
 
 ## Phase 6 — Match Intent and complete Polis
 
+- **Status:** Verified.
 - Add Human/AI and victory intent to Refine.
 - Rebuild the four current Polis types against Match Intent.
 - Implement Three Realms, Thalassic League and Unequal Realms.
 - Add victory feasibility and AI accommodation reports.
 
+Phase 6 uses the retained strategic graph as its authority. Each Polis compiler emits a distinct topology signature, role-bearing starts/objectives, route-width and redundancy evidence, city-state contestability and a separate finding for every victory condition. Strong AI accommodation changes navigability and expansion geometry only; it never grants invisible yields. Three Realms normalizes incompatible counts with a visible relaxation, while counts below three block generation. Unequal Realms remains directly selectable but is omitted from ordinary Randomise. Refine can optionally bind Human/AI/Flexible control and teams to numbered generated starts; civilization identity and actual lobby enforcement remain Scenario responsibilities.
+
+The completed implementation also retains a five-part Match Intent assessment for Excogitare, Eccentric and Physical based on final starts, resources, city-state contestability, nearby production and territorial capacity. Review distinguishes that evidence from Polis's authored graph. Deterministic A/B fixtures for all seven Polis types are Repair-clean; Strong-AI, victory emphasis, team/count contracts, explicit seats, Randomise exclusion, project cloning and the reviewed Phase 0 fixture all have regression coverage. Final verification passes 119 domain tests and 20 rendered-shell tests, type checking, lint, production and Pages builds, static-export verification, and a responding `node:24-alpine` container at port 3001. Manual Civ V behavior remains outside the automated claim.
+
 ## Phase 7 — Tile and semantic protection
+
+- **Status:** Verified.
 
 Semantic protection is a required part of the rewrite implementation. Phase 7 is incomplete if it delivers only painted tile masks, named selections or post-generation copying; all four engines must consume semantic constraints during candidate construction and report semantic fidelity afterward.
 
@@ -1079,11 +1086,17 @@ Semantic protection is a required part of the rewrite implementation. Phase 7 is
 - Translate semantic constraints into all four engines before candidate generation.
 - Add seam reconciliation, semantic-fidelity reports and blocking conflict behavior.
 
+**Implementation checkpoint:** Phase 7 is verified. Channel masks, true drag selection, named regions, overlay, protection undo/redo, stable semantics, four distinct policies, confidence-labelled import inference, directed-edge watershed protection, deterministic candidate search, atomic conflict handling, fidelity reports and `.excogitare` round trip are implemented. A neutral typed-array payload now enters candidate construction: Excogitare conditions spatial fields, Eccentric conditions polygon allocation and graph paths, Physical conditions sea-level/relief/drainage boundaries, and Polis conditions strategic anchors, edges and territories. The final merge remains an exact Civ V encoding and seam guard rather than a substitute for native constraint compilation.
+
 ## Phase 8 — Continuous Lab
+
+- **Status:** Verified.
 
 - Add schema v2, deterministic four-choice construction, automatic generation/prefetch and End and export.
 - Preserve v1 import.
 - Connect nearest-confusion definitions and Narrative Assessment to exported evidence.
+
+**Implementation checkpoint:** Phase 8 is verified. The Lab schedules all thirty-three identities in deterministic shuffled batches, creates exactly four unique answers from the target's named and structurally related confusions, retains only the current and one prefetched rendered map, advances without correctness feedback, and ends only on explicit **End and export**. Schema v2 retains exact recipes, timing, diagnostics, Narrative Assessment and derived summaries without map snapshots; schema v1 imports as a read-only archive. Direct model tests, rendered-shell tests, the 153-test regression suite, lint, types, production and Pages builds, and a live two-trial Alpine workflow pass. This verifies the evidence apparatus, not human recognizability of the narrative catalogue.
 
 ## Phase 9 — Durable projects
 
@@ -1091,6 +1104,8 @@ Semantic protection is a required part of the rewrite implementation. Phase 7 is
 - Add versioned `.excogitare` download/reimport with optional history; do not depend on application-managed persistence.
 - Preserve Civ5Map export purity.
 - Add transactional import, unsaved-project warnings and imported-map promotion.
+
+**Implementation checkpoint:** Phase 9 is verified. `.excogitare` is a schema-v2 ZIP/DEFLATE bundle with a readable payload manifest, standard SHA-256 hashes, strict archive inspection, 64 MB compressed/expanded ceilings, 160-entry and thirty-history bounds, Full or Current + checkpoints history policy, clean embedded Civ5Map snapshot, safe extension preservation and a pure monolithic-v1 migration fixture. New, Save and Open project actions distinguish project identity from map identity, imported Civ5Maps become new unsaved projects, and close/reload warns without claiming browser persistence. The 157-test combined regression, TypeScript, lint, Vinext production, Pages static verifier and `node:24-alpine` runtime pass; live checks cover project naming, both history policies, Unsaved state, modal dismissal and non-overlapping desktop header layouts.
 
 ## Phase 10 — Scenario workspace
 
@@ -1239,17 +1254,17 @@ All product decisions previously listed as open are resolved, schema ownership/n
 - [x] Design → Refine → Iterate → Edit → Review workflow implemented without operation-driven navigation.
 - [x] Scale materially affects every engine without becoming a Map Size alias.
 - [x] Archetype can repaint generated and imported topography while preserving structural layers by default.
-- [ ] All thirty-three accepted Narrative Map Types have runtime profiles, genuine domain behavior, diagnostics and nearest-confusion evidence.
-- [ ] Polis consumes Human/AI and victory intent in topology and all engines report Match Intent feasibility.
-- [ ] Three Realms, Thalassic League and Unequal Realms are exposed and complete.
-- [ ] Drag to Preserve supports channel masks, undo/history, selective regeneration and blocking conflict reports.
-- [ ] Semantic protection supports stable lineage, Exact/Shape/Function/Relationship policies and **Preserve this watershed** across all applicable engines.
+- [x] All thirty-three accepted Narrative Map Types have runtime profiles, genuine domain behavior, diagnostics and nearest-confusion evidence.
+- [x] Polis consumes Human/AI and victory intent in topology and all engines report Match Intent feasibility.
+- [x] Three Realms, Thalassic League and Unequal Realms are exposed and complete.
+- [x] Drag to Preserve supports channel masks, undo/history, selective regeneration and blocking conflict reports.
+- [x] Semantic protection supports stable lineage, Exact/Shape/Function/Relationship policies and **Preserve this watershed** across all applicable engines.
 - [x] Iterate history remains continuous and branch-aware.
-- [ ] Continuous four-choice Lab and schema v2 implemented with v1 compatibility.
-- [ ] Downloaded `.excogitare` project files round-trip the complete authoring state in a later clean session through safe versioned bundles and transactional migration, without relying on application-managed persistence.
-- [ ] Scenario workspace implements Setup, Factions, World, Objectives and Validate with capability-labelled Civ5Map support and project-only disclosure.
-- [ ] Randomise, workers, cloning, history, checkpoints and mobile consequences verified.
-- [ ] Civ V legality, accessibility, rivers, starts, Repair and export regressions pass.
-- [ ] Identity, Match Intent, Scale, Archetype, preservation and Lab test matrices pass.
-- [ ] Type checking, lint, production build, Pages build and Alpine runtime pass.
-- [ ] README, visual help, feature register, current code and completion claims reconciled.
+- [x] Continuous four-choice Lab and schema v2 implemented with v1 compatibility.
+- [x] Downloaded `.excogitare` project files round-trip the complete authoring state in a later clean session through safe versioned bundles and transactional migration, without relying on application-managed persistence.
+- [x] Scenario workspace implements Setup, Factions, World, Objectives and Validate with capability-labelled Civ5Map support and project-only disclosure. Newly written record families remain at Write until representative Civ V load confirmation.
+- [x] Randomise, workers, cloning, history, checkpoints and mobile consequences verified for Phases 1–6.
+- [x] Civ V legality, accessibility, rivers, starts, Repair and export regressions pass for Phases 1–6.
+- [x] Identity, Match Intent, Scale, Archetype, preservation, Lab, durable-project and Scenario test matrices pass for Phases 1–10.
+- [x] Type checking, lint, production build, Pages build and Alpine runtime pass for Phases 1–10.
+- [x] README, visual help, feature register, current code and Phase 10 implementation claims reconciled.
