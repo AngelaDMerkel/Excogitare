@@ -148,8 +148,8 @@
       },
       "digests": {
         "normalizedRecipe": "025dea1ed6f6935cd5eefa606d5b3dc16f8ccb6cdba687e5adb97633fe6504ad",
-        "civ5Map": "dba580ebf485ebc3b5c895881c1437137fea78ee039f78ee91c2dcb24b2d49e4",
-        "tiles": "397846cd26e7f819ba81bbe9ebedd5ba6e468467f20b2b93e6d42a5a8befc78f",
+        "civ5Map": "0e35ae0d6625403b694ede5b335fc59b947acbf8a5e0867a1063ae143027fc6f",
+        "tiles": "decc9996d36756e49e34ea6c7d15d230cfd0f2f687b988b0d294ca828339321c",
         "structure": "71c91ca1a92ce53343095950dd5d39362c620b1cd2bf55c438cb7b3fc9792f69"
       },
       "summary": {
@@ -218,8 +218,8 @@
       },
       "digests": {
         "normalizedRecipe": "57bfcc048536c57a4142831b6ccb915985221b1c6040ce5c44edbeb28e3386c3",
-        "civ5Map": "d4351323df25901e97334639ff7621e30dca4716ef18b7c4cdfe54c51ee31508",
-        "tiles": "accb05050a1beae7b8f392840c4536ef0f3c5de7ab177a492a6b61250cb860c4",
+        "civ5Map": "a8c7fb69a00a6df0f7be09a656d18c6a7296e16b2e364e20b3b71f16ebef6338",
+        "tiles": "0750ae2cc99c083364b1ac328a710e19e99b5b4dcf1a9e1fa2b393c4f5c2bca8",
         "structure": "816c4547e71ae1a96c72283f0ab60a02946183eb0bd543631f698bf3c51dce97"
       },
       "summary": {
@@ -327,8 +327,8 @@
       },
       "digests": {
         "normalizedRecipe": "89545574269ed07cebeac8805e5fade089af04530482c787d344e428486b2548",
-        "civ5Map": "72fb9a13f9e89623f6415469a7b90bbaec34a87dd1d67e8823cdc0cf90fa51d8",
-        "tiles": "afc1c7b14a8d447b5921b2713f4dfa34b77d79b41ec47773e994111bb828c7a1",
+        "civ5Map": "385108550a5ca0b9cc73117eb58e3696c4bc7c49a06dd65ee246bc0da5bf10e3",
+        "tiles": "7ca612a0bf83f5067d14e35decd0b18a0bfdc176539224b5d76f7739fccd0bcd",
         "structure": "ce87d679e8c4b9ae41e878a990de9ae465113d4676fffd119721a3d6311a377f"
       },
       "summary": {
@@ -339,7 +339,7 @@
         "waterTiles": 528,
         "mountainTiles": 137,
         "riverTiles": 6,
-        "resourceTiles": 49,
+        "resourceTiles": 48,
         "wonderTiles": 5,
         "improvementTiles": 10,
         "routeTiles": 0,
@@ -435,8 +435,8 @@
       },
       "digests": {
         "normalizedRecipe": "a39e6e53dfe3efcdc50b3362d98f38290478778eea91923f6b8e195dbf00e710",
-        "civ5Map": "79667c1a3ca9dc47fc299755fd3aff09dcce35fcca82109c56539668fae63791",
-        "tiles": "76c06bc9dd14d1ba2fd4eaa730c0c4173928383cff3949b5e40e54c5a348c565",
+        "civ5Map": "9eb577286d4057d3e2227f64c34f340cf77cfbdc34b144989fdbeedb39972a8c",
+        "tiles": "c0860a19e423b89bd6c4e55539296b3c2e6b1093dae593b687b215bb48528109",
         "structure": "215c8c7d6d2d5d54a6590a795a0b41322bb031f9abb21a9df6e0b20ba67c6ade"
       },
       "summary": {
@@ -529,8 +529,8 @@
       },
       "digests": {
         "normalizedRecipe": "138fbe73bd30378bc78b059c09b113b59940a8cbdc6775db35dd0ebf5483ba30",
-        "civ5Map": "9f41b357409e383760e7238a1c6f6c2157628b6172ef3cddf78106136ffed7a9",
-        "tiles": "b79251e8e5a5ccc7f498cae8d982c809615e6529bd33f117229d89b2482a2539",
+        "civ5Map": "de5c9fe989307b4e8b509c854501a283faeb2bc1ae4d59db7ee931b4c6b02285",
+        "tiles": "8a35249e41dfe6efa509bd4470ed79e1cff80a6757b9c01430e87eb78a5aaabb",
         "structure": "465812c7ec1accb7e725523ecbaa2e1bfb953f8c28e10ffb24edc3a1d6d1d7e6"
       },
       "summary": {
@@ -638,8 +638,8 @@
       },
       "digests": {
         "normalizedRecipe": "2884b53267262dcca59ea8bc93dddd4717c8d36b2bf9821bacbf41bd1f619c70",
-        "civ5Map": "ae2f7acdb09ea209cb4683695d7f37745629a06b3dc76c8bb5d05555592c16f4",
-        "tiles": "069dd653c7a970b52ce4f666de45c433892c71df8004d4f01ab93705837d5b1d",
+        "civ5Map": "da82362886e6b1c7c23974ff9bffee776fcc86e1220397d19023af3a3ef25429",
+        "tiles": "394d5a28724bcbb16d23d040e1cf022f10c6e8015826f1d10d935252e1eea15c",
         "structure": "424aefeceae9211d9258f20dcd0aa92a9a66e968709d12a1c447696812a10c14"
       },
       "summary": {
@@ -650,7 +650,7 @@
         "waterTiles": 3245,
         "mountainTiles": 146,
         "riverTiles": 13,
-        "resourceTiles": 175,
+        "resourceTiles": 180,
         "wonderTiles": 5,
         "improvementTiles": 42,
         "routeTiles": 0,
@@ -749,8 +749,8 @@
       },
       "digests": {
         "normalizedRecipe": "65caec09330e633b18f921add42740d9ac9b5c832ec48239eb2b510a1a7ba074",
-        "civ5Map": "46db81ee92c3bcdcdad6b8402eb88f251192e167f64aeb0d72536b4ee8bc6d88",
-        "tiles": "537e37656f3d5d3bd47f7571386e4504c376544ea1ce34751081714ff2f03b42",
+        "civ5Map": "007dfae9bb2b2b5df3043a32271fbb6b500750ab4ada54ccff3804f9ffe57b69",
+        "tiles": "6397abf5f1053423d4fd1cf7cf98129e981fe9e45a1b3a80a3b345b9a0b8bf3c",
         "structure": "be2cdefe03f1b1081463dc528115d12b17ecfcdb3e11596893b97b2f99a686fc"
       },
       "summary": {
@@ -862,9 +862,9 @@
       },
       "digests": {
         "normalizedRecipe": "a31eea212b5aa6d71906e168c542f62b5785c4e4055889133d97a8aaa54d2e35",
-        "civ5Map": "4c0e8cef1dbaf8e6f99e6874e86133523a8bee329a4d773303b8e72414cd7058",
-        "tiles": "b3a11fd94de280e854179a99083ffee9219f787a0f547e695ba204f8b80eeb96",
-        "structure": "b7a0967d8ed41db15e9b139097871f3ee11afbaf57101c54c8c8de10621d0114"
+        "civ5Map": "4ba01d04767439d24011f4b75776306e08da14c485799a027bc229f73db6b66b",
+        "tiles": "35a9a39e2e880227112cff39ba94d82bde6108e2025f965a570cbf037de12dfb",
+        "structure": "65f2e277da0ecc5bb10f9c1b8c4a7e707a6bd112703e1f81b1bfae4cd9a6a663"
       },
       "summary": {
         "width": 80,
@@ -874,7 +874,7 @@
         "waterTiles": 1664,
         "mountainTiles": 559,
         "riverTiles": 74,
-        "resourceTiles": 308,
+        "resourceTiles": 306,
         "wonderTiles": 5,
         "improvementTiles": 42,
         "routeTiles": 0,
@@ -971,8 +971,8 @@
       },
       "digests": {
         "normalizedRecipe": "8c0d6b7b18c2c87001c0e1ce77949b00e58dbf7754a9cb00dd6521df7b00f576",
-        "civ5Map": "0624ac1ad23827ca2429c96d37921b35a87b4efc33bd42ab184d0556990f33f4",
-        "tiles": "e3e26751718bb1dc3b4d6fe7523156b5f34125752f4e381b282c3b9afa13f3e1",
+        "civ5Map": "56a7d1235de37f8bbccace7bfd27391eb5ad3f18cb15d6345fc5821861d404eb",
+        "tiles": "8714e38f5833f95fc99ed0fc56cb51b7844ee8d238c58e37fc1af614c606f36f",
         "structure": "54f5c52cbdaddb855435560a0f87891e48cd45e5f51c50ec81363e78010efb9e"
       },
       "summary": {

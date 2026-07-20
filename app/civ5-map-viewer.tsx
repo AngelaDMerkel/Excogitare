@@ -3013,7 +3013,7 @@ export function Civ5MapViewer() {
             <button type="button" data-tooltip="Undo the most recent map edit while preserving the current zoom and pan." onClick={undo} disabled={!pastMaps.length} title="Undo" aria-label="Undo">↶</button>
             <button type="button" data-tooltip="Restore the most recently undone map edit while preserving the current zoom and pan." onClick={redo} disabled={!futureMaps.length} title="Redo" aria-label="Redo">↷</button>
           </div>
-          <button className="button button-secondary button-export-view" type="button" data-tooltip="Export the current rendered view as a transparent-background PNG at high resolution." onClick={exportView}>Export PNG</button>
+          {mode !== "CREATE" && <button className="button button-secondary button-export-view" type="button" data-tooltip="Export the current rendered view as a transparent-background PNG at high resolution." onClick={exportView}>Export PNG</button>}
           <button className="button button-secondary button-new-project" type="button" data-tooltip="Begin a new unsaved project from the current generated or imported map." onClick={beginNewProject}>New project</button>
           <button className="button button-secondary" type="button" data-tooltip={`${projectName} · ${projectDirty ? "Unsaved. " : ""}Choose a history policy, then download a compressed, SHA-256 verified Excogitare project.`} onClick={requestProjectExport}>Save project</button>
           <button className="button button-secondary" type="button" data-tooltip="Open a downloaded .excogitare ZIP bundle or migrate a legacy v1 project without relying on browser persistence." onClick={() => projectInputRef.current?.click()}>Open project</button>
@@ -4096,6 +4096,10 @@ export function Civ5MapViewer() {
             <i aria-hidden="true" />
             <button className="fit-button" type="button" data-tooltip="Fit the entire map inside the available canvas, including extreme aspect ratios." onClick={() => fitMap(size)}>Fit</button>
             {mode !== "LAB" && <>
+            {mode === "CREATE" && <>
+            <i aria-hidden="true" />
+            <button className="png-export-button" type="button" data-tooltip="Export the current rendered view as a transparent-background PNG at high resolution." onClick={exportView} aria-label="Export PNG">PNG</button>
+            </>}
             <i aria-hidden="true" />
             <button className={`projection-button${projection === "ISOMETRIC" ? " is-active" : ""}`} type="button" data-tooltip={projection === "ISOMETRIC" ? "Return to the flat 2D hex rendering." : "Tilt the map into the decorative isometric renderer with raised hills and mountains."} aria-pressed={projection === "ISOMETRIC"} onClick={() => setProjection((current) => current === "FLAT" ? "ISOMETRIC" : "FLAT")}>{projection === "ISOMETRIC" ? "2D" : "ISO 3D"}</button>
             <i aria-hidden="true" />

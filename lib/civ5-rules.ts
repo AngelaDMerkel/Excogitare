@@ -1,22 +1,23 @@
 import type { Civ5Map, Civ5Tile } from "./civ5-map.ts";
 
 export type PlacementVerdict = { valid: boolean; reason?: string };
+type PlacementMap = Pick<Civ5Map, "terrains" | "resources">;
 
 function typeName(values: string[], index: number) {
   return index === 255 ? "" : values[index] ?? "";
 }
 
-export function isWaterTerrain(map: Civ5Map, tile: Civ5Tile) {
+export function isWaterTerrain(map: Pick<Civ5Map, "terrains">, tile: Civ5Tile) {
   const terrain = typeName(map.terrains, tile.terrain);
   if (terrain) return terrain.includes("OCEAN") || terrain.includes("COAST");
   return tile.terrain < 2;
 }
 
-export function isPassableLand(map: Civ5Map, tile: Civ5Tile) {
+export function isPassableLand(map: Pick<Civ5Map, "terrains">, tile: Civ5Tile) {
   return !isWaterTerrain(map, tile) && tile.elevation !== 2;
 }
 
-export function resourcePlacementVerdict(map: Civ5Map, tile: Civ5Tile): PlacementVerdict {
+export function resourcePlacementVerdict(map: PlacementMap, tile: Civ5Tile): PlacementVerdict {
   if (tile.resource === 255) return { valid: true };
   const resource = typeName(map.resources, tile.resource);
   if (!resource) return { valid: false, reason: "The resource definition is missing." };
@@ -26,6 +27,7 @@ export function resourcePlacementVerdict(map: Civ5Map, tile: Civ5Tile): Placemen
   const oil = resource.includes("OIL");
   if (waterOnly && !water) return { valid: false, reason: `${resource.replace("RESOURCE_", "")} requires water.` };
   if (!waterOnly && !oil && water) return { valid: false, reason: `${resource.replace("RESOURCE_", "")} requires land.` };
+  if (resource.includes("WHEAT") && tile.elevation !== 0) return { valid: false, reason: "WHEAT requires flat land." };
   return { valid: true };
 }
 

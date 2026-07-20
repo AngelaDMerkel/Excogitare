@@ -704,6 +704,31 @@ test("repair tests correct illegal resources, features, and river bytes", () => 
   assert.equal(repaired.tiles[8].river, 0);
 });
 
+test("Wheat requires flat land and Repair relocates hill Wheat", () => {
+  const tile = (terrain: number, elevation: number, resource = 255): Civ5Tile => ({ terrain, resource, feature: 255, river: 0, elevation, continent: terrain === 0 ? 0 : 1, wonder: 255, resourceAmount: resource === 255 ? 0 : 1 });
+  const map: Civ5Map = {
+    name: "Hill Wheat", description: "", worldSize: "Custom", version: 12, width: 4, height: 1, players: 0, wraps: false,
+    terrains: ["TERRAIN_OCEAN", "TERRAIN_GRASS"], features: [], wonders: [], resources: ["RESOURCE_WHEAT"],
+    tiles: [tile(1, 1, 0), tile(1, 0), tile(1, 2), tile(0, 0)], startLocations: [], source: "file", scenarioDataPresent: false,
+  };
+
+  assert.equal(resourcePlacementVerdict(map, { ...map.tiles[1], resource: 0 }).valid, true);
+  assert.deepEqual(resourcePlacementVerdict(map, map.tiles[0]), { valid: false, reason: "WHEAT requires flat land." });
+  assert.equal(resourcePlacementVerdict(map, { ...map.tiles[2], resource: 0 }).valid, false);
+  assert.equal(resourcePlacementVerdict(map, { ...map.tiles[3], resource: 0 }).valid, false);
+
+  const reviewIssue = validateCiv5Map(map).find((issue) => issue.category === "RESOURCES" && issue.x === 0 && issue.y === 0);
+  assert.equal(reviewIssue?.severity, "ERROR");
+  assert.match(reviewIssue?.message ?? "", /flat land/i);
+
+  const repairIssue = buildRepairIssues(map).find((issue) => issue.id === "resource-0");
+  assert.equal(repairIssue?.mutation?.kind, "MOVE_RESOURCE");
+  const repaired = applyRepairIssues(map, [repairIssue!], new Set([repairIssue!.id]));
+  assert.equal(repaired.tiles[0].resource, 255);
+  assert.equal(repaired.tiles[1].resource, 0);
+  assert.equal(resourcePlacementVerdict(repaired, repaired.tiles[1]).valid, true);
+});
+
 test("illegal resources are deleted when no compatible relocation exists", () => {
   const map: Civ5Map = {
     name: "No ocean", description: "", worldSize: "Custom", version: 12, width: 3, height: 2, players: 0, wraps: false,

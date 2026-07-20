@@ -1,5 +1,5 @@
 import type { Civ5Map, Civ5StartLocation } from "./civ5-map.ts";
-import { isPassableLand } from "./civ5-rules.ts";
+import { isPassableLand, resourcePlacementVerdict } from "./civ5-rules.ts";
 import { RIVER_DATA_MASK, RIVER_EDGE_MASK } from "./rivers.ts";
 import { MINIMUM_START_DISTANCE } from "./start-locations.ts";
 
@@ -134,6 +134,10 @@ export function validateCiv5Map(map: Civ5Map): ValidationIssue[] {
   for (let index = 0; index < map.tiles.length; index += 1) {
     const tile = map.tiles[index];
     if (tile.resource !== 255 && (tile.resource < 0 || tile.resource >= map.resources.length)) invalidResources += 1;
+    else if (tile.resource !== 255) {
+      const verdict = resourcePlacementVerdict(map, tile);
+      if (!verdict.valid) issues.push({ severity: "ERROR", category: "RESOURCES", message: verdict.reason ?? "Illegal resource placement.", x: index % map.width, y: Math.floor(index / map.width) });
+    }
     if (tile.wonder !== 255 && (tile.wonder < 0 || tile.wonder >= map.wonders.length)) invalidWonders += 1;
     if (tile.river & ~RIVER_DATA_MASK) invalidRiverBits += 1;
     if (tile.improvement) previewSites += 1;

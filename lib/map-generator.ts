@@ -1363,6 +1363,7 @@ function normalizeStarts(
   tournament: boolean,
 ) {
   const resourceIndex = (name: string) => RESOURCES.indexOf(name);
+  const placementMap = { terrains: TERRAINS, resources: RESOURCES };
   for (const start of starts) {
     const origin = tiles[start.y * width + start.x];
     if (quality === "LEGENDARY") {
@@ -1398,9 +1399,11 @@ function normalizeStarts(
       ? ["RESOURCE_WHEAT", "RESOURCE_CATTLE", "RESOURCE_IRON", "RESOURCE_HORSE", "RESOURCE_GOLD", "RESOURCE_GEMS"]
       : ["RESOURCE_WHEAT", "RESOURCE_IRON", "RESOURCE_HORSE", ...(tournament ? ["RESOURCE_CATTLE"] : [])];
     placements.forEach((resource, index) => {
-      const target = workable[index % Math.max(1, workable.length)];
+      const resourceId = resourceIndex(resource);
+      const candidates = workable.length ? [...workable.slice(index % workable.length), ...workable.slice(0, index % workable.length)] : [];
+      const target = candidates.find((candidate) => candidate.tile.resource === 255 && resourcePlacementVerdict(placementMap, { ...candidate.tile, resource: resourceId }).valid);
       if (!target) return;
-      target.tile.resource = resourceIndex(resource);
+      target.tile.resource = resourceId;
       target.tile.resourceAmount = resource.includes("IRON") || resource.includes("HORSE") ? 2 : 1;
     });
   }
@@ -1428,6 +1431,7 @@ function applyResourceRules(
   safeIndices: number[] = [],
 ) {
   const abundance = { SCARCE: 0.65, STANDARD: 1, ABUNDANT: 1.55 } as const;
+  const placementMap = { terrains: TERRAINS, resources: RESOURCES };
   const landCandidates = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 ? [index] : []);
   const safeSet = new Set(safeIndices);
   const ordinaryLandCandidates = landCandidates.filter((index) => !safeSet.has(index));
@@ -1439,7 +1443,10 @@ function applyResourceRules(
       if (placed >= count) break;
       const tile = tiles[index];
       if (tile.resource !== 255 || tile.wonder !== 255 || tile.improvement) continue;
-      tile.resource = selector ? selector(index, placed) : resourceIndices[Math.floor(random() * resourceIndices.length)];
+      const legalResources = resourceIndices.filter((resource) => resourcePlacementVerdict(placementMap, { ...tile, resource }).valid);
+      if (!legalResources.length) continue;
+      const preferred = selector ? selector(index, placed) : legalResources[Math.floor(random() * legalResources.length)];
+      tile.resource = legalResources.includes(preferred) ? preferred : legalResources[Math.floor(random() * legalResources.length)];
       tile.resourceAmount = tile.resource >= 5 && tile.resource <= 10 ? 2 : 1;
       placed += 1;
     }
