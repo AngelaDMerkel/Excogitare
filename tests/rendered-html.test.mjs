@@ -682,8 +682,9 @@ test("V2 renders the map-centred studio as the main application", async () => {
   const response = await render("/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  for (const text of ["World premise", "Great Watersheds", "Randomise everything", "Generate new world", "Develop", "Save project", "World snapshots", "Water minimum", "Geography &amp; possible play"]) assert.ok(html.includes(text), text);
+  for (const text of ["Geographic foundation", "Great Watersheds", "Randomise everything", "Generate new world", "Develop", "Save project", "World snapshots", "Water minimum", "Geography &amp; possible play"]) assert.ok(html.includes(text), text);
   assert.doesNotMatch(html, /aria-label="Undo"|aria-label="Redo"|Gameplay ideas|class="studio-header"/);
   assert.doesNotMatch(html, />Scenario</);
   assert.doesNotMatch(html, />Lab</);
+  assert.doesNotMatch(html, /World history|Add event|Add a past|Comet flood|The comet seas|The retreating ice/);
 });

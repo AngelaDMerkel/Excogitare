@@ -4,10 +4,9 @@ import { readFileSync } from "node:fs";
 import { parseCiv5Map, serializeCiv5Map } from "../lib/civ5-map.ts";
 import { isWaterTerrain } from "../lib/civ5-rules.ts";
 import { buildRepairIssues } from "../lib/map-repair.ts";
-import { LANDSCAPES, acceptWorld, defaultRecipe, newEvent, random, randomRecipe, redo, undo, validateRecipe, type Session, type StudioRecipe } from "../lib/studio/model.ts";
+import { LANDSCAPES, acceptWorld, defaultRecipe, random, randomRecipe, redo, undo, validateRecipe, type Session, type StudioRecipe } from "../lib/studio/model.ts";
 import { exportMap, generateWorld, importMap, mapOptions, runJob, sampleWorld, validateWorld } from "../lib/studio/operations.ts";
 import { parseSession, serializeSession } from "../lib/studio/project.ts";
-import { transformedSurface } from "../lib/studio/geography.ts";
 
 const recipe: StudioRecipe = { ...defaultRecipe(), size: "DUEL", players: 2, cityStates: 2, candidates: 1, seed: "v2-watersheds-proof" };
 let reference: ReturnType<typeof generateWorld>;
@@ -17,11 +16,10 @@ test("V2 full randomisation is deterministic under an injected random stream and
   assert.deepEqual(randomRecipe(random("seed")), randomRecipe(random("seed")));
   const rng = random("sweep"); const recipes = Array.from({ length: 60 }, () => randomRecipe(rng));
   for (const r of recipes) validateRecipe(r);
-  const events = recipes.flatMap(r => r.events);
-  for (const key of ["intensity", "age", "radius"] as const) assert.ok(new Set(events.map(event => event[key])).size > 1, key);
+  for (const recipe of recipes) assert.ok(!("events" in recipe), "randomisation cannot prescribe a fictional history");
   for (const key of ["landscape", "foundation", "players", "size", "temperature", "rainfall", "balance", "geometry", "wraps", "teams", "resources", "candidates"] as const) assert.ok(new Set(recipes.map(r => r[key])).size > 1, key);
   assert.throws(() => validateRecipe({ ...recipe, water: [40, 20] }), /ordered range/);
-  assert.throws(() => validateRecipe({ ...recipe, water: [0, 10], motifs: ["OCEAN_DIVIDES"] }), /Ocean Divides/);
+  assert.throws(() => validateRecipe({ ...recipe, events: [] } as StudioRecipe), /retired story controls/);
   assert.equal(mapOptions({ ...recipe, foundation: "GAMEPLAY" }).engine, mapOptions(recipe).engine, "priority must not replace the selected premise's constructor");
 });
 
@@ -49,21 +47,6 @@ test("rainfall refinement retains coastline and the original elevation substrate
   assert.ok(wet.features.some(f => original.features.some(old => old.id === f.id)), "recognizable features retain identity");
 });
 
-test("narrative events transform retained terrain causally and changing intensity does not accumulate old edits", () => {
-  const original = world(); const event = { ...newEvent("CRATERS", random("crater")), x: .5, y: .5, radius: .2, age: 0, intensity: .8 };
-  const r = { ...recipe, events: [event], erosion: 0 };
-  const surface = transformedSurface(original, r);
-  const center = Math.floor(original.map.height / 2) * original.map.width + Math.floor(original.map.width / 2);
-  assert.ok(surface[center] < original.base[center], "impact excavates its basin");
-  const radius = Math.round(Math.min(original.map.width, original.map.height * .866) * .2); const rim = center + radius;
-  assert.ok(surface[rim] > original.base[rim], "impact raises its rim");
-  const flooded = runJob({ kind: "REFINE", world: original, recipe: { ...recipe, events: [{ ...event, kind: "FLOOD" }] } });
-  const again = runJob({ kind: "REFINE", world: flooded, recipe: { ...flooded.recipe, rainfall: 40 } });
-  assert.deepEqual(flooded.base, original.base);
-  assert.deepEqual(again.fields.elevation, flooded.fields.elevation);
-  assert.equal(validateWorld(flooded).length, 0);
-});
-
 test("regional sketches alter retained relief and protected tiles survive dependent recomputation", () => {
   const original = world();
   const index = original.map.tiles.findIndex(t => !isWaterTerrain(original.map, t) && t.elevation === 0);
@@ -84,7 +67,7 @@ test("selected repairs leave unselected defects visible and do not silently clea
   assert.equal(result.map.tiles[8].resource, 200);
 });
 
-test("projects retain world fields, drafts, locks, narrative edits and immutable undo/redo history", () => {
+test("projects retain world fields, drafts, locks, geographic edits and immutable undo/redo history", () => {
   const original = world(); original.locked = [1, 2];
   const next = runJob({ kind: "REFINE", world: original, recipe: { ...recipe, rainfall: 72 } });
   const initial: Session = { current: original, past: [], future: [] };
@@ -124,16 +107,11 @@ test("every landscape produces lawful final geography within its requested range
   }
 });
 
-test("strategic premises, narrative histories and rotational arenas change actual geography", () => {
+test("strategic foundations and explicit rotational arenas change actual geography", () => {
   const composed = generateWorld({ ...recipe, foundation: "GAMEPLAY", landscape: "RIVAL_SHORES", water: [45, 65], mountains: [15, 26], candidates: 3, seed: "v2-composition" });
   assert.equal(composed.map.structure?.engine, "POLIS");
   assert.ok(composed.map.structure?.strategicGraph?.edges.length);
   const original = world();
-  for (const kind of ["FLOOD", "CRATERS", "THAW", "RUINS"] as const) {
-    const result = runJob({ kind: "REFINE", world: original, recipe: { ...recipe, events: [newEvent(kind, random(kind))] } });
-    assert.notDeepEqual(result.map.tiles, original.map.tiles, kind);
-    assert.equal(validateWorld(result).length, 0, kind);
-  }
   const symmetric = runJob({ kind: "REBALANCE", world: original, balance: "SYMMETRIC" });
   for (let i = 0; i < symmetric.map.tiles.length / 2; i++) {
     const a = symmetric.map.tiles[i], b = symmetric.map.tiles[symmetric.map.tiles.length - i - 1];
@@ -141,7 +119,7 @@ test("strategic premises, narrative histories and rotational arenas change actua
   }
   assert.equal(validateWorld(symmetric).length, 0);
   assert.equal(symmetric.map.structure?.evidenceState, "STALE");
-  assert.ok(symmetric.development.causes.some(c => c.kind === "ARENA"));
+  assert.ok(symmetric.development.operations.some(c => c.kind === "ARENA"));
 });
 
 test("refinement is stable when reapplied, and wonder controls alter the actual map", () => {

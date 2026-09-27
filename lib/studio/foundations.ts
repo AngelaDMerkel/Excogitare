@@ -38,29 +38,80 @@ export function mapOptions(recipe: StudioRecipe, seed = recipe.seed): MapGenerat
 export function worldFromMap(map: Civ5Map, recipe = defaultRecipe(), origin: World["origin"] = "IMPORTED", snapshot?: EngineNarrativeStageSnapshot): World {
   const safe = structuredClone(map), fields = fieldsFromNative(safe, snapshot), features = identifyFeatures(safe, [], origin !== "GENERATED");
   const id = `foundation:${hash(`${recipe.seed}:${map.name}:${map.width}:${map.height}`).toString(36)}`;
-  const baselineRecipe = { ...structuredClone(recipe), events: [] };
+  const baselineRecipe = structuredClone(recipe);
   return {
-    version: 3, revision: 0, map: safe, recipe: structuredClone(recipe), base: [...fields.elevation], baseRivers: safe.tiles.map(t => t.river), fields,
+    version: 4, revision: 0, map: safe, recipe: structuredClone(recipe), base: [...fields.elevation], baseRivers: safe.tiles.map(t => t.river), fields,
     substrate: { id, seed: recipe.seed, engine: safe.structure?.engine ?? "INFERRED", confidence: snapshot?.reliefValues ? "NATIVE" : "INFERRED", tiles: structuredClone(safe.tiles), fields: structuredClone(fields), recipe: baselineRecipe, places: structuredClone(features), ...(snapshot?.reliefValues ? { nativeFields: { relief: [...snapshot.reliefValues], ...(snapshot.moistures ? { moisture: [...snapshot.moistures] } : {}), ...(snapshot.temperatures ? { temperature: [...snapshot.temperatures] } : {}) } } : {}) },
     strokes: [], locked: [], protections: [], features, origin, assessment: assess(safe, recipe),
-    development: { causes: [{ id, kind: safe.structure?.engine ?? "INFERRED", label: snapshot ? "Retained native geography and its construction plan" : "Observed geography; physical fields inferred", tiles: [], parentIds: [], inferred: !snapshot }], changes: { direct: [], dependent: [], retained: safe.tiles.length, affectedPlaces: [], explanation: [] }, proposals: [], candidates: [] },
+    development: { operations: [{ id, kind: safe.structure?.engine ?? "INFERRED", label: snapshot ? "Retained native geography and its construction plan" : "Observed geography; physical fields inferred", tiles: [], parentIds: [], inferred: !snapshot }], changes: { direct: [], dependent: [], retained: safe.tiles.length, affectedPlaces: [], explanation: [] }, proposals: [], candidates: [] },
     messages: snapshot ? ["Native tiles and geographic plans retained. Raw engine fields are stored alongside a relief calibration for local editing."] : ["Physical fields are inferred from observed tiles. Original geography is preserved; its geological history is unknown."],
   };
 }
-export function migrateWorld(value: World | unknown): World {
-  const old = value as World;
-  if (!old || !old.map || !old.recipe) throw new Error("Invalid world record.");
-  if (old.version === 3) {
-    const current = structuredClone(old);
-    if (current.substrate) current.substrate.seed ??= current.map.generation?.seed ?? current.recipe.seed;
+/** Preserve old accepted maps; a fictional programme is never replayed during migration. */
+export function migrateWorld(value: unknown): World {
+  const old = value as Partial<Omit<World, "version" | "recipe">> & { version: number; recipe?: unknown };
+  if (!old || !old.map || !old.recipe || ![2, 3, 4].includes(old.version)) throw new Error("Invalid or unsupported world record.");
+  if (old.version === 4) return structuredClone(value) as World;
+  const n = old.map.width * old.map.height;
+  if (!Number.isInteger(n) || n < 1 || n > 20000 || !Array.isArray(old.map.tiles) || old.map.tiles.length !== n) throw new Error("The earlier world has an invalid or oversized grid.");
+  const recipe = migrateRecipe(old.recipe);
+  const earlierRecipe = old.recipe as { events?: unknown[] };
+  if (earlierRecipe.events !== undefined && (!Array.isArray(earlierRecipe.events) || earlierRecipe.events.length > 8)) throw new Error("The earlier world's edit programme is malformed.");
+  if (old.version === 2) {
+    const current = worldFromMap(old.map, recipe, old.origin);
+    current.revision = old.revision ?? 0;
+    current.label = old.label;
+    current.source = old.source ? structuredClone(old.source) : undefined;
+    current.locked = [...(old.locked ?? [])];
+    current.protections = structuredClone(old.protections ?? []);
+    current.substrate.legacyAuthoring = { recipe: structuredClone(old.recipe), strokes: structuredClone(old.strokes ?? []) };
+    current.features = identifyFeatures(current.map, old.features ?? [], true);
+    current.substrate.places = structuredClone(current.features);
+    current.messages.push("Earlier edits are preserved in the saved geography. Future changes begin from this landscape.");
     return current;
   }
-  if ((old.version as number) !== 2) throw new Error("Unsupported world version.");
-  const recipe = migrateRecipe(old.recipe), current = worldFromMap(old.map, { ...recipe, events: [] }, old.origin);
-  current.revision = old.revision; current.label = old.label; current.source = old.source ? structuredClone(old.source) : undefined; current.locked = [...old.locked];
-  current.substrate.legacyAuthoring = { recipe: structuredClone(old.recipe), strokes: structuredClone(old.strokes) };
-  current.features = identifyFeatures(current.map, old.features, true); current.substrate.places = structuredClone(current.features);
-  current.messages.push("Earlier V2 edits are preserved in this accepted foundation. Their prior physical causes were not retained, so future changes begin from this snapshot.");
+  if (!old.substrate || !old.fields || !old.development) throw new Error("The earlier world is missing its retained geography.");
+  const current = structuredClone(value) as World;
+  current.version = 4;
+  current.recipe = recipe;
+  current.substrate.recipe = migrateRecipe(old.substrate.recipe);
+  current.substrate.seed ??= current.map.generation?.seed ?? recipe.seed;
+  const earlierDevelopment = old.development as unknown as { causes: World["development"]["operations"] };
+  if (!Array.isArray(earlierDevelopment.causes)) throw new Error("The earlier world is missing its operation records.");
+  current.development.operations = structuredClone(earlierDevelopment.causes);
+  delete (current.development as unknown as Record<string, unknown>).causes;
+  const replayable = current.development.candidates.filter(candidate => {
+    const priorRecipe = candidate.recipe as unknown as { events?: unknown[] } | undefined;
+    return !priorRecipe?.events?.length;
+  });
+  current.development.candidates = replayable.map(candidate => ({ ...candidate, ...(candidate.recipe ? { recipe: migrateRecipe(candidate.recipe) } : {}) }));
+  if (earlierRecipe.events?.length) {
+    // Save the accepted surface as the new editing baseline. Keep its previous
+    // native fields and authoring programme as an archive, never active inputs.
+    current.substrate = {
+      id: `saved:${hash(JSON.stringify(current.map.tiles)).toString(36)}`,
+      seed: current.substrate.seed,
+      engine: current.substrate.engine,
+      confidence: "RETAINED",
+      tiles: structuredClone(current.map.tiles),
+      fields: structuredClone(current.fields),
+      recipe: structuredClone(recipe),
+      places: structuredClone(current.features),
+      legacyAuthoring: {
+        recipe: structuredClone(old.recipe), strokes: structuredClone(old.strokes ?? []),
+        foundation: structuredClone(old.substrate), operations: structuredClone(earlierDevelopment.causes),
+      },
+    };
+    current.base = [...current.fields.elevation];
+    current.baseRivers = current.map.tiles.map(tile => tile.river);
+    current.strokes = [];
+    current.development = {
+      operations: [{ id: current.substrate.id, kind: "SAVED", label: "Previously edited geography retained", tiles: [], parentIds: [], inferred: false }],
+      changes: { direct: [], dependent: [], retained: n, affectedPlaces: [], explanation: [] },
+      proposals: [], candidates: [],
+    };
+    current.messages.push("Earlier programmed edits are preserved in this landscape. Their records are archived; new edits work directly on the saved geography.");
+  }
   return current;
 }
 export function nativeFoundation(recipe: StudioRecipe, seed: string, progress: (label: string) => void = () => {}): World {

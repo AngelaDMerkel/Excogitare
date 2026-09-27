@@ -2,6 +2,8 @@
 
 Date: 2026-09-26
 
+The user's 27 September correction makes geography the source of player-inferred history. Earlier proposals for fictional-event authoring are superseded by [Geography before narrative](features/geography-before-narrative.md).
+
 ## Implementation authorization and amendments
 
 The user authorized implementation on a branch without the `codex` prefix: `v2/map-studio`. Exact multiplayer starts are omitted from V2; earlier passages below recording that requirement and its investigation are historical and superseded. Generated exports remain ordinary geography-only maps. The user's visual-language reference is [inSANE](https://github.com/AngelaDMerkel/inSANE). Current implementation scope and evidence are tracked in [V2 map studio](features/v2-map-studio.md).

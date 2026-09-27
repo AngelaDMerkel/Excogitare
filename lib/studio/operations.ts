@@ -5,7 +5,7 @@ import { buildRepairIssues, applyRepairIssues } from "../map-repair.ts";
 import { markGenerationStructureStale } from "../generation-structure.ts";
 import { inferFields, identifyFeatures } from "./geography.ts";
 import { assess } from "./assessment.ts";
-import { defaultRecipe, hash, LANDSCAPES, newEvent, random, randomRecipe, validateRecipe, type CandidateSummary, type Job, type Progress, type Stroke, type StudioRecipe, type World } from "./model.ts";
+import { defaultRecipe, hash, random, randomRecipe, validateRecipe, type CandidateSummary, type Job, type Progress, type Stroke, type StudioRecipe, type World } from "./model.ts";
 import { migrateWorld, nativeFoundation, worldFromMap } from "./foundations.ts";
 import { applyDevelopment, developWorld, findProposals, finishWorld } from "./development.ts";
 import { symmetry } from "./arena.ts";
@@ -42,8 +42,7 @@ function dominates(a: World, b: World) {
 }
 export function generateWorld(input: StudioRecipe, progress: Progress = () => {}): World {
   validateRecipe(input);
-  const recipe = structuredClone(input), landscape = LANDSCAPES.find(l => l.id === recipe.landscape)!;
-  if (landscape.story && !recipe.events.some(event => event.kind === landscape.story)) recipe.events.push({ ...newEvent(landscape.story, random(`${recipe.seed}:history`)), x: .5, y: landscape.story === "THAW" ? .78 : .5, radius: .24, age: .55, intensity: .6, placement: landscape.story === "THAW" ? "ICE_MARGIN" : "INLAND" });
+  const recipe = structuredClone(input);
   const dimensions = resolveMapDimensions(recipe.size, recipe.geometry);
   if (dimensions.width * dimensions.height > 20000) throw new Error("This recipe exceeds the supported 20,000-tile work budget.");
   const candidates: World[] = [], summaries: CandidateSummary[] = [], failures: string[] = [];
@@ -51,10 +50,9 @@ export function generateWorld(input: StudioRecipe, progress: Progress = () => {}
     const seed = i ? `${recipe.seed.slice(0, 230)}:candidate-${i + 1}` : recipe.seed;
     progress(`Building foundation ${i + 1} of ${recipe.candidates}`, i, recipe.candidates);
     try {
-      let world = nativeFoundation({ ...recipe, events: [] }, seed, label => progress(`Foundation ${i + 1}: ${label}`, i, recipe.candidates));
+      let world = nativeFoundation(recipe, seed, label => progress(`Foundation ${i + 1}: ${label}`, i, recipe.candidates));
       world.recipe.seed = recipe.seed;
       world.substrate.recipe.seed = recipe.seed;
-      if (recipe.events.length) world = developWorld(world, { ...world.recipe, events: recipe.events });
       if (recipe.balance === "SYMMETRIC") { symmetry(world); world = finishWorld(world); }
       if (!compositionFits(world)) throw new Error("The resulting world exceeds the requested water or mountain ranges. Widen the range or reduce the intervention.");
       const improvements: string[] = [];
@@ -84,16 +82,15 @@ export function runJob(job: Job, progress: Progress = () => {}): World {
   if (job.kind === "RANDOMISE") {
     const rng = random(job.seed); let error = "";
     for (let attempt = 0; attempt < 6; attempt++) { try { return generateWorld(randomRecipe(rng), (label, completed, total) => progress(`Random world ${attempt + 1}: ${label}`, completed, total)); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); } }
-    throw new Error(`Six randomized premises could not meet their constraints. ${error}`);
+    throw new Error(`Six randomized foundations could not meet their constraints. ${error}`);
   }
   const world = migrateWorld(job.world);
   progress("Developing the retained world", 0, 4);
   if (job.kind === "ALTERNATIVE") {
     const candidate = world.development.candidates.find(c => c.seed === job.seed);
     if (!candidate?.recipe || !candidate.fingerprint || !candidate.strokes) throw new Error("This earlier search did not retain a replayable foundation. Generate a new search to compare alternatives.");
-    let result = nativeFoundation({ ...candidate.recipe, events: [] }, candidate.seed, label => progress(label, 1, 4));
+    let result = nativeFoundation(candidate.recipe, candidate.seed, label => progress(label, 1, 4));
     result.recipe.seed = candidate.recipe.seed; result.substrate.recipe.seed = candidate.recipe.seed;
-    if (candidate.recipe.events.length) result = developWorld(result, candidate.recipe);
     if (candidate.recipe.balance === "SYMMETRIC") { symmetry(result); result = finishWorld(result); }
     for (const stroke of candidate.strokes) result = developWorld(result, result.recipe, stroke);
     if (hash(JSON.stringify(result.map.tiles)).toString(36) !== candidate.fingerprint) throw new Error("The saved foundation no longer reproduces under this generator version. The accepted world is retained.");

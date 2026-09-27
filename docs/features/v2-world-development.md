@@ -1,5 +1,7 @@
 # V2 world development
 
+**Direction corrected on 27 September:** [Geography before narrative](geography-before-narrative.md) supersedes this record's ordered events, fictional-history controls and comet/thaw transformations. Players infer possible histories from geography. The former implementation and its verification below are retained as historical evidence. Native foundations, physical development, gameplay assessment and the floating Atlas workspace remain in use.
+
 ## Contract
 
 Status: **Implemented**. Automated domain, interface, type, lint, production and static-export checks pass. Desktop and 390×844 layouts have been inspected. Real Civ V multiplayer loads, human recognition/enjoyment and the unavailable Alpine runtime remain unverified; the whole outcome is not called Verified.

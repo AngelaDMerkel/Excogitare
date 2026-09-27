@@ -1,5 +1,7 @@
 # V2 map studio
 
+The current [Geography before narrative](geography-before-narrative.md) contract removes fictional-event authoring. Players infer a possible history from the landscape. This record describes the earlier implementation.
+
 ## Status and approved contract
 
 **Superseded architecture:** The subsequent [V2 world development](v2-world-development.md) implementation replaces the initial reconstruction pipeline, simplified recipe panel and extracted flat renderer described below. Its record is authoritative for current behavior and verification. The original verification log is retained as historical evidence, not evidence for the rewrite.

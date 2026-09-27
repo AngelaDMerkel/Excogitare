@@ -4,8 +4,8 @@ import { generateRiverNetwork } from "../map-generator.ts";
 import { reconstructCiv5RiverEdgeSystems } from "../rivers.ts";
 import { markGenerationStructureStale } from "../generation-structure.ts";
 import type { EngineNarrativeStageSnapshot } from "../engine-narrative-diagnostics.ts";
-import { clamp, hash, random, type Cause, type Feature, type Fields, type StudioRecipe, type World } from "./model.ts";
-import { adjacency, components, drainageTree, paths, region, tileDistance, trace } from "./spatial.ts";
+import { clamp, hash, random, type MapOperation, type Feature, type Fields, type StudioRecipe, type World } from "./model.ts";
+import { adjacency, components, drainageTree, region, tileDistance } from "./spatial.ts";
 export { adjacency, components } from "./spatial.ts";
 const terrainIndex = (map: Civ5Map, suffix: string, fallback: number) => { const i = map.terrains.findIndex(t => t.endsWith(`_${suffix}`)); return i < 0 ? fallback : i; };
 const featureIndex = (map: Civ5Map, suffix: string) => { const i = map.features.findIndex(t => t.endsWith(`_${suffix}`)); return i < 0 ? 255 : i; };
@@ -13,7 +13,7 @@ const featureIndex = (map: Civ5Map, suffix: string) => { const i = map.features.
 /** Only imports and old projects require inference. Native tile output is never repainted here. */
 export function inferFields(map: Civ5Map): Fields {
   const elevation = map.tiles.map((tile, i) => isWaterTerrain(map, tile) ? (/COAST/.test(map.terrains[tile.terrain]) ? .42 : .25) : [.56, .72, .89][tile.elevation] + (hash(`inferred:${i}`) % 1000) * .00003);
-  return { elevation, moisture: map.tiles.map(tile => /DESERT|SNOW/.test(map.terrains[tile.terrain]) ? .15 : /GRASS/.test(map.terrains[tile.terrain]) ? .72 : .4), temperature: map.tiles.map(tile => /SNOW/.test(map.terrains[tile.terrain]) ? .05 : /TUNDRA/.test(map.terrains[tile.terrain]) ? .22 : /DESERT/.test(map.terrains[tile.terrain]) ? .8 : .6), drainage: drainageTree(map, elevation).downstream };
+  return { elevation, moisture: map.tiles.map(tile => /DESERT|SNOW/.test(map.terrains[tile.terrain]) ? .15 : /GRASS/.test(map.terrains[tile.terrain]) ? .72 : .4), temperature: map.tiles.map(tile => /SNOW/.test(map.terrains[tile.terrain]) || /ICE/.test(map.features[tile.feature] ?? "") ? .05 : /TUNDRA/.test(map.terrains[tile.terrain]) ? .22 : /DESERT/.test(map.terrains[tile.terrain]) ? .8 : .6), drainage: drainageTree(map, elevation).downstream };
 }
 export function fieldsFromNative(map: Civ5Map, snapshot?: EngineNarrativeStageSnapshot): Fields {
   const inferred = inferFields(map);
@@ -38,48 +38,9 @@ export function cleanPlacements(map: Civ5Map, scope?: Iterable<number>) {
   }
   return map;
 }
-function eventSurface(world: World, recipe: StudioRecipe) {
-  const { map } = world, graph = adjacency(map), elevation = [...world.base], warming = new Array<number>(map.tiles.length).fill(0);
-  const causes: Cause[] = [];
-  for (const event of recipe.events) {
-    let cx = event.x * (map.width - 1), cy = event.y * (map.height - 1);
-    const radius = Math.max(2, event.radius * Math.min(map.width, map.height * .866));
-    if (event.placement && event.placement !== "FIXED") {
-      const baselineMap = { ...map, tiles: world.substrate.tiles };
-      const distanceToWater = paths(graph, baselineMap.tiles.flatMap((tile, i) => isWaterTerrain(baselineMap, tile) ? [i] : []), () => 1).distance;
-      const candidates = baselineMap.tiles.flatMap((tile, i) => !isWaterTerrain(baselineMap, tile) && tile.elevation < 2 && (event.placement !== "ICE_MARGIN" || world.substrate.fields.temperature[i] < .35) ? [i] : []);
-      const score = (i: number) => {
-        let dx = Math.abs(i % map.width - cx); if (map.wraps) dx = Math.min(dx, map.width - dx);
-        const separation = Math.hypot(dx, (Math.floor(i / map.width) - cy) * .866);
-        const setting = event.placement === "INLAND" ? Math.min(radius, distanceToWater[i]) * .8 : -Math.abs(distanceToWater[i] - 2) * .5;
-        return setting - separation * .8;
-      };
-      candidates.sort((a, b) => score(b) - score(a) || a - b);
-      if (!candidates.length) throw new Error(`No ${event.placement === "INLAND" ? "continental interior" : "cold ice margin"} fits this event. Choose a fixed location or another foundation.`);
-      cx = candidates[0] % map.width; cy = Math.floor(candidates[0] / map.width);
-    }
-    const footprint: number[] = [], before = [...elevation];
-    for (let i = 0; i < elevation.length; i++) {
-      let dx = i % map.width - cx; if (map.wraps && Math.abs(dx) > map.width / 2) dx -= Math.sign(dx) * map.width;
-      const dy = (Math.floor(i / map.width) - cy) * .866, d = Math.hypot(dx, dy) / radius;
-      if (d >= 1.65) continue;
-      footprint.push(i);
-      const angle = Math.atan2(dy, dx), irregular = 1 + .08 * Math.sin(angle * 5 + hash(event.id) % 17) + .035 * Math.cos(angle * 9);
-      const taper = (1 - Math.min(1, Math.max(0, d - 1.2) / .45)) ** 2;
-      const rim = Math.exp(-(((d - irregular) / (.13 + event.age * .16)) ** 2)), basin = Math.max(0, 1 - d * d) ** 2;
-      if (event.kind === "CRATERS" || event.kind === "FLOOD") elevation[i] = clamp(elevation[i] + event.intensity * taper * (rim * .38 * (1 - event.age * .65) - basin * (event.kind === "FLOOD" ? .5 : .4)));
-      else if (event.kind === "THAW") { warming[i] += event.intensity * Math.max(0, 1 - d / 1.65) * (.3 + event.age * .35); elevation[i] = clamp(elevation[i] - event.intensity * basin * .12); }
-    }
-    if (event.kind === "RUINS" && footprint.length) {
-      const center = footprint.reduce((best, i) => Math.hypot(i % map.width - cx, Math.floor(i / map.width) - cy) < Math.hypot(best % map.width - cx, Math.floor(best / map.width) - cy) ? i : best);
-      const destination = footprint.filter(i => tileDistance(map, i, center) > radius * .8).sort((a, b) => elevation[a] - elevation[b] || a - b)[0] ?? center;
-      const allowed = new Set(footprint), route = paths(graph, [center], (_, j) => allowed.has(j) ? 1 + elevation[j] * 3 : Infinity);
-      for (const i of trace(route.previous, destination)) { elevation[i] = clamp(elevation[i] - event.intensity * .3); for (const j of graph[i]) if (allowed.has(j) && hash(`${event.id}:${j}`) % 100 > event.age * 75) elevation[j] = clamp(elevation[j] + event.intensity * .075); }
-    }
-    // Age changes the event's material contribution, not unrelated terrain.
-    if (event.age > 0) for (const i of footprint) { const delta = elevation[i] - before[i]; const nearby = graph[i].reduce((sum, j) => sum + elevation[j] - before[j], 0) / Math.max(1, graph[i].length); elevation[i] = clamp(before[i] + delta * (1 - event.age * .25) + nearby * event.age * .25); }
-    causes.push({ id: event.id, kind: event.kind, label: event.kind === "FLOOD" ? "Impact, deposited water and breached basins" : event.kind === "CRATERS" ? "Impact excavation and eroded rim" : event.kind === "THAW" ? "Retreating ice and meltwater" : "Excavation and abandoned embankments", tiles: footprint, parentIds: [world.substrate.id], inferred: false });
-  }
+function developedSurface(world: World, recipe: StudioRecipe) {
+  const { map } = world, graph = adjacency(map), elevation = [...world.base], temperatureDelta = new Array<number>(map.tiles.length).fill(0);
+  const operations: MapOperation[] = [];
   for (const [order, stroke] of world.strokes.entries()) {
     for (const i of stroke.tiles) { if (i < 0 || i >= elevation.length) continue; if (stroke.kind === "RIDGE") elevation[i] = clamp(elevation[i] + stroke.strength * .27); if (stroke.kind === "BASIN") elevation[i] = clamp(elevation[i] - stroke.strength * .34); if (stroke.kind === "LAND") elevation[i] = Math.max(.54, clamp(elevation[i] + stroke.strength * .3)); if (stroke.kind === "PASS") elevation[i] = Math.min(.65, elevation[i]); }
     if (stroke.kind === "PAINT") for (const i of stroke.tiles) {
@@ -88,8 +49,11 @@ function eventSurface(world: World, recipe: StudioRecipe) {
       else if (stroke.elevation !== undefined && stroke.elevation !== before.elevation) elevation[i] = [.57, .74, .91][stroke.elevation] ?? elevation[i];
       else if (stroke.terrain !== undefined && isWaterTerrain(map, before)) elevation[i] = Math.max(.55, elevation[i]);
     }
+    if (stroke.kind === "WARM" || stroke.kind === "COOL") {
+      for (const i of stroke.tiles) temperatureDelta[i] += (stroke.kind === "WARM" ? 1 : -1) * stroke.strength * .4;
+    }
     const selected = new Set(stroke.tiles);
-    causes.push({ id: `edit-${order}-${hash(stroke.tiles.join(","))}`, kind: stroke.kind, label: `${stroke.kind.toLowerCase()} development`, tiles: [...stroke.tiles], parentIds: world.features.filter(f => f.tiles.some(i => selected.has(i))).map(f => f.id), inferred: false });
+    operations.push({ id: `edit-${order}-${hash(stroke.tiles.join(","))}`, kind: stroke.kind, label: `${stroke.kind.toLowerCase()} development`, tiles: [...stroke.tiles], parentIds: world.features.filter(f => f.tiles.some(i => selected.has(i))).map(f => f.id), inferred: false });
   }
   const erosionDelta = (recipe.erosion - world.substrate.recipe.erosion) / 100;
   if (erosionDelta !== 0) {
@@ -109,9 +73,9 @@ function eventSurface(world: World, recipe: StudioRecipe) {
       }
     }
   }
-  return { elevation, warming, causes };
+  return { elevation, temperatureDelta, operations };
 }
-export function transformedSurface(world: World, recipe: StudioRecipe) { return eventSurface(world, recipe).elevation; }
+export function transformedSurface(world: World, recipe: StudioRecipe) { return developedSurface(world, recipe).elevation; }
 function waterBudget(map: Civ5Map, elevation: number[], water: Set<number>, recipe: StudioRecipe, locked: Set<number>, graph: number[][], allowed?: Set<number>) {
   const n = map.tiles.length, min = Math.round(recipe.water[0] / 100 * n), max = Math.round(recipe.water[1] / 100 * n), target = Math.max(min, Math.min(max, water.size)), grow = water.size < target;
   while (water.size !== target) {
@@ -138,10 +102,10 @@ function placeFunctionSurvives(world: World, map: Civ5Map, protection: World["pr
   const originalConnected = components(world.map, i => selected.has(i) && passable(world.map, i))[0]?.length ?? 0;
   return after >= originalConnected * .8 && protection.tiles.filter(i => passable(map, i)).length >= before * .8;
 }
-/** Rebuild from persistent causes. Only affected channels replace native tiles. */
-export function realizeSurface(world: World, recipe: StudioRecipe): { map: Civ5Map; fields: Fields; causes: Cause[]; direct: number[]; dependent: number[] } {
+/** Rebuild from retained geography and explicit edits. Only affected channels replace native tiles. */
+export function realizeSurface(world: World, recipe: StudioRecipe): { map: Civ5Map; fields: Fields; operations: MapOperation[]; direct: number[]; dependent: number[] } {
   const map = structuredClone(world.map), graph = adjacency(map), locked = new Set(world.locked), baseline = world.substrate, baseMap = { ...map, tiles: baseline.tiles };
-  const { elevation, warming, causes } = eventSurface(world, recipe), moisture = [...baseline.fields.moisture], temperature = [...baseline.fields.temperature];
+  const { elevation, temperatureDelta, operations } = developedSurface(world, recipe), moisture = [...baseline.fields.moisture], temperature = [...baseline.fields.temperature];
   const changedRelief = elevation.flatMap((v, i) => Math.abs(v - baseline.fields.elevation[i]) > 1e-8 || Math.abs(world.fields.elevation[i] - baseline.fields.elevation[i]) > 1e-8 ? [i] : []), direct = new Set(changedRelief), affected = new Set(region(graph, changedRelief, 2));
   const water = new Set(baseline.tiles.flatMap((tile, i) => isWaterTerrain(baseMap, tile) ? [i] : []));
   for (const i of changedRelief) { if (elevation[i] < .5) water.add(i); else water.delete(i); }
@@ -150,7 +114,7 @@ export function realizeSurface(world: World, recipe: StudioRecipe): { map: Civ5M
   const globalClimate = recipe.rainfall !== baseline.recipe.rainfall || recipe.temperature !== baseline.recipe.temperature || world.recipe.rainfall !== baseline.recipe.rainfall || world.recipe.temperature !== baseline.recipe.temperature, fieldWet = new Array<number>(map.tiles.length).fill(0);
   for (let i = 0; i < map.tiles.length; i++) if (Math.abs(world.fields.temperature[i] - baseline.fields.temperature[i]) > 1e-8 || Math.abs(world.fields.moisture[i] - baseline.fields.moisture[i]) > 1e-8) affected.add(i);
   for (const stroke of world.strokes) if (stroke.kind === "WET" || stroke.kind === "DRY") for (const i of stroke.tiles) { fieldWet[i] += (stroke.kind === "WET" ? 1 : -1) * stroke.strength * .4; affected.add(i); direct.add(i); }
-  for (let i = 0; i < warming.length; i++) if (warming[i] > 0) { affected.add(i); direct.add(i); }
+  for (let i = 0; i < temperatureDelta.length; i++) if (temperatureDelta[i] !== 0) { affected.add(i); direct.add(i); }
   if (globalClimate) for (let i = 0; i < map.tiles.length; i++) affected.add(i);
   // Bounded windward/leeward response to locally changed relief.
   for (const i of changedRelief) { const delta = elevation[i] - baseline.fields.elevation[i], y = Math.floor(i / map.width), direction = Math.abs(y / Math.max(1, map.height - 1) * 2 - 1) > .35 ? 1 : -1; for (let distance = 1; distance <= 6; distance++) for (const side of [-1, 1]) { let x = i % map.width + distance * direction * side; if (map.wraps) x = (x + map.width) % map.width; if (x < 0 || x >= map.width) continue; const j = y * map.width + x; fieldWet[j] += delta * (side < 0 ? .14 : -.22) * (1 - distance / 7); affected.add(j); } }
@@ -159,7 +123,7 @@ export function realizeSurface(world: World, recipe: StudioRecipe): { map: Civ5M
   map.tiles = world.map.tiles.map((tile, i) => ({ ...tile, terrain: baseline.tiles[i].terrain, elevation: baseline.tiles[i].elevation, feature: baseline.tiles[i].feature, river: baseline.tiles[i].river }));
   for (const i of affected) {
     const tile = map.tiles[i], heightDelta = elevation[i] - baseline.fields.elevation[i];
-    temperature[i] = clamp(temperature[i] + (recipe.temperature - baseline.recipe.temperature) / 150 - heightDelta * .55 + warming[i]);
+    temperature[i] = clamp(temperature[i] + (recipe.temperature - baseline.recipe.temperature) / 150 - heightDelta * .55 + temperatureDelta[i]);
     moisture[i] = clamp(moisture[i] + (recipe.rainfall - baseline.recipe.rainfall) / 150 + fieldWet[i] + (water.has(i) ? .25 : graph[i].some(j => water.has(j)) ? Math.max(0, heightDelta * -.1) : 0));
     if (water.has(i)) { tile.terrain = graph[i].some(j => !water.has(j)) ? coast : ocean; tile.elevation = 0; tile.feature = temperature[i] < .12 ? featureIndex(map, "ICE") : 255; }
     else {
@@ -195,7 +159,7 @@ export function realizeSurface(world: World, recipe: StudioRecipe): { map: Civ5M
   const exactPaint = new Set(world.strokes.filter(s => s.kind === "PAINT").flatMap(s => s.tiles));
   cleanPlacements(map, [...affected].filter(i => !exactPaint.has(i)));
   for (let i = 0; i < map.tiles.length; i++) if (!affected.has(i) && !exactPaint.has(i)) map.tiles[i] = { ...world.map.tiles[i] };
-  const atFoundation = !world.strokes.length && !recipe.events.length && ["rainfall", "temperature", "erosion", "rivers", "water", "mountains"].every(key => JSON.stringify(recipe[key as keyof StudioRecipe]) === JSON.stringify(baseline.recipe[key as keyof StudioRecipe]));
+  const atFoundation = !world.strokes.length && ["rainfall", "temperature", "erosion", "rivers", "water", "mountains"].every(key => JSON.stringify(recipe[key as keyof StudioRecipe]) === JSON.stringify(baseline.recipe[key as keyof StudioRecipe]));
   if (atFoundation) for (let i = 0; i < map.tiles.length; i++) {
     for (const key of ["terrain", "elevation", "feature", "river"] as const) map.tiles[i][key] = baseline.tiles[i][key];
     elevation[i] = baseline.fields.elevation[i]; moisture[i] = baseline.fields.moisture[i]; temperature[i] = baseline.fields.temperature[i];
@@ -209,8 +173,8 @@ export function realizeSurface(world: World, recipe: StudioRecipe): { map: Civ5M
     if (broken) throw new Error(`The change conflicts with the protected ${protection.policy.toLowerCase()} of ${protection.id}.`);
   }
   const actual = map.tiles.flatMap((t, i) => JSON.stringify(t) !== JSON.stringify(world.map.tiles[i]) ? [i] : []);
-  if (actual.length) map.structure = markGenerationStructureStale(map.structure, "World development changed realized geography. Native causes remain; previous proof is historical.");
-  return { map, fields: { elevation, moisture, temperature, drainage: drainageTree(map, elevation, graph).downstream }, causes, direct: actual.filter(i => direct.has(i)), dependent: actual.filter(i => !direct.has(i)) };
+  if (actual.length) map.structure = markGenerationStructureStale(map.structure, "World development changed realized geography. Native process records remain; previous proof is historical.");
+  return { map, fields: { elevation, moisture, temperature, drainage: drainageTree(map, elevation, graph).downstream }, operations, direct: actual.filter(i => direct.has(i)), dependent: actual.filter(i => !direct.has(i)) };
 }
 export function identifyFeatures(map: Civ5Map, previous: Feature[] = [], inferred = false): Feature[] {
   const graph = adjacency(map), features: Feature[] = [];

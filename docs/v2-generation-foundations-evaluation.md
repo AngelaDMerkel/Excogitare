@@ -4,6 +4,8 @@ Date: 26 September 2026
 
 ## Recommendation
 
+**Subsequent correction — 27 September 2026:** The user clarified that players infer histories from the geography. The proposals below for an authored event history are superseded by [Geography before narrative](features/geography-before-narrative.md). Geographic processes, retained places and gameplay assessment remain relevant; the application does not prescribe fictional events or generate narrative interpretations.
+
 Develop V2 around a persistent world that can be cultivated through geography, history and strategic relationships. The existing engines contain useful, distinct capabilities. The strongest starting point for this user's preferences is Eccentric's regional and watershed structure, supported by Physical's causal processes and an expanded Polis planning and assessment layer. Excogitare's field operations remain useful for shaping and variation.
 
 The architectural improvement is to let these capabilities work on shared, persistent causes and constraints. Their present complete-map outputs cannot simply be run one after another: each must have an explicit responsibility, and changes must be negotiated before final terrain is committed.

@@ -38,7 +38,7 @@ export function developWorld(source: World, recipe: StudioRecipe, stroke?: Strok
   const rebuilt = realizeSurface(result, recipe);
   result.map = rebuilt.map; result.fields = rebuilt.fields;
   if (!result.map.scenarioDataPresent) result.map.players = recipe.players;
-  result.development.causes = [source.development.causes[0], ...rebuilt.causes];
+  result.development.operations = [source.development.operations[0], ...rebuilt.operations];
   result.development.changes = { direct: rebuilt.direct, dependent: rebuilt.dependent, retained: result.map.tiles.length - rebuilt.direct.length - rebuilt.dependent.length, affectedPlaces: [], explanation: ["Changes were replayed from the retained foundation. Unaffected tiles and independent river systems retain their accepted state."] };
   updateContent(result, source);
   if (recipe.balance === "SYMMETRIC") {

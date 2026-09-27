@@ -32,5 +32,5 @@ export function symmetry(world: World) {
   fields.drainage = drainageTree(map, fields.elevation).downstream;
   map.structure = markGenerationStructureStale(map.structure, "An explicitly authored rotational arena replaces native asymmetry.");
   const id = `arena:${world.substrate.id}`;
-  world.development.causes = [...world.development.causes.filter(cause => cause.id !== id), { id, kind: "ARENA", label: "Authored rotational arena", tiles: [], parentIds: [world.substrate.id], inferred: false }];
+  world.development.operations = [...world.development.operations.filter(cause => cause.id !== id), { id, kind: "ARENA", label: "Authored rotational arena", tiles: [], parentIds: [world.substrate.id], inferred: false }];
 }

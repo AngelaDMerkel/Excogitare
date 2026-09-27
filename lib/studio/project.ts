@@ -8,7 +8,7 @@ import { assessWorld } from "./development.ts";
 const PAYLOAD = "extensions/studio-v2.json";
 export function validateWorldRecord(value: unknown): asserts value is World {
   const world = value as World;
-  if (!world || world.version !== 3 || !world.map || !world.fields || !world.substrate || !world.development || !Array.isArray(world.base)) throw new Error("The project has an invalid retained world record.");
+  if (!world || world.version !== 4 || !world.map || !world.fields || !world.substrate || !world.development || !Array.isArray(world.base)) throw new Error("The project has an invalid retained world record.");
   validateRecipe(world.recipe);
   const n = world.map.width * world.map.height;
   if (!Number.isInteger(world.map.width) || !Number.isInteger(world.map.height) || world.map.width < 1 || world.map.height < 1) throw new Error("Invalid map dimensions.");
@@ -20,17 +20,17 @@ export function validateWorldRecord(value: unknown): asserts value is World {
   if (!Array.isArray(world.fields.drainage) || world.fields.drainage.length !== n || world.fields.drainage.some(i => !Number.isInteger(i) || i < -1 || i >= n)) throw new Error("Invalid retained drainage.");
   for (const tile of world.map.tiles) if (!tile || ["terrain", "elevation", "feature", "resource", "river", "continent", "wonder", "resourceAmount"].some(key => !Number.isInteger(tile[key as keyof typeof tile]) || Number(tile[key as keyof typeof tile]) < 0 || Number(tile[key as keyof typeof tile]) > 255)) throw new Error("Invalid physical tile record.");
   const indices = (items: number[]) => Array.isArray(items) && items.length <= n && items.every(i => Number.isInteger(i) && i >= 0 && i < n);
-  if (!indices(world.locked) || !Array.isArray(world.strokes) || world.strokes.length > 1000 || world.strokes.some(s => !indices(s.tiles) || !["RIDGE", "BASIN", "LAND", "PASS", "WET", "DRY", "PAINT"].includes(s.kind) || !Number.isFinite(s.strength))) throw new Error("Invalid geographic edits or protected tiles.");
+  if (!indices(world.locked) || !Array.isArray(world.strokes) || world.strokes.length > 1000 || world.strokes.some(s => !indices(s.tiles) || !["RIDGE", "BASIN", "LAND", "PASS", "WET", "DRY", "WARM", "COOL", "PAINT"].includes(s.kind) || !Number.isFinite(s.strength))) throw new Error("Invalid geographic edits or protected tiles.");
   if (!Array.isArray(world.features) || world.features.some(f => typeof f.id !== "string" || typeof f.name !== "string" || !indices(f.tiles))) throw new Error("Invalid retained feature selection.");
   const basis = world.substrate;
   validateRecipe(basis.recipe);
-  if (typeof basis.id !== "string" || typeof basis.seed !== "string" || !["NATIVE", "INFERRED"].includes(basis.confidence) || !Array.isArray(basis.tiles) || basis.tiles.length !== n || !basis.fields || !Array.isArray(basis.places)) throw new Error("Invalid retained foundation.");
+  if (typeof basis.id !== "string" || typeof basis.seed !== "string" || !["NATIVE", "INFERRED", "RETAINED"].includes(basis.confidence) || !Array.isArray(basis.tiles) || basis.tiles.length !== n || !basis.fields || !Array.isArray(basis.places)) throw new Error("Invalid retained foundation.");
   for (const values of [basis.fields.elevation, basis.fields.moisture, basis.fields.temperature]) if (!Array.isArray(values) || values.length !== n || values.some(v => !Number.isFinite(v) || v < 0 || v > 1)) throw new Error("Invalid foundation fields.");
   if (!Array.isArray(basis.fields.drainage) || basis.fields.drainage.length !== n || basis.fields.drainage.some(i => !Number.isInteger(i) || i < -1 || i >= n)) throw new Error("Invalid foundation drainage.");
   if (basis.nativeFields) for (const values of [basis.nativeFields.relief, basis.nativeFields.moisture, basis.nativeFields.temperature]) if (values && (!Array.isArray(values) || values.length !== n || values.some(v => !Number.isFinite(v)))) throw new Error("Invalid native process fields.");
   if (basis.confidence === "NATIVE" && !Array.isArray(basis.nativeFields?.relief)) throw new Error("Native field provenance requires retained process data.");
   if (!Array.isArray(world.protections) || world.protections.some(p => typeof p.id !== "string" || !["SHAPE", "FUNCTION"].includes(p.policy) || !indices(p.tiles))) throw new Error("Invalid place protection.");
-  if (!Array.isArray(world.development.causes) || !world.development.causes.length || world.development.causes.length > 1010 || world.development.causes.some(c => typeof c.id !== "string" || typeof c.label !== "string" || !indices(c.tiles) || !Array.isArray(c.parentIds))) throw new Error("Invalid world causes.");
+  if (!Array.isArray(world.development.operations) || !world.development.operations.length || world.development.operations.length > 1010 || world.development.operations.some(c => typeof c.id !== "string" || typeof c.label !== "string" || !indices(c.tiles) || !Array.isArray(c.parentIds))) throw new Error("Invalid map operations.");
   if (!Array.isArray(world.development.proposals) || world.development.proposals.length > 10 || world.development.proposals.some(p => !p.stroke || !indices(p.stroke.tiles) || !Number.isFinite(p.stroke.strength))) throw new Error("Invalid development proposals.");
   if (!world.development.changes || !indices(world.development.changes.direct) || !indices(world.development.changes.dependent) || !Number.isInteger(world.development.changes.retained) || world.development.changes.retained < 0 || world.development.changes.retained > n) throw new Error("Invalid development footprint.");
   if (!Array.isArray(world.development.candidates) || world.development.candidates.length > 12) throw new Error("Invalid retained candidate search.");
@@ -51,19 +51,21 @@ export function serializeSession(input: Session, name: string, legacy?: Excogita
   const recipe = world.map.recipe ?? generationRecipeFromOptions(mapOptions(world.recipe));
   const project = createExcogitareProject({ projectName: name, map: world.map, recipe, excogitareVersion: "2.0.0", scenario: legacy?.scenario, history: { schemaVersion: 1, entries: [], checkpoints: [] } });
   for (const entry of [...session.past, ...session.future]) validateWorldRecord(entry.world);
-  project.extensions = { ...legacy?.extensions, bundleEntries: { ...(legacy?.extensions?.bundleEntries as Record<string, unknown> ?? {}), [PAYLOAD]: { version: 3, session, ...(legacy ? { legacy } : {}) } } };
+  project.extensions = { ...legacy?.extensions, bundleEntries: { ...(legacy?.extensions?.bundleEntries as Record<string, unknown> ?? {}), [PAYLOAD]: { version: 4, session, ...(legacy ? { legacy } : {}) } } };
   return serializeExcogitareProject(project, { historyPolicy: "FULL" });
 }
 export function parseSession(bytes: ArrayBuffer): { session: Session; name: string; legacy?: ExcogitareProject } {
   const project = parseExcogitareProject(bytes);
   const payload = (project.extensions?.bundleEntries as Record<string, unknown> | undefined)?.[PAYLOAD] as { version: number; session: Session; legacy?: ExcogitareProject } | undefined;
   if (payload) {
-    if (![2, 3].includes(payload.version) || !payload.session || !Array.isArray(payload.session.past) || !Array.isArray(payload.session.future) || payload.session.past.length + payload.session.future.length > 128) throw new Error("Unsupported or oversized V2 authoring history.");
+    if (![2, 3, 4].includes(payload.version) || !payload.session || !Array.isArray(payload.session.past) || !Array.isArray(payload.session.future) || payload.session.past.length + payload.session.future.length > 128) throw new Error("Unsupported or oversized V2 authoring history.");
     const session = payload.session;
     session.current = migrateWorld(session.current);
     for (const entry of [...session.past, ...session.future]) entry.world = migrateWorld(entry.world);
-    if (payload.version === 2) {
+    if (payload.version < 4) {
+      session.legacyDrafts = { draft: structuredClone(session.draft), developmentDraft: structuredClone(session.developmentDraft) };
       if (session.draft) session.draft = migrateRecipe(session.draft);
+      if (session.developmentDraft) session.developmentDraft = migrateRecipe(session.developmentDraft);
     }
     if (session.draft) validateRecipe(session.draft);
     if (session.developmentDraft) validateRecipe(session.developmentDraft);

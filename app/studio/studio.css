@@ -86,11 +86,6 @@
 .studio-proposal details { border:0; }
 .studio-proposal summary { padding:8px 0!important; font-size:11px!important; }
 .studio-proposal>button { width:100%; margin-top:9px; color:var(--s-accent); font-size:12px; }
-.studio-event { margin:0 10px 10px; background:#f7f2ec; border-radius:8px; padding:5px 0; }
-.studio-event-heading { display:flex; align-items:center; padding:5px 9px; gap:4px; }
-.studio-event-heading strong { flex:1; font-size:12px; font-weight:500; }
-.studio-event-heading button { min-height:26px; padding:2px 6px; border:0; background:transparent; }
-.studio-event details { border:0; }
 .studio-review-status { display:flex; align-items:center; gap:8px; padding:9px 14px; font-size:12px; }
 .studio-dot { width:7px; height:7px; border-radius:50%; background:var(--s-green); display:inline-block; flex:none; }
 .studio-dot.is-error { background:#9a4949; }

@@ -3,7 +3,7 @@ import test from "node:test";
 import { generateMap } from "../lib/map-generator.ts";
 import { createDemoMap } from "../lib/civ5-map.ts";
 import { isWaterTerrain } from "../lib/civ5-rules.ts";
-import { defaultRecipe, LANDSCAPES, selectLandscape, newEvent, random, type World } from "../lib/studio/model.ts";
+import { defaultRecipe, LANDSCAPES, selectLandscape, type World } from "../lib/studio/model.ts";
 import { generateWorld, runJob, worldFromMap, mapOptions, migrateWorld, validateWorld } from "../lib/studio/operations.ts";
 import { buildRepairIssues } from "../lib/map-repair.ts";
 import { developWorld } from "../lib/studio/development.ts";
@@ -16,7 +16,7 @@ const recipe = { ...defaultRecipe(), size: "DUEL" as const, players: 2, cityStat
 let cached: World;
 const world = () => structuredClone(cached ??= generateWorld(recipe));
 
-test("each native constructor crosses the world boundary with identical tiles and retained causes", () => {
+test("each native constructor crosses the world boundary with identical tiles and retained process records", () => {
   for (const id of ["WATERSHEDS", "COLLISION", "CONTINENTS", "RIVAL_SHORES"] as const) {
     const landscape = LANDSCAPES.find(l => l.id === id)!;
     const r = { ...recipe, landscape: id, water: landscape.water, mountains: landscape.mountains, seed: `v2-${id}` };
@@ -53,37 +53,15 @@ test("local moisture development preserves unrelated tiles, native plans and sta
   assert.equal(validateWorld(result).length, 0);
 });
 
-test("removing a history event restores foundation geography instead of baking in the old edit", () => {
-  const original = world(), event = { ...newEvent("FLOOD", random("removable")), x: .5, y: .5, radius: .2, intensity: .5 };
-  const changed = developWorld(original, { ...original.recipe, events: [event] });
-  assert.notDeepEqual(changed.fields.elevation, original.fields.elevation);
-  const restored = developWorld(changed, { ...changed.recipe, events: [] });
-  assert.deepEqual(restored.fields, original.fields);
-  for (const key of ["terrain", "elevation", "river", "feature"] as const) assert.deepEqual(restored.map.tiles.map(t => t[key]), original.map.tiles.map(t => t[key]), key);
-});
-
-test("history order has physical consequences and a repeated accepted refinement is stable", () => {
-  const original = world(), impact = { ...newEvent("CRATERS", random("age")), x: .5, y: .5, intensity: .55, radius: .22 }, engineering = { ...newEvent("RUINS", random("engineering")), x: .5, y: .5, intensity: .5, radius: .22 };
-  const first = developWorld(original, { ...original.recipe, events: [impact, engineering] });
-  const second = developWorld(original, { ...original.recipe, events: [engineering, impact] });
-  assert.notDeepEqual(first.fields.elevation, second.fields.elevation);
-  assert.deepEqual(developWorld(first, first.recipe).map.tiles, first.map.tiles);
-});
-
-test("the two narrative foundations change actual fields and carry distinct causal histories", () => {
-  for (const id of ["COMET_SEAS", "POLAR_THAW"] as const) {
-    const r = selectLandscape({ ...recipe, seed: `development-${id}` }, id), result = generateWorld(r);
-    assert.ok(result.development.causes.some(c => c.kind === (id === "COMET_SEAS" ? "FLOOD" : "THAW")));
-    assert.notDeepEqual(result.fields.elevation, result.substrate.fields.elevation);
+test("every geographic foundation retains its native output without a fictional-event overlay", () => {
+  for (const landscape of LANDSCAPES) {
+    const r = selectLandscape({ ...recipe, seed: `geography-${landscape.id}` }, landscape.id);
+    const native = generateMap(mapOptions(r)), result = generateWorld(r);
+    assert.deepEqual(result.map.tiles, native.tiles, landscape.id);
+    assert.deepEqual(result.fields, result.substrate.fields, landscape.id);
+    assert.equal(result.development.operations.length, 1);
+    assert.ok(!("events" in result.recipe));
     assert.equal(validateWorld(result).length, 0);
-    if (id === "POLAR_THAW") assert.ok(result.fields.temperature.some((t, i) => t > result.substrate.fields.temperature[i]));
-    if (id === "COMET_SEAS") {
-      const edge = result.map.tiles.flatMap((_, i) => i % result.map.width === 0 || i % result.map.width === result.map.width - 1 || Math.floor(i / result.map.width) === 0 || Math.floor(i / result.map.width) === result.map.height - 1 ? [i] : []);
-      assert.ok(edge.filter(i => result.map.tiles[i].elevation === 2).length / edge.length < .8, "the comet world must not inherit a rectangular mountain enclosure");
-      const event = result.development.causes.find(c => c.kind === "FLOOD")!;
-      const affected = new Set(region(adjacency(result.map), event.tiles, 6));
-      for (let i = 0; i < result.map.tiles.length; i++) if (!affected.has(i)) assert.equal(result.map.tiles[i].terrain, result.substrate.tiles[i].terrain, `unrelated shoreline ${i}`);
-    }
   }
 });
 
@@ -135,11 +113,11 @@ test("place shape protection rejects a conflicting edit atomically", () => {
   assert.deepEqual(original, before);
 });
 
-test("imported geography is preserved and its inferred causes remain explicit", () => {
+test("imported geography is preserved and its inferred physical fields remain explicit", () => {
   const map = createDemoMap(), imported = worldFromMap(map);
   assert.deepEqual(imported.map.tiles, map.tiles);
   assert.equal(imported.substrate.confidence, "INFERRED");
-  assert.ok(imported.development.causes.every(c => c.inferred));
+  assert.ok(imported.development.operations.every(c => c.inferred));
 });
 
 test("a selected search result keeps the author seed and reproduces from its saved recipe", () => {
@@ -188,7 +166,7 @@ test("earlier V2 records migrate as intact snapshots with their former authoring
   const original = world();
   const old = { ...original, version: 2, recipe: { ...original.recipe, version: 2 }, substrate: undefined, development: undefined, protections: undefined };
   const migrated = migrateWorld(old);
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.deepEqual(migrated.map.tiles, original.map.tiles);
   assert.deepEqual(migrated.substrate.legacyAuthoring?.recipe, old.recipe);
   assert.equal(migrated.substrate.confidence, "INFERRED");
