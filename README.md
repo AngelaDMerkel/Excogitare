@@ -1,5 +1,27 @@
 # Excogitare
 
+## V2 map studio
+
+The main page now opens a map-centred studio with a ready-to-explore Great Watersheds world. Its warm paper surfaces, burgundy accents, compact floating panels and central canvas draw on [inSANE](https://github.com/AngelaDMerkel/inSANE).
+
+![Excogitare V2 map studio](public/readme/v2-studio.png)
+
+- **Create** starts from a world premise: Great Watersheds, colliding plates, drowned shelves, glacial country, inland seas, crooked continents, comet seas, retreating ice or rival shores. Geography-led and gameplay-led priorities influence search and development while keeping the selected premise.
+- **Randomise everything** searches new compatible recipes. **Generate new world** compares viable foundations and develops promising candidates. Review can replay and preview alternative foundations from that search. The saved author seed reproduces the search.
+- Water and mountain ranges have two draggable handles, keyboard controls and editable exact values. Detailed climate, resource, shape, contact and approach settings remain accessible.
+- **Develop** works on retained native geography. Suggest local developments, inspect their measured effects and trade-offs, preview the changed tiles, then keep or discard the proposal. Independent terrain and river systems are preserved.
+- Ordered world histories add impacts, flooding, retreating ice and abandoned engineering. Position, extent, intensity and age have geographic effects. Events can seek a nearby continental interior or ice margin, or use an exact position.
+- Select a region or geographic place, or sketch a range, basin, passage or local moisture change. Protect exact tiles, a place's shape or its function. Name and describe the world for export.
+- **Review** compares several plausible starting arrangements, weighted land/coastal/ocean access, settlement opportunities, tactical clearance and resource access. These are geographic estimates; Civ V assigns actual starts and human gameplay remains unverified. Selected repairs are previewed before acceptance and persist through subsequent development.
+- Bottom snapshots support comparison and return; keyboard undo/redo remains available. **Save project** downloads a `.excogitare` bundle containing the native foundation, process fields, histories, protections, proposals, alternative-search recipes, separate Create/Develop drafts and selected snapshots. Earlier V2 maps migrate intact and keep their former authoring record.
+- **Export map** writes a structurally checked `.Civ5Map` and reparses every physical tile channel. Generated exports contain ordinary geography, with no fixed multiplayer starts. Imported files retain supported original records when their source bytes are available.
+
+V2 keeps native output and its continuous fields rather than reconstructing and repainting every foundation. Its new development pipeline separates local terrain processes, dependent hydrology, legal content placement, strategic assessment and candidate search. Raw native fields are preserved alongside a calibrated working relief field. Imported fields remain explicitly inferred. Native proof becomes historical when edits change the map. The processes are cartographic approximations, and the metrics do not establish beauty, enjoyment or real multiplayer balance.
+
+The previous workspace remains available at `/legacy` as a development and compatibility reference. The sections below describe that retained interface. Current scope and checks are recorded in [V2 world development](docs/features/v2-world-development.md); [V2 map studio](docs/features/v2-map-studio.md) also records the initial implementation's history.
+
+## Legacy workspace reference
+
 ![Excogitare — Civilization V Map Viewer & Editor](public/og-editor.png)
 
 *excōgitāre* /ɛk.skoː.ɡɪˈtaː.rɛ/ — Latin: to devise, contrive, or think something into being.

@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
+async function render(path = "/legacy") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
@@ -676,4 +676,14 @@ test("Lua uses an editable, staged, multi-file project workspace", async () => {
   assert.match(runtime, /worker\.onmessageerror/);
   assert.match(css, /\.lua-source-editor,/);
   assert.match(css, /\.lua-pipeline li\.is-complete::before/);
+});
+
+test("V2 renders the map-centred studio as the main application", async () => {
+  const response = await render("/");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  for (const text of ["World premise", "Great Watersheds", "Randomise everything", "Generate new world", "Develop", "Save project", "World snapshots", "Water minimum", "Geography &amp; possible play"]) assert.ok(html.includes(text), text);
+  assert.doesNotMatch(html, /aria-label="Undo"|aria-label="Redo"|Gameplay ideas|class="studio-header"/);
+  assert.doesNotMatch(html, />Scenario</);
+  assert.doesNotMatch(html, />Lab</);
 });

@@ -1,0 +1,86 @@
+{
+  "date": "2026-09-26",
+  "scope": "One illustrative Standard-map sample per engine. Native output compared with initial V2 worldFromMap and realizeSurface(true), including V2 name assignment; later content and balancing passes are excluded.",
+  "results": [
+    {
+      "case": "WATERSHEDS",
+      "engine": "ECCENTRIC",
+      "preset": "GREAT_WATERSHEDS",
+      "seed": "foundation-evaluation-2026-09-26",
+      "size": "STANDARD",
+      "players": 4,
+      "cityStates": 4,
+      "tiles": 4160,
+      "nativeObjectCount": 2106,
+      "v2RetainsNativeStructure": false,
+      "changedAtInitialSurfaceStep": {
+        "terrain": 1968,
+        "elevation": 225,
+        "river": 139,
+        "feature": 1668,
+        "resource": 11
+      },
+      "terrainChangedPercent": 47.3
+    },
+    {
+      "case": "COLLISION",
+      "engine": "PHYSICAL",
+      "preset": "COLLIDING_PLATES",
+      "seed": "foundation-evaluation-2026-09-26",
+      "size": "STANDARD",
+      "players": 4,
+      "cityStates": 4,
+      "tiles": 4160,
+      "nativeObjectCount": 133,
+      "v2RetainsNativeStructure": false,
+      "changedAtInitialSurfaceStep": {
+        "terrain": 1833,
+        "elevation": 161,
+        "river": 115,
+        "feature": 702,
+        "resource": 18
+      },
+      "terrainChangedPercent": 44.1
+    },
+    {
+      "case": "CONTINENTS",
+      "engine": "EXCOGITARE",
+      "preset": "CONTINENTS",
+      "seed": "foundation-evaluation-2026-09-26",
+      "size": "STANDARD",
+      "players": 4,
+      "cityStates": 4,
+      "tiles": 4160,
+      "nativeObjectCount": 38,
+      "v2RetainsNativeStructure": false,
+      "changedAtInitialSurfaceStep": {
+        "terrain": 1590,
+        "elevation": 123,
+        "river": 150,
+        "feature": 1388,
+        "resource": 18
+      },
+      "terrainChangedPercent": 38.2
+    },
+    {
+      "case": "GAMEPLAY",
+      "engine": "POLIS",
+      "preset": "CONTESTED_HEARTLAND",
+      "seed": "foundation-evaluation-2026-09-26",
+      "size": "STANDARD",
+      "players": 4,
+      "cityStates": 4,
+      "tiles": 4160,
+      "nativeObjectCount": 31,
+      "v2RetainsNativeStructure": false,
+      "changedAtInitialSurfaceStep": {
+        "terrain": 1818,
+        "elevation": 167,
+        "river": 368,
+        "feature": 1214,
+        "resource": 11
+      },
+      "terrainChangedPercent": 43.7
+    }
+  ]
+}
