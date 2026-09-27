@@ -1,0 +1,125 @@
+<style>
+  #excogitare-mythic-icons { width:100%; }
+  #excogitare-mythic-icons .mythic-proof { --mythic-gold:#d9b678; --mythic-night:#252c40; --mythic-paper:#f2e8d6; color:var(--mythic-gold); font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  #excogitare-mythic-icons .mythic-proof * { box-sizing:border-box; }
+  #excogitare-mythic-icons .mythic-proof p { margin:0; }
+  #excogitare-mythic-icons .mythic-hero { display:flex; flex-direction:column; justify-content:space-between; height:345px; padding:23px 28px; background:var(--mythic-night); color:var(--mythic-gold); }
+  #excogitare-mythic-icons .mythic-proof[data-reverse=true] .mythic-hero { background:var(--mythic-paper); color:var(--mythic-night); }
+  #excogitare-mythic-icons .mythic-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  #excogitare-mythic-icons .mythic-number { font-size:11px; letter-spacing:.13em; text-transform:uppercase; }
+  #excogitare-mythic-icons .mythic-direction { font:400 22px/1.2 Optima,Palatino,Georgia,serif; }
+  #excogitare-mythic-icons .mythic-lockup { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; }
+  #excogitare-mythic-icons .mythic-mark { display:block; width:104px; height:104px; flex:none; overflow:visible; }
+  #excogitare-mythic-icons .mythic-name { font:400 39px/1.1 Optima,Palatino,Georgia,serif; letter-spacing:.10em; white-space:nowrap; }
+  #excogitare-mythic-icons .mythic-motto { font-size:11px; letter-spacing:.17em; text-align:center; text-transform:uppercase; }
+  #excogitare-mythic-icons .mythic-proofs { display:grid; grid-template-columns:1fr 1fr; background:var(--mythic-night); border-top:1px solid #d9b67838; min-height:185px; }
+  #excogitare-mythic-icons .mythic-sizeproof { display:flex; flex-direction:column; gap:20px; padding:21px 28px; }
+  #excogitare-mythic-icons .mythic-small-label { font-size:11px; letter-spacing:.09em; text-transform:uppercase; }
+  #excogitare-mythic-icons .mythic-sizes { display:flex; align-items:flex-end; gap:24px; }
+  #excogitare-mythic-icons .mythic-size { display:flex; flex-direction:column; align-items:center; gap:9px; font-size:11px; }
+  #excogitare-mythic-icons .mythic-tile { width:64px; height:64px; border-radius:15px; display:grid; place-items:center; background:var(--mythic-gold); color:var(--mythic-night); }
+  #excogitare-mythic-icons .mythic-tile .mythic-mark { width:50px; height:50px; }
+  #excogitare-mythic-icons .mythic-32 { width:32px; height:32px; }
+  #excogitare-mythic-icons .mythic-16 { width:16px; height:16px; }
+  #excogitare-mythic-icons .mythic-paperproof { display:flex; flex-direction:column; justify-content:space-between; gap:22px; padding:21px 28px; background:var(--mythic-paper); color:var(--mythic-night); }
+  #excogitare-mythic-icons .mythic-studio { display:flex; align-items:center; gap:12px; }
+  #excogitare-mythic-icons .mythic-studio .mythic-mark { width:35px; height:35px; }
+  #excogitare-mythic-icons .mythic-studio .mythic-name { font-size:18px; letter-spacing:.055em; }
+  #excogitare-mythic-icons .mythic-studio-subtitle { font-size:11px; margin-top:4px; display:block; color:#655e57; }
+  #excogitare-mythic-icons .mythic-tab { display:flex; align-items:center; gap:8px; font-size:12px; }
+  #excogitare-mythic-icons .mythic-defs { position:absolute; width:0; height:0; overflow:hidden; }
+  @media(max-width:560px) {
+    #excogitare-mythic-icons .mythic-hero { padding:22px 20px; height:335px; }
+    #excogitare-mythic-icons .mythic-name { font-size:28px; }
+    #excogitare-mythic-icons .mythic-proofs { grid-template-columns:1fr; }
+    #excogitare-mythic-icons .mythic-sizeproof { padding:20px; min-height:182px; }
+    #excogitare-mythic-icons .mythic-paperproof { padding:20px; min-height:164px; gap:16px; }
+    #excogitare-mythic-icons .mythic-number { font-size:10px; letter-spacing:.08em; }
+    #excogitare-mythic-icons .mythic-direction { font-size:20px; }
+    #excogitare-mythic-icons .mythic-studio .mythic-name { font-size:18px; }
+  }
+</style>
+<div id="excogitare-mythic-icons">
+  <svg class="mythic-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="mythic-wayfinder" viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="none" stroke="currentColor" stroke-width="3"/><path d="M32 2 39 25 57 32 39 39 32 62 25 39 7 32 25 25z M32 26l6 6-6 6-6-6z" fill="currentColor" fill-rule="evenodd"/></symbol>
+      <symbol id="mythic-wayfinder-small" viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="none" stroke="currentColor" stroke-width="4"/><path d="M32 2 39 25 57 32 39 39 32 62 25 39 7 32 25 25z" fill="currentColor"/></symbol>
+      <symbol id="mythic-rift" viewBox="0 0 64 64"><path d="M31 3 5 32 28 58C20 44 35 37 28 29 24 24 23 18 31 3ZM37 8 59 32 34 61C24 44 44 38 36 26 32 20 33 15 37 8Z" fill="currentColor"/></symbol>
+      <symbol id="mythic-rift-small" viewBox="0 0 64 64"><path d="M29 3 4 32 25 56C18 43 32 37 25 29 21 23 23 15 29 3ZM38 8 60 32 35 61C26 45 47 38 38 25 34 19 35 14 38 8Z" fill="currentColor"/></symbol>
+      <symbol id="mythic-worldseed" viewBox="0 0 64 64"><path d="M17 12a25 25 0 1 0 30 0M8 32c12-10 36-10 48 0M32 18c-13 12-13 27 0 40M32 18c13 12 13 27 0 40" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="m32 1 4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="currentColor"/></symbol>
+      <symbol id="mythic-worldseed-small" viewBox="0 0 64 64"><path d="M17 12a25 25 0 1 0 30 0M8 32c12-10 36-10 48 0M32 26v32" fill="none" stroke="currentColor" stroke-width="4"/><path d="m32 1 4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="currentColor"/></symbol>
+      <symbol id="mythic-runestone" viewBox="0 0 64 64"><path d="M20 12 32 4 48 14 42 21 32 14 28 17v10h12l7 5-7 5H28v10l4 3 11-8 6 8-17 11-12-8Z" fill="currentColor"/></symbol>
+      <symbol id="mythic-runestone-small" viewBox="0 0 64 64"><path d="M20 12 32 4 48 14 42 21 32 14 28 17v10h12l7 5-7 5H28v10l4 3 11-8 6 8-17 11-12-8Z" fill="currentColor"/></symbol>
+      <symbol id="mythic-original" viewBox="0 0 64 64"><path d="M32 3 58 32 32 61 6 32z" fill="none" stroke="currentColor" stroke-width="3"/><path d="m32 14 5 13 13 5-13 5-5 13-5-13-13-5 13-5z M32 26l6 6-6 6-6-6z" fill-rule="evenodd" fill="currentColor"/></symbol>
+      <symbol id="mythic-original-small" viewBox="0 0 64 64"><path d="M32 3 58 32 32 61 6 32z" fill="none" stroke="currentColor" stroke-width="4"/><path d="m32 14 5 13 13 5-13 5-5 13-5-13-13-5 13-5z" fill="currentColor"/></symbol>
+    </defs>
+  </svg>
+  <div class="viz-carousel" aria-label="Mythic icon refinements">
+    <section data-variant="Wayfinder" data-icon="wayfinder" aria-label="Wayfinder compass rose">
+      <div class="mythic-proof" aria-label="Wayfinder appearance">
+        <div class="mythic-hero"><div class="mythic-heading"><span class="mythic-number">01 / Compass rose</span><span class="mythic-direction">Wayfinder</span></div><div class="mythic-lockup"><svg class="mythic-mark" role="img" aria-label="Compass rose with an elongated north and south needle"><use href="#mythic-wayfinder"/></svg><span class="mythic-name">EXCOGITARE</span></div><p class="mythic-motto">A world awaits its history.</p></div>
+        <div class="mythic-proofs"></div>
+      </div>
+    </section>
+    <section data-variant="Rift" data-icon="rift" aria-label="Rift, a world divided by a river" hidden>
+      <div class="mythic-proof" aria-label="Rift appearance">
+        <div class="mythic-hero"><div class="mythic-heading"><span class="mythic-number">02 / River &amp; land</span><span class="mythic-direction">Rift</span></div><div class="mythic-lockup"><svg class="mythic-mark" role="img" aria-label="Diamond world split by a winding river in negative space"><use href="#mythic-rift"/></svg><span class="mythic-name">EXCOGITARE</span></div><p class="mythic-motto">A world awaits its history.</p></div>
+        <div class="mythic-proofs"></div>
+      </div>
+    </section>
+    <section data-variant="Worldseed" data-icon="worldseed" aria-label="Worldseed, a globe with a rising star" hidden>
+      <div class="mythic-proof" aria-label="Worldseed appearance">
+        <div class="mythic-hero"><div class="mythic-heading"><span class="mythic-number">03 / World &amp; star</span><span class="mythic-direction">Worldseed</span></div><div class="mythic-lockup"><svg class="mythic-mark" role="img" aria-label="Globe with curved meridians and a four-point star at its crown"><use href="#mythic-worldseed"/></svg><span class="mythic-name">EXCOGITARE</span></div><p class="mythic-motto">A world awaits its history.</p></div>
+        <div class="mythic-proofs"></div>
+      </div>
+    </section>
+    <section data-variant="Runestone" data-icon="runestone" aria-label="Runestone, an angular E monogram" hidden>
+      <div class="mythic-proof" aria-label="Runestone appearance">
+        <div class="mythic-hero"><div class="mythic-heading"><span class="mythic-number">04 / Carved monogram</span><span class="mythic-direction">Runestone</span></div><div class="mythic-lockup"><svg class="mythic-mark" role="img" aria-label="Angular E with pointed arms and tapered upper and lower ends"><use href="#mythic-runestone"/></svg><span class="mythic-name">EXCOGITARE</span></div><p class="mythic-motto">A world awaits its history.</p></div>
+        <div class="mythic-proofs"></div>
+      </div>
+    </section>
+    <section data-variant="Original reference" data-icon="original" aria-label="Original mythic diamond reference" hidden>
+      <div class="mythic-proof" aria-label="Original appearance">
+        <div class="mythic-hero"><div class="mythic-heading"><span class="mythic-number">00 / Original reference</span><span class="mythic-direction">Worldforge</span></div><div class="mythic-lockup"><svg class="mythic-mark" role="img" aria-label="Original four-point spark within a diamond"><use href="#mythic-original"/></svg><span class="mythic-name">EXCOGITARE</span></div><p class="mythic-motto">A world awaits its history.</p></div>
+        <div class="mythic-proofs"></div>
+      </div>
+    </section>
+  </div>
+  <template id="mythic-size-template">
+    <div class="mythic-sizeproof">
+      <p class="mythic-small-label">App &amp; favicons · actual sizes</p>
+      <div class="mythic-sizes">
+        <div class="mythic-size"><div class="mythic-tile"><svg class="mythic-mark" aria-hidden="true" data-mark="full"></svg></div><span>64 px</span></div>
+        <div class="mythic-size"><svg class="mythic-mark mythic-32" role="img" aria-label="Icon at 32 pixels" data-mark="small"></svg><span>32 px</span></div>
+        <div class="mythic-size"><svg class="mythic-mark mythic-16" role="img" aria-label="Icon at 16 pixels" data-mark="small"></svg><span>16 px</span></div>
+      </div>
+    </div>
+    <div class="mythic-paperproof">
+      <p class="mythic-small-label">One color · on paper</p>
+      <div class="mythic-studio"><svg class="mythic-mark" aria-hidden="true" data-mark="full"></svg><div><span class="mythic-name">EXCOGITARE</span><span class="mythic-studio-subtitle">Great Watersheds</span></div></div>
+      <div class="mythic-tab"><svg class="mythic-mark mythic-16" aria-hidden="true" data-mark="small"></svg><span>Excogitare — Map studio</span></div>
+    </div>
+  </template>
+</div>
+<script>
+(() => {
+  const root = document.getElementById("excogitare-mythic-icons");
+  const template = root.querySelector("#mythic-size-template");
+  root.querySelectorAll("[data-icon]").forEach(section => {
+    const proof = section.querySelector(".mythic-proof");
+    const samples = template.content.cloneNode(true);
+    samples.querySelectorAll("[data-mark]").forEach(svg => {
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", `#mythic-${section.dataset.icon}${svg.dataset.mark === "small" ? "-small" : ""}`);
+      svg.appendChild(use);
+    });
+    section.querySelector(".mythic-proofs").appendChild(samples);
+    if (globalThis.Tweak) {
+      const state = { reverse:false };
+      const tweak = new Tweak({container:proof,onChange:() => { proof.dataset.reverse=String(state.reverse); }});
+      tweak.addToggle(state,"reverse",{label:"Show main mark on paper"});
+    }
+  });
+})();
+</script>
