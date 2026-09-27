@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ExcogitareWordmark, WayfinderMark } from "../brand";
 import type { ExcogitareProject } from "../../lib/authoring-schema";
 import { mapExportBaseName } from "../../lib/map-file-name";
 import { acceptWorld, hash, redo, undo, type Job, type Session, type Stroke, type StudioRecipe, type World } from "../../lib/studio/model";
@@ -129,7 +130,7 @@ export function MapStudio() {
     <input ref={fileRef} hidden type="file" accept=".Civ5Map,.civ5map,.excogitare" onChange={e => { const file = e.target.files?.[0]; if (file) void openFile(file); e.target.value = ""; }} />
     <MapCanvas world={display} tool={tool} brush={brush} layers={layers} selected={selected} differences={differences} isometric={isometric} disabled={blocked} onSelection={setSelected} onHover={setHovered} onSketch={stroke} canvasRef={canvasRef} />
     <aside className="studio-left studio-sheet" aria-label="World design">
-      <div className="studio-brand"><span aria-hidden="true">◇</span><div><h1>Excogitare</h1><span>{world.map.name}</span></div><button className="studio-icon-button" aria-label="Hide controls" onClick={() => setShowControls(false)}>‹</button></div>
+      <div className="studio-brand"><WayfinderMark /><div><h1><ExcogitareWordmark /></h1><span>{world.map.name}</span></div><button className="studio-icon-button" aria-label="Hide controls" onClick={() => setShowControls(false)}>‹</button></div>
       <nav className="studio-modes" aria-label="Authoring tasks">{(["CREATE", "DEVELOP", "REVIEW"] as const).map(value => <button key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>{value === "CREATE" ? "Create" : value === "DEVELOP" ? "Develop" : "Review"}</button>)}</nav>
       <div className="studio-scroll">
         {mode === "CREATE" && <RecipePanel recipe={recipe} onChange={changeRecipe} disabled={blocked} />}

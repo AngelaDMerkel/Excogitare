@@ -1,5 +1,6 @@
 "use client";
 
+import { ExcogitareWordmark, WayfinderMark } from "./brand";
 import {
   type ChangeEvent,
   type DragEvent,
@@ -2976,10 +2977,8 @@ export function Civ5MapViewer() {
     <main className={`viewer-app workspace-${workspacePresentation.key}${mode === "VIEW" ? "" : " has-workspace-context"}`}>
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">V</span>
-          <div>
-            <h1>Excogitare</h1>
-          </div>
+          <WayfinderMark />
+          <h1><ExcogitareWordmark /></h1>
         </div>
         <nav className="workspace-navigation" aria-label="Workspaces">
           <span className="workspace-navigation-label">Workspaces</span>

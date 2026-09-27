@@ -3,6 +3,9 @@
 :root {
   --font-geist-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --brand-gold: #d9b678;
+  --brand-night: #252c40;
+  --brand-paper: #f2e8d6;
   --ink: #e9eee9;
   --muted: #95a7a2;
   --line: rgba(188, 207, 197, 0.14);
@@ -42,7 +45,7 @@ button { color: inherit; }
   align-items: center;
   gap: 28px;
   padding: 0 28px;
-  background: rgba(13, 33, 38, 0.97);
+  background: var(--brand-night);
   border-bottom: 1px solid var(--line);
   position: relative;
   z-index: 4;
@@ -144,22 +147,9 @@ button { color: inherit; }
 .experimental-badge { position: absolute; top: -6px; right: 2px; z-index: 1; padding: 2px 4px; border: 1px solid rgba(255, 158, 142, .42); border-radius: 3px; background: #9f3028; color: #ffe3dd; font-family: var(--font-geist-mono), monospace; font-size: 5px; font-weight: 750; letter-spacing: .06em; line-height: 1; text-transform: uppercase; box-shadow: 0 2px 6px rgba(0, 0, 0, .34); pointer-events: none; }
 .development-badge { position: absolute; top: -6px; right: 2px; z-index: 1; padding: 2px 4px; border: 1px solid rgba(151, 207, 255, .5); border-radius: 3px; background: #245f91; color: #e2f3ff; font-family: var(--font-geist-mono), monospace; font-size: 5px; font-weight: 750; letter-spacing: .06em; line-height: 1; text-transform: uppercase; box-shadow: 0 2px 6px rgba(0, 0, 0, .34); pointer-events: none; }
 
-.brand { display: flex; align-items: center; gap: 13px; min-width: 240px; }
-
-.brand-mark {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(239, 209, 138, 0.45);
-  border-radius: 50%;
-  background: linear-gradient(145deg, #325c5c, #142d32);
-  box-shadow: inset 0 0 0 4px rgba(6, 21, 24, 0.35), 0 6px 24px rgba(0, 0, 0, 0.24);
-  color: var(--gold-bright);
-  font-family: Georgia, serif;
-  font-weight: 700;
-  font-size: 20px;
-}
+.excogitare-mark { display:block; flex:none; width:34px; height:34px; }
+.excogitare-wordmark { display:block; width:100%; height:auto; }
+.brand { display:flex; align-items:center; gap:10px; min-width:0; color:var(--brand-gold); }
 
 .eyebrow {
   margin: 0 0 3px;
@@ -171,7 +161,7 @@ button { color: inherit; }
   text-transform: uppercase;
 }
 
-.brand h1 { margin: 0; font-family: Georgia, serif; font-size: 24px; font-weight: 500; letter-spacing: 0.02em; }
+.brand h1 { margin:0; min-width:0; flex:1; }
 .topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; white-space: nowrap; }
 .project-status { display: grid; max-width: 132px; gap: 1px; padding-right: 10px; border-right: 1px solid var(--line); text-align: right; }
 .project-status span { overflow: hidden; color: #9fb0ab; font-size: 8px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -1331,7 +1321,7 @@ button { color: inherit; }
 }
 
 @media (max-width: 1180px) {
-  .brand { min-width: 175px; }
+  .brand { min-width: 0; }
   .topbar { grid-template-columns: minmax(155px, 175px) minmax(350px, 1fr) auto; }
   .topbar { gap: 14px; padding-inline: 18px; }
   .topbar-actions { gap: 6px; }
@@ -1347,9 +1337,8 @@ button { color: inherit; }
 @media (max-width: 900px) {
   body { overflow: auto; }
   .topbar { grid-template-columns: minmax(122px, 132px) minmax(322px, 1fr) auto; gap: 8px; padding: 0 10px; }
-  .brand { min-width: 132px; }
-  .brand-mark { width: 34px; height: 34px; font-size: 17px; }
-  .brand h1 { font-size: 20px; }
+  .brand { min-width:0; gap:7px; }
+  .brand .excogitare-mark { width:26px; height:26px; }
   .workspace-tabs button { min-width: 66px; padding-inline: 7px; }
   .topbar-actions .button { padding-inline: 9px; font-size: 9px; }
   .button-export-map { display: none; }

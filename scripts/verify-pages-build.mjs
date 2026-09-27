@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const outputDirectory = new URL("../out/", import.meta.url);
 const outputPath = fileURLToPath(outputDirectory);
-const requiredFiles = ["index.html", "404.html", "wasmoon.wasm", "og-editor.png"];
+const requiredFiles = ["index.html", "404.html", "wasmoon.wasm", "og-editor.png", "favicon.svg", "favicon.ico", "apple-touch-icon.png", "site.webmanifest", "brand/icon-192.png", "brand/icon-512.png", "brand/icon-maskable-512.png"];
 
 await Promise.all(requiredFiles.map((file) => access(new URL(file, outputDirectory))));
 
@@ -13,6 +13,19 @@ const html = await readFile(new URL("index.html", outputDirectory), "utf8");
 assert.match(html, /\/Excogitare\/_next\//, "The static page must load its Next assets below /Excogitare.");
 assert.match(html, /https:\/\/angeladmerkel\.github\.io\/Excogitare\/og-editor\.png/, "Social metadata must use the final Pages URL.");
 assert.doesNotMatch(html, /(?:src|href)="\/_next\//, "No Next asset may escape to the github.io origin root.");
+
+for (const asset of ["favicon.svg", "favicon.ico", "apple-touch-icon.png", "site.webmanifest"]) {
+  assert.ok(html.includes(`href="/Excogitare/${asset}"`), `Brand metadata must reference ${asset} under the Pages base path.`);
+  assert.ok(!html.includes(`href="/${asset}"`), `Brand metadata must not escape to the origin root: ${asset}.`);
+}
+const manifest = JSON.parse(await readFile(new URL("site.webmanifest", outputDirectory), "utf8"));
+const manifestUrl = "https://angeladmerkel.github.io/Excogitare/site.webmanifest";
+assert.equal(new URL(manifest.start_url, manifestUrl).pathname, "/Excogitare/");
+assert.equal(new URL(manifest.scope, manifestUrl).pathname, "/Excogitare/");
+for (const icon of manifest.icons) {
+  assert.ok(new URL(icon.src, manifestUrl).pathname.startsWith("/Excogitare/brand/"));
+  await access(new URL(icon.src, outputDirectory));
+}
 
 async function collectJavaScript(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

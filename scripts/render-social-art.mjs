@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { DEFAULT_GENERATION_OPTIONS, generateMap } from "../lib/map-generator.ts";
+import { identity, markMarkup, wordmark, wordmarkMarkup } from "../branding/svg.mjs";
 
 const WIDTH = 2400;
 const HEIGHT = 1260;
@@ -241,7 +242,7 @@ const startsMarkup = map.startLocations.map((start) => {
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
-    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06161b"/><stop offset=".58" stop-color="#0b242a"/><stop offset="1" stop-color="#0e2e34"/></linearGradient>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${identity.colors.night}"/><stop offset="1" stop-color="#1c2336"/></linearGradient>
     <radialGradient id="mapGlow" cx="76%" cy="44%" r="62%"><stop offset="0" stop-color="#8ec2b2" stop-opacity=".22"/><stop offset="1" stop-color="#8ec2b2" stop-opacity="0"/></radialGradient>
     <linearGradient id="sliceShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#06161b" stop-opacity=".35"/><stop offset=".18" stop-color="#06161b" stop-opacity="0"/><stop offset="1" stop-color="#06161b" stop-opacity=".08"/></linearGradient>
     <pattern id="quietGrid" width="72" height="72" patternUnits="userSpaceOnUse"><path d="M 72 0 L 0 0 0 72" fill="none" stroke="#86a7a0" stroke-opacity=".035" stroke-width="1"/></pattern>
@@ -262,12 +263,12 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <path d="M 1770 0 L 1960 1260" fill="none" stroke="#8bb3a7" stroke-opacity=".14" stroke-width="1"/>
 
   <g transform="translate(118 112)">
-    <path d="M 0 0 H 86" stroke="#d9b96f" stroke-width="8"/>
-    <text x="0" y="126" fill="#f3eee3" font-family="Arial, Helvetica, sans-serif" font-size="112" font-weight="700" letter-spacing="9">EXCOGITARE</text>
-    <text x="3" y="190" fill="#d9b96f" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="6">CIVILIZATION V MAP VIEWER &amp; EDITOR</text>
+    <g transform="translate(0 0) scale(2.5)">${markMarkup()}</g>
+    <g transform="translate(206 43) scale(${1080 / wordmark.width})">${wordmarkMarkup()}</g>
+    <text x="3" y="220" fill="${identity.colors.gold}" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="400" letter-spacing="5">CIVILIZATION V MAP STUDIO</text>
 
-    <text x="0" y="408" fill="#dce7e3" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="400" letter-spacing="1">SEE THE WORLD.</text>
-    <text x="0" y="492" fill="#dce7e3" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="1">THEN CHANGE IT.</text>
+    <text x="0" y="408" fill="${identity.colors.paper}" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="400" letter-spacing="2">A WORLD AWAITS</text>
+    <text x="0" y="492" fill="${identity.colors.paper}" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="400" letter-spacing="2">ITS HISTORY.</text>
     <text x="3" y="568" fill="#92aaa5" font-family="Arial, Helvetica, sans-serif" font-size="26">Generate, inspect, repair, and export Civilization V maps.</text>
 
     <g transform="translate(2 664)">

@@ -1,6 +1,6 @@
 # Excogitare brand exploration
 
-Three original vector directions for review. These files are **groundwork**, not the application's production identity.
+Historical vector explorations. **Wayfinder was selected for production**; the authoritative assets and usage rules are in [the brand guide](../../docs/branding.md). These files preserve the earlier comparisons.
 
 | Direction | Idea | Wordmark sample | Palette |
 |---|---|---|---|
@@ -14,7 +14,7 @@ Three original vector directions for review. These files are **groundwork**, not
 
 Typeface samples rely on installed system fonts; fonts are not redistributed. Wordmark outlines, optical kerning, final licenses/font packaging, icon pixel adjustments, ICO/Apple/PWA production files, social imagery and application integration follow the choice of direction. The final app does not need to adopt these sample typefaces or taglines.
 
-The comparison and the assets use fixed brand palettes intentionally, including both light and dark examples. Current application files and metadata are unchanged.
+The comparison and the assets use fixed brand palettes intentionally, including both light and dark examples. Application integration followed the later Wayfinder selection.
 
 ## Round 2: mythic icons
 
@@ -22,4 +22,4 @@ The user selected mythic as the base. `mythic-icons.html` compares **Wayfinder**
 
 The symbols inside this comparison are the authoritative source for this round. Run `node mockups/branding/generate-mythic-assets.mjs` to export fifteen SVG proofs to `assets/mythic/`. Each option has a full mark, favicon and app SVG. The five `*-app-512.png` files are rasterized app-icon proofs. They are review assets, not a final browser or application icon package.
 
-All five proofs passed Chrome layout checks at 736/320 px, including carousel navigation, resolved symbol references, exact 16/32 px favicon dimensions and no measured clipping or page errors. SVG XML and 512 px PNG dimensions were checked. A final icon choice and production integration remain open.
+All five proofs passed Chrome layout checks at 736/320 px, including carousel navigation, resolved symbol references, exact 16/32 px favicon dimensions and no measured clipping or page errors. SVG XML and 512 px PNG dimensions were checked. The user subsequently chose Wayfinder for production.

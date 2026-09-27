@@ -1,8 +1,12 @@
 # Excogitare
 
+![Excogitare — Wayfinder compass and wordmark](public/brand/banner.svg)
+
+Excogitare uses the **Wayfinder** compass, an outlined mythic wordmark and a gold/night palette. [Brand assets and usage](docs/branding.md) cover the app, favicons and social artwork.
+
 ## V2 map studio
 
-The main page now opens a map-centred studio with a ready-to-explore Great Watersheds world. Its warm paper surfaces, burgundy accents, compact floating panels and central canvas draw on [inSANE](https://github.com/AngelaDMerkel/inSANE).
+The main page now opens a map-centred studio with a ready-to-explore Great Watersheds world. Its warm paper surfaces, compact floating panels and central canvas draw on [inSANE](https://github.com/AngelaDMerkel/inSANE). The gold and navy header carries Excogitare's Wayfinder identity.
 
 ![Excogitare V2 map studio](public/readme/v2-studio.png)
 

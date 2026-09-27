@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
   },
   ...(pagesBuild ? { webpack: pagesWebpack } : {}),
   env: {
+    NEXT_PUBLIC_EXCOGITARE_BASE_PATH: pagesBuild ? pagesBasePath : "",
     NEXT_PUBLIC_EXCOGITARE_SITE_URL: pagesBuild
       ? "https://angeladmerkel.github.io/Excogitare"
       : process.env.NEXT_PUBLIC_EXCOGITARE_SITE_URL ?? "http://localhost:3000",

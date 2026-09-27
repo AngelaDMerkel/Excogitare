@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(path = "/legacy") {
@@ -79,8 +79,32 @@ test("social artwork is a high-resolution render of a generated Excogitare map",
   assert.match(renderer, /preset: "WILD_REGIONS"/);
   assert.match(renderer, /const PROJECTION = \{ a: 0\.86, b: 0\.25, c: -0\.52, d: 0\.38 \}/);
   assert.match(renderer, /clipPath id="mapSlice"/);
-  assert.match(renderer, /SEE THE WORLD\./);
-  assert.match(renderer, /THEN CHANGE IT\./);
+  assert.match(renderer, /A WORLD AWAITS/);
+  assert.match(renderer, /ITS HISTORY\./);
+});
+
+test("Wayfinder branding and browser icons are available in both application shells", async () => {
+  for (const path of ["/", "/legacy"]) {
+    const response = await render(path);
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /<h1>.*?aria-label="Excogitare".*?<\/h1>/s);
+    assert.match(html, /class="excogitare-mark"/);
+    for (const asset of ["favicon.svg", "favicon.ico", "apple-touch-icon.png", "site.webmanifest"]) {
+      assert.ok(html.includes(`href="/${asset}"`), `${path} must reference ${asset}`);
+      await access(new URL(`../public/${asset}`, import.meta.url));
+    }
+  }
+  const manifest = JSON.parse(await readFile(new URL("../public/site.webmanifest", import.meta.url), "utf8"));
+  for (const base of ["https://example.test/", "https://example.test/Excogitare/"]) {
+    assert.equal(new URL(manifest.start_url, `${base}site.webmanifest`).href, base);
+    assert.equal(new URL(manifest.scope, `${base}site.webmanifest`).href, base);
+    for (const icon of manifest.icons) {
+      assert.ok(new URL(icon.src, `${base}site.webmanifest`).href.startsWith(base));
+      const png = await readFile(new URL(`../public/${icon.src}`, import.meta.url));
+      assert.equal(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`, icon.sizes);
+    }
+  }
 });
 
 test("README visual guide includes every generation engine and the principal workspaces", async () => {

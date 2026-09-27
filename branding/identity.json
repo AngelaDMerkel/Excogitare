@@ -1,0 +1,9 @@
+{
+  "name": "Excogitare",
+  "mark": "Wayfinder",
+  "colors": { "gold": "#d9b678", "night": "#252c40", "paper": "#f2e8d6" },
+  "viewBox": "0 0 64 64",
+  "circle": { "cx": 32, "cy": 32, "r": 22, "strokeWidth": 3, "smallStrokeWidth": 4 },
+  "path": "M32 2 39 25 57 32 39 39 32 62 25 39 7 32 25 25z M32 26l6 6-6 6-6-6z",
+  "smallPath": "M32 2 39 25 57 32 39 39 32 62 25 39 7 32 25 25z"
+}
