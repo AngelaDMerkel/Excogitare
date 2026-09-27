@@ -27,7 +27,7 @@ Every feature record must cover, or explicitly mark inapplicable:
 10. README/help wording, risks, limitations and accurate completion claims.
 11. Final comparison of request, feature record, diff and current code.
 
-Runtime code changes also require the Alpine image/container check when the local runtime is available. Never commit or push for the user.
+Runtime code changes also require the Alpine image/container check when the local runtime is available. Make semantic commits on the active development branch as coherent changes are completed and checked. Include required dependencies, preserve unrelated pending changes, and do not push unless the user explicitly asks.
 
 ## Feature register
 
