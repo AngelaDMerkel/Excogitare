@@ -1,0 +1,161 @@
+<style>
+  #excogitare-brand-comparison { width:100%; }
+  #excogitare-brand-comparison .brand-proof { --brand-paper:#f6f0e6; --brand-ink:#6e3f47; --brand-detail:#54443f; --brand-rule:#6e3f4730; --brand-tracking:-.035em; font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  #excogitare-brand-comparison .brand-proof * { box-sizing:border-box; }
+  #excogitare-brand-comparison .strata { --brand-paper:#eef2eb; --brand-ink:#214e50; --brand-detail:#395650; --brand-rule:#214e5030; --brand-tracking:-.055em; }
+  #excogitare-brand-comparison .worldforge { --brand-paper:#252c40; --brand-ink:#d9b678; --brand-detail:#e3d2b7; --brand-rule:#d9b67840; --brand-tracking:.10em; }
+  #excogitare-brand-comparison .brand-proof p { margin:0; }
+  #excogitare-brand-comparison .brand-hero { height:300px; padding:24px 30px; display:flex; flex-direction:column; justify-content:space-between; background:var(--brand-paper); color:var(--brand-ink); }
+  #excogitare-brand-comparison .brand-proof[data-inverse=true] .brand-hero { background:var(--brand-ink); color:var(--brand-paper); }
+  #excogitare-brand-comparison .brand-kicker { display:flex; justify-content:space-between; gap:16px; font-size:11px; text-transform:uppercase; letter-spacing:.13em; }
+  #excogitare-brand-comparison .brand-lockup { display:flex; align-items:center; justify-content:center; gap:22px; }
+  #excogitare-brand-comparison .brand-mark { display:block; width:80px; height:80px; flex:none; overflow:visible; }
+  #excogitare-brand-comparison .brand-name { font:400 clamp(34px,7.5vw,62px)/1.1 Baskerville,Georgia,serif; letter-spacing:var(--brand-tracking); white-space:nowrap; }
+  #excogitare-brand-comparison .strata .brand-name { font-family:"Avenir Next",Avenir,Arial,sans-serif; font-weight:500; }
+  #excogitare-brand-comparison .worldforge .brand-lockup { flex-direction:column; gap:18px; }
+  #excogitare-brand-comparison .worldforge .brand-mark { width:70px; height:70px; }
+  #excogitare-brand-comparison .worldforge .brand-name { font:400 clamp(26px,5.5vw,43px)/1.1 Optima,Palatino,Georgia,serif; letter-spacing:var(--brand-tracking); }
+  #excogitare-brand-comparison .brand-motto { text-align:center; font-size:12px; letter-spacing:.17em; text-transform:uppercase; }
+  #excogitare-brand-comparison .brand-specimens { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); min-height:236px; background:var(--brand-paper); color:var(--brand-ink); border-top:1px solid var(--brand-rule); }
+  #excogitare-brand-comparison .brand-placement { padding:20px 24px; display:flex; flex-direction:column; justify-content:space-between; gap:20px; border-right:1px solid var(--brand-rule); min-width:0; }
+  #excogitare-brand-comparison .brand-label { font-size:11px; text-transform:uppercase; letter-spacing:.11em; }
+  #excogitare-brand-comparison .brand-studio { display:flex; gap:10px; align-items:center; padding:13px 12px; background:#fffdf9; color:#302b27; border:1px solid #d9d1c7; border-radius:10px; max-width:290px; box-shadow:0 4px 12px #302b2708; }
+  #excogitare-brand-comparison .brand-studio .brand-mark { width:31px; height:31px; color:var(--brand-ink); }
+  #excogitare-brand-comparison .worldforge .brand-studio .brand-mark { color:#89622d; }
+  #excogitare-brand-comparison .brand-studio .brand-name { font-size:25px; }
+  #excogitare-brand-comparison .worldforge .brand-studio .brand-name { font-size:18px; letter-spacing:.05em; }
+  #excogitare-brand-comparison .brand-mapname { display:block; color:#756d65; font-size:11px; margin-top:4px; }
+  #excogitare-brand-comparison .brand-swatches { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--brand-detail); }
+  #excogitare-brand-comparison .brand-swatches span { display:inline-flex; align-items:center; gap:5px; }
+  #excogitare-brand-comparison .brand-swatches i { display:inline-block; width:10px; height:10px; border-radius:50%; box-shadow:inset 0 0 0 1px #756d6540; }
+  #excogitare-brand-comparison .brand-sizes { padding:20px 24px; display:flex; flex-direction:column; gap:16px; justify-content:space-between; min-width:0; }
+  #excogitare-brand-comparison .brand-icon-row { display:flex; align-items:flex-end; gap:22px; }
+  #excogitare-brand-comparison .brand-icon-sample { display:flex; flex-direction:column; align-items:center; gap:9px; font-size:11px; }
+  #excogitare-brand-comparison .brand-app-icon { display:flex; align-items:center; justify-content:center; width:64px; height:64px; border-radius:15px; background:var(--brand-ink); color:var(--brand-paper); }
+  #excogitare-brand-comparison .brand-app-icon .brand-mark { width:50px; height:50px; }
+  #excogitare-brand-comparison .brand-icon-sample .brand-32 { width:32px; height:32px; }
+  #excogitare-brand-comparison .brand-icon-sample .brand-16 { width:16px; height:16px; }
+  #excogitare-brand-comparison .brand-browser { display:flex; gap:8px; align-items:center; width:100%; max-width:200px; padding:9px 12px; border-radius:8px 8px 0 0; background:var(--brand-ink); color:var(--brand-paper); font-size:12px; }
+  #excogitare-brand-comparison .brand-browser .brand-mark { width:16px; height:16px; }
+  #excogitare-brand-comparison .brand-browser span:last-child { margin-left:auto; opacity:.7; }
+  #excogitare-brand-comparison .brand-svg-defs { position:absolute; width:0; height:0; overflow:hidden; }
+  @media(max-width:520px) {
+    #excogitare-brand-comparison .brand-hero { height:310px; padding:22px 20px; }
+    #excogitare-brand-comparison .brand-lockup { flex-direction:column; gap:18px; }
+    #excogitare-brand-comparison .brand-name { font-size:44px; }
+    #excogitare-brand-comparison .strata .brand-name { font-size:41px; }
+    #excogitare-brand-comparison .worldforge .brand-name { font-size:28px; }
+    #excogitare-brand-comparison .brand-kicker { font-size:10px; letter-spacing:.08em; }
+    #excogitare-brand-comparison .brand-motto { font-size:11px; }
+    #excogitare-brand-comparison .brand-specimens { grid-template-columns:1fr; min-height:365px; }
+    #excogitare-brand-comparison .brand-placement { border-right:0; border-bottom:1px solid var(--brand-rule); padding:18px 20px; gap:12px; }
+    #excogitare-brand-comparison .brand-sizes { padding:18px 20px; display:grid; grid-template-columns:1fr; gap:12px; }
+    #excogitare-brand-comparison .brand-icon-row { gap:28px; }
+    #excogitare-brand-comparison .brand-browser { display:none; }
+  }
+</style>
+<div id="excogitare-brand-comparison">
+  <svg class="brand-svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="brand-atlas" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="3"/><path d="M20 17h25v10h-3l-2-6H29v9h8l1-4h3v13h-3l-1-5h-8v10h11l3-7h3v11H20v-3h4V20h-4z" fill="currentColor"/></symbol>
+      <symbol id="brand-atlas-small" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="4"/><path d="M22 17h23v6H29v6h13v6H29v7h16v6H22z" fill="currentColor"/></symbol>
+      <symbol id="brand-strata" viewBox="0 0 64 64"><path d="M32 4 56 18v7H25v5h24v8H25v5h31v4L32 61 8 47V18z" fill="currentColor"/></symbol>
+      <symbol id="brand-worldforge" viewBox="0 0 64 64"><path d="M32 3 58 32 32 61 6 32z" fill="none" stroke="currentColor" stroke-width="3"/><path d="m32 14 5 13 13 5-13 5-5 13-5-13-13-5 13-5z M32 26l6 6-6 6-6-6z" fill-rule="evenodd" fill="currentColor"/></symbol>
+      <symbol id="brand-worldforge-small" viewBox="0 0 64 64"><path d="M32 3 58 32 32 61 6 32z" fill="none" stroke="currentColor" stroke-width="4"/><path d="m32 14 5 13 13 5-13 5-5 13-5-13-13-5 13-5z" fill="currentColor"/></symbol>
+    </defs>
+  </svg>
+  <div class="viz-carousel" aria-label="Excogitare brand directions">
+    <section data-variant="Atlas · scholarly" aria-label="Atlas, scholarly cartography">
+      <div class="brand-proof atlas" aria-label="Atlas appearance">
+        <div class="brand-hero">
+          <p class="brand-kicker"><span>01 / Scholarly cartography</span><span>Atlas</span></p>
+          <div class="brand-lockup"><svg class="brand-mark" role="img" aria-label="Engraved E within a circular seal"><use href="#brand-atlas"/></svg><span class="brand-name">Excogitare</span></div>
+          <p class="brand-motto">Worlds, considered.</p>
+        </div>
+        <div class="brand-specimens">
+          <div class="brand-placement">
+            <p class="brand-label">In the studio</p>
+            <div class="brand-studio"><svg class="brand-mark" aria-hidden="true"><use href="#brand-atlas"/></svg><div><span class="brand-name">Excogitare</span><span class="brand-mapname">Great Watersheds</span></div></div>
+            <div class="brand-swatches"><span><i style="background:#6e3f47"></i>Burgundy</span><span><i style="background:#f6f0e6"></i>Paper</span><span><i style="background:#302b27"></i>Ink</span></div>
+          </div>
+          <div class="brand-sizes">
+            <p class="brand-label">App &amp; favicon · actual sizes</p>
+            <div class="brand-icon-row">
+              <div class="brand-icon-sample"><div class="brand-app-icon"><svg class="brand-mark" role="img" aria-label="Atlas app icon"><use href="#brand-atlas"/></svg></div><span>64 px</span></div>
+              <div class="brand-icon-sample"><svg class="brand-mark brand-32" role="img" aria-label="Atlas at 32 pixels"><use href="#brand-atlas-small"/></svg><span>32 px</span></div>
+              <div class="brand-icon-sample"><svg class="brand-mark brand-16" role="img" aria-label="Atlas at 16 pixels"><use href="#brand-atlas-small"/></svg><span>16 px</span></div>
+            </div>
+            <div class="brand-browser"><svg class="brand-mark" aria-hidden="true"><use href="#brand-atlas-small"/></svg><span>Excogitare</span><span aria-hidden="true">×</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="Strata · geometric" aria-label="Strata, geometric worldbuilder" hidden>
+      <div class="brand-proof strata" aria-label="Strata appearance">
+        <div class="brand-hero">
+          <p class="brand-kicker"><span>02 / Geometric worldbuilder</span><span>Strata</span></p>
+          <div class="brand-lockup"><svg class="brand-mark" role="img" aria-label="Geometric E cut into a hexagonal land tile"><use href="#brand-strata"/></svg><span class="brand-name">Excogitare</span></div>
+          <p class="brand-motto">Give a world its shape.</p>
+        </div>
+        <div class="brand-specimens">
+          <div class="brand-placement">
+            <p class="brand-label">In the studio</p>
+            <div class="brand-studio"><svg class="brand-mark" aria-hidden="true"><use href="#brand-strata"/></svg><div><span class="brand-name">Excogitare</span><span class="brand-mapname">Great Watersheds</span></div></div>
+            <div class="brand-swatches"><span><i style="background:#214e50"></i>Deep teal</span><span><i style="background:#eef2eb"></i>Chalk</span><span><i style="background:#b9d7c6"></i>Mint</span></div>
+          </div>
+          <div class="brand-sizes">
+            <p class="brand-label">App &amp; favicon · actual sizes</p>
+            <div class="brand-icon-row">
+              <div class="brand-icon-sample"><div class="brand-app-icon"><svg class="brand-mark" role="img" aria-label="Strata app icon"><use href="#brand-strata"/></svg></div><span>64 px</span></div>
+              <div class="brand-icon-sample"><svg class="brand-mark brand-32" role="img" aria-label="Strata at 32 pixels"><use href="#brand-strata"/></svg><span>32 px</span></div>
+              <div class="brand-icon-sample"><svg class="brand-mark brand-16" role="img" aria-label="Strata at 16 pixels"><use href="#brand-strata"/></svg><span>16 px</span></div>
+            </div>
+            <div class="brand-browser"><svg class="brand-mark" aria-hidden="true"><use href="#brand-strata"/></svg><span>Excogitare</span><span aria-hidden="true">×</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="Worldforge · mythic" aria-label="Worldforge, mythic strategy" hidden>
+      <div class="brand-proof worldforge" aria-label="Worldforge appearance">
+        <div class="brand-hero">
+          <p class="brand-kicker"><span>03 / Mythic strategy</span><span>Worldforge</span></p>
+          <div class="brand-lockup"><svg class="brand-mark" role="img" aria-label="Four-point spark inside a diamond"><use href="#brand-worldforge"/></svg><span class="brand-name">EXCOGITARE</span></div>
+          <p class="brand-motto">A world awaits its history.</p>
+        </div>
+        <div class="brand-specimens">
+          <div class="brand-placement">
+            <p class="brand-label">In the studio</p>
+            <div class="brand-studio"><svg class="brand-mark" aria-hidden="true"><use href="#brand-worldforge"/></svg><div><span class="brand-name">EXCOGITARE</span><span class="brand-mapname">Great Watersheds</span></div></div>
+            <div class="brand-swatches"><span><i style="background:#d9b678"></i>Gold</span><span><i style="background:#252c40"></i>Night</span><span><i style="background:#f2e8d6"></i>Vellum</span></div>
+          </div>
+          <div class="brand-sizes">
+            <p class="brand-label">App &amp; favicon · actual sizes</p>
+            <div class="brand-icon-row">
+              <div class="brand-icon-sample"><div class="brand-app-icon"><svg class="brand-mark" role="img" aria-label="Worldforge app icon"><use href="#brand-worldforge"/></svg></div><span>64 px</span></div>
+              <div class="brand-icon-sample"><svg class="brand-mark brand-32" role="img" aria-label="Worldforge at 32 pixels"><use href="#brand-worldforge-small"/></svg><span>32 px</span></div>
+              <div class="brand-icon-sample"><svg class="brand-mark brand-16" role="img" aria-label="Worldforge at 16 pixels"><use href="#brand-worldforge-small"/></svg><span>16 px</span></div>
+            </div>
+            <div class="brand-browser"><svg class="brand-mark" aria-hidden="true"><use href="#brand-worldforge-small"/></svg><span>Excogitare</span><span aria-hidden="true">×</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById("excogitare-brand-comparison");
+  if (!globalThis.Tweak) return;
+  root.querySelectorAll(".brand-proof").forEach(proof => {
+    const initialTracking = proof.classList.contains("worldforge") ? .10 : proof.classList.contains("strata") ? -.055 : -.035;
+    const state = { tracking:initialTracking, inverse:false };
+    const render = () => {
+      proof.style.setProperty("--brand-tracking", `${state.tracking}em`);
+      proof.dataset.inverse = String(state.inverse);
+    };
+    const tweak = new Tweak({ container:proof, onChange:render });
+    tweak.addSlider(state,"tracking",{label:"Wordmark spacing",min:-.06,max:.14,step:.005,unit:"em"});
+    tweak.addToggle(state,"inverse",{label:"Reverse main colors"});
+  });
+})();
+</script>
