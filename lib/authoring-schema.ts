@@ -3,6 +3,7 @@ import type { GeographicObjectKind, GenerationStructure } from "./generation-str
 import type { GenerationRecipe } from "./generation-recipe.ts";
 import type { PassProvenance } from "./generation-pass-graph.ts";
 import type { NarrativeAssessment } from "./narrative-types.ts";
+import type { PersistedNarrativeEvidence } from "./narrative-evidence.ts";
 
 export type ProtectionChannel = "TOPOLOGY" | "ELEVATION" | "CLIMATE" | "FEATURES" | "HYDROLOGY" | "CONTENT" | "STARTS" | "SCENARIO";
 export type SemanticProtectionPolicy = "EXACT" | "SHAPE" | "FUNCTION" | "RELATIONSHIP";
@@ -128,6 +129,7 @@ export type ProjectHistoryEntry = {
   recipe: GenerationRecipe;
   map: Civ5Map;
   provenance: PassProvenance[];
+  derived?: DerivedEvidence;
 };
 
 export type ProjectCheckpoint = {
@@ -137,6 +139,7 @@ export type ProjectCheckpoint = {
   recipe: GenerationRecipe;
   map: Civ5Map;
   provenance: PassProvenance[];
+  derived?: DerivedEvidence;
 };
 
 export type ProjectHistory = {
@@ -171,6 +174,7 @@ export type DerivedEvidence = {
   passVersions: Record<string, number>;
   structure?: GenerationStructure;
   narrative?: NarrativeAssessment;
+  narrativeSemantics?: PersistedNarrativeEvidence;
   match?: MatchFeasibilityReport;
   validation?: ValidationReport;
   scenarioCompatibility?: ScenarioCompatibilityReport;

@@ -1,7 +1,7 @@
 # Narrative Rewrite Phase 0 Evidence
 
 - **Captured:** 2026-07-17
-- **Purpose:** Establish the pre-rewrite behavioral boundary. This is evidence of current behavior, not a claim that the approved rewrite is implemented.
+- **Purpose:** Establish the pre-rewrite behavioral boundary at the time of capture. This is historical evidence, not a claim about current reconstructed behavior or proof that the approved rewrite is complete.
 - **Exact fixture:** [`rewrite-baseline.json`](rewrite-baseline.json)
 - **Manual game matrix:** [`manual-civ5-load-matrix.md`](manual-civ5-load-matrix.md)
 
@@ -29,6 +29,8 @@ The existing suite supplies the malformed and behavioral fixtures rather than st
 - Civ5Map metadata, Scenario-start and tile round trips.
 
 ## Captured automated evidence
+
+Every result in this table belongs to the dated Phase 0 checkpoint. It must not be reused as a current reconstruction test or packaging result.
 
 | Check | Result |
 | --- | --- |
@@ -72,6 +74,16 @@ The Polis characterization deliberately changes because Imperial Ring is no long
 ## Geography-only writer correction
 
 The fixture is deliberately regenerated after representative Excogitare exports failed to load in Civilization V. Comparison with installed Firaxis-authored maps showed that the compact generated scenario envelope lacked required type dictionaries and opaque game-option payloads; its successful self-parse was not compatibility evidence. Generated Civ5Map hashes therefore change because ordinary exports now end after the geography grid, and all reparsed Scenario-only counts become zero. In-memory and `.excogitare` project intent remains unchanged. A separate regression recognizes the exact legacy Excogitare 1.3.2 envelope and removes it on re-export while excluding unrelated authored scenarios.
+
+## Reviewed native engine–narrative reconstruction update — 2026-08-16
+
+The fixture was deliberately regenerated after all thirty-three Narrative Map Types moved from the shared post-generation topology realizer into strict owner-engine grammars. Excogitare now compiles semantic requests into continuous fields, Eccentric reserves graph regions and relationships, Physical installs causal initial and boundary conditions, and Polis builds roster-aware strategic graphs before geographic disguise. The old `realizeNarrativeGeography`, exact-mask and topology-rebuild runtime definitions remain deleted.
+
+Review regenerated the complete nine-case candidate twice and obtained the same normalized capture digest, `e6dae37f1762960faadd94b0d8064e1cb9cbbaaa1c2212ef38464363e7868044`, both times. Every normalized recipe and requested land/water/start boundary remained unchanged relative to the provisional fixture. All nine tile, Civ5Map and retained-structure digests changed because final native cause realization, exact binding, hydrology, content and strategic-route hardening altered game geography rather than merely adding metadata. The most material recorded corrections include eliminating Lonely Oceans' prior validation error, increasing Great Watersheds' encoded river coverage from 73 to 132 owner plots, and retaining the final field, graph, physical and strategic causal inventories in structure diagnostics. The final Tectonic Continents correction binds every rift to one continuous route between its exact historical shores and removes the previously needed active-margin relaxation.
+
+Every case has `PROVEN` native evidence, no essential or prohibited semantic failure, clean Repair output and `SATISFIED` content evidence wherever content applies. Lonely Oceans, Broken Island Chains and Glacial World select explicit authored relaxation prefixes; those consequences remain retained rather than being hidden behind an aggregate score. The other six cases require no authored relaxation. This review accepts the new deterministic bytes as the reconstruction baseline; it does not claim human blind recognition, multiplayer balance or successful loading in Civilization V.
+
+The prior Phase 0 statement that game-output hashes were unchanged described the observation-only architecture at that time and is historical. Native generation intentionally supersedes those bytes.
 
 ## Review rule
 

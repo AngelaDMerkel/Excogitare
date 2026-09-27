@@ -5,9 +5,9 @@ import { strToU8, unzipSync, zipSync } from "fflate";
 import { derivedEvidenceIsCurrent, type DerivedEvidence, type ProtectionState } from "../lib/authoring-schema.ts";
 import { parseCiv5Map, serializeCiv5Map, type Civ5Map } from "../lib/civ5-map.ts";
 import { addGenerationToHistory, restoreGeneration } from "../lib/generation-history.ts";
-import { attachSemanticIdentities, markGenerationStructureStale, type GenerationStructure } from "../lib/generation-structure.ts";
+import { attachSemanticIdentities, generationPassChangesBetweenMaps, markGenerationStructureStale, type GenerationStructure } from "../lib/generation-structure.ts";
 import { dependentPassIds, GENERATION_PASS_DEFINITIONS, GenerationCancelledError, GenerationPassSession, generationInputHash, invalidatePassEvidence, type GenerationPassDefinition } from "../lib/generation-pass-graph.ts";
-import { DEFAULT_GENERATION_OPTIONS, estimateGenerationResources, generateMap, generateMapFromRecipe, randomGenerationOptions, randomGenerationRecipe } from "../lib/map-generator.ts";
+import { DEFAULT_GENERATION_OPTIONS, MAP_PRESETS, estimateGenerationResources, generateMap, generateMapFromRecipe, randomGenerationOptions, randomGenerationRecipe } from "../lib/map-generator.ts";
 import { cloneGenerationRecipe, generationOptionsFromRecipe, generationRecipeFromOptions, normalizeGenerationRecipe, type WorldScale } from "../lib/generation-recipe.ts";
 import { ARCHETYPE_PROFILES, applyWorldArchetype, compatibleArchetypes } from "../lib/world-archetype.ts";
 import { createExcogitareProject, MAX_PROJECT_BYTES, parseExcogitareProject, serializeExcogitareProject, serializeLegacyExcogitareProjectV1, sha256Hex } from "../lib/excogitare-project.ts";
@@ -83,8 +83,16 @@ test("pass invalidation follows declared dependencies without invalidating indep
 test("all engines retain recipes, structured progress, semantic identities and pass provenance", () => {
   for (const [engine, preset] of [["EXCOGITARE", "CONTINENTS"], ["ECCENTRIC", "GREAT_WATERSHEDS"], ["PHYSICAL", "DYNAMIC_EARTH"], ["POLIS", "IMPERIAL_RING"]] as const) {
     const progress: Array<{ stage: string; passId: string; completed: number }> = [];
+    const observedStages: string[] = [];
     const options = { ...DEFAULT_GENERATION_OPTIONS, engine, preset, size: "DUEL" as const, players: 2, cityStates: 1, seed: `substrate-${engine.toLowerCase()}` };
-    const first = generateMap(options, (stage, event) => progress.push({ stage, passId: event.passId, completed: event.completedPasses }));
+    const first = generateMap(
+      options,
+      (stage, event) => progress.push({ stage, passId: event.passId, completed: event.completedPasses }),
+      { onEngineNarrativeStage: (snapshot) => {
+        observedStages.push(snapshot.stage);
+        if (snapshot.stage === "RAW_NATIVE") snapshot.landMask.fill(false);
+      } },
+    );
     const second = generateMap(options);
     assert.deepEqual(first.recipe, second.recipe);
     assert.deepEqual(first.tiles, second.tiles);
@@ -103,7 +111,72 @@ test("all engines retain recipes, structured progress, semantic identities and p
     assert.ok(first.structure?.objects.every((object) => Boolean(object.semanticId)));
     assert.equal(new Set(first.structure?.objects.map((object) => object.semanticId)).size, first.structure?.objects.length);
     assert.equal(first.structure?.semanticLineage?.length, first.structure?.objects.length);
+    const engineEvidence = first.structure?.engineNarrativeEvidence;
+    assert.equal(engineEvidence?.schemaVersion, 1);
+    assert.equal(engineEvidence?.engine, engine);
+    assert.deepEqual(Object.keys(engineEvidence?.stages ?? {}).sort(), ["FINAL", "LEGAL_NORMALIZED", "NARRATIVE_REALIZED", "RAW_NATIVE"]);
+    assert.deepEqual(engineEvidence?.comparisons.map((comparison) => `${comparison.from}:${comparison.to}`), [
+      "RAW_NATIVE:NARRATIVE_REALIZED",
+      "NARRATIVE_REALIZED:LEGAL_NORMALIZED",
+      "LEGAL_NORMALIZED:FINAL",
+    ]);
+    assert.ok(Object.values(engineEvidence?.stages ?? {}).every((stage) => /^[a-f0-9]{8}$/.test(stage.fingerprint)));
+    assert.deepEqual(observedStages, ["RAW_NATIVE", "NARRATIVE_REALIZED", "LEGAL_NORMALIZED", "FINAL"]);
     assert.ok(progress.some((event) => event.passId === "SEMANTIC_IDENTITY"));
+  }
+});
+
+function gamePayloadDigest(map: Civ5Map) {
+  const payload = {
+    name: map.name,
+    description: map.description,
+    worldSize: map.worldSize,
+    version: map.version,
+    width: map.width,
+    height: map.height,
+    players: map.players,
+    wraps: map.wraps,
+    terrains: map.terrains,
+    features: map.features,
+    wonders: map.wonders,
+    resources: map.resources,
+    tiles: map.tiles,
+    startLocations: map.startLocations,
+    generation: map.generation,
+  };
+  return sha256Hex(new TextEncoder().encode(JSON.stringify(payload)));
+}
+
+test("native narrative integration retains deterministic representative game output", () => {
+  const fixtures = [
+    { engine: "EXCOGITARE", preset: "CONTINENTS", hash: "2929a7a17cf9eef60023cb0507faeec963dd55ab8a5c0e97ecf5e1bc33a53d20" },
+    { engine: "ECCENTRIC", preset: "SHATTERED_BASINS", hash: "25f5593fe36f5bf9b848e80cda6cc4c0d21bdea02fdfd6a55d74b30279f893b9" },
+    { engine: "PHYSICAL", preset: "DYNAMIC_EARTH", hash: "1d61f805e7e66f1d11741fe287733bc0d32dfe9855cf0c9a549ea80ae7496074" },
+    { engine: "POLIS", preset: "IMPERIAL_RING", hash: "6fddcab2b1ba8eeecdde51629b570b533e52316559069d5a33174470205e29e1" },
+  ] as const;
+  for (const fixture of fixtures) {
+    const preset = MAP_PRESETS.find((candidate) => candidate.id === fixture.preset)!;
+    const options = {
+      ...DEFAULT_GENERATION_OPTIONS,
+      engine: fixture.engine,
+      preset: fixture.preset,
+      size: "TINY" as const,
+      seed: "phase1-observation",
+      players: 4,
+      cityStates: 4,
+      waterPercent: preset.water,
+      mountainPercent: preset.mountains,
+      style: fixture.engine === "ECCENTRIC" ? "FANTASTICAL" as const : fixture.engine === "PHYSICAL" ? "REALISTIC" as const : "MUNDANE" as const,
+      climateRealism: preset.climateRealism ?? DEFAULT_GENERATION_OPTIONS.climateRealism,
+      riverDensity: preset.riverDensity ?? DEFAULT_GENERATION_OPTIONS.riverDensity,
+      plateActivity: preset.plateActivity ?? DEFAULT_GENERATION_OPTIONS.plateActivity,
+      erosionStrength: preset.erosionStrength ?? DEFAULT_GENERATION_OPTIONS.erosionStrength,
+      worldAge: preset.worldAge ?? DEFAULT_GENERATION_OPTIONS.worldAge,
+      climate: preset.climate ?? DEFAULT_GENERATION_OPTIONS.climate,
+      rainfall: preset.rainfall ?? DEFAULT_GENERATION_OPTIONS.rainfall,
+      physicalOceanInfluence: preset.physicalOceanInfluence ?? DEFAULT_GENERATION_OPTIONS.physicalOceanInfluence,
+    };
+    assert.equal(gamePayloadDigest(generateMap(options)), fixture.hash, `${fixture.engine}/${fixture.preset} changed game output`);
   }
 });
 
@@ -129,8 +202,10 @@ test("derived evidence and history reject stale or shared authoring state", () =
   const restored = restoreGeneration(history[0]);
   restored.recipe!.matchIntent.enabledVictories.pop();
   restored.structure!.provenance![0].relaxations.push("test-only");
+  restored.structure!.engineNarrativeEvidence!.stages.FINAL!.metrics.landShare = 0;
   assert.equal(history[0].map.recipe!.matchIntent.enabledVictories.length, 5);
   assert.deepEqual(history[0].map.structure!.provenance![0].relaxations, []);
+  assert.notEqual(history[0].map.structure!.engineNarrativeEvidence!.stages.FINAL!.metrics.landShare, 0);
 
   const stale = markGenerationStructureStale(map.structure, "test mutation");
   assert.equal(stale?.evidenceState, "STALE");
@@ -140,6 +215,16 @@ test("derived evidence and history reject stale or shared authoring state", () =
   const hydrologyOnly = markGenerationStructureStale(map.structure, "river edit", ["HYDROLOGY"]);
   assert.equal(hydrologyOnly?.passEvidence?.find((entry) => entry.passId === "TOPOLOGY")?.state, "CURRENT");
   assert.deepEqual(hydrologyOnly?.passEvidence?.filter((entry) => entry.state === "STALE").map((entry) => entry.passId), ["HYDROLOGY", "LEGALITY", "SEMANTIC_IDENTITY"]);
+
+  const noOp = markGenerationStructureStale(map.structure, "no authored change", []);
+  assert.equal(noOp?.evidenceState, "CURRENT");
+  assert.equal(noOp?.staleReason, undefined);
+  assert.equal(generationPassChangesBetweenMaps(map, structuredClone(map)).size, 0);
+
+  const legacy = { ...structuredClone(map.structure!), passEvidence: undefined, evidenceState: "CURRENT" as const };
+  const staleLegacy = markGenerationStructureStale(legacy, "legacy topology edit", ["TOPOLOGY"]);
+  assert.equal(staleLegacy?.evidenceState, "STALE");
+  assert.equal(staleLegacy?.staleReason, "legacy topology edit");
 });
 
 test("imports remain honest about absent generation intent and Randomise produces complete recipes", () => {
@@ -280,8 +365,15 @@ test("resource estimates expose deterministic candidate and oversized-memory cos
   const colossal = estimateGenerationResources({ ...DEFAULT_GENERATION_OPTIONS, size: "COLOSSAL", geometry: "STANDARD", engine: "PHYSICAL" }, "EXHAUSTIVE");
   assert.equal(standard.candidates, 1);
   assert.equal(colossal.candidates, 12);
+  assert.ok(standard.maximumCandidateEvaluations > standard.candidates);
+  assert.ok(colossal.maximumCandidateEvaluations > colossal.candidates);
   assert.ok(colossal.estimatedPeakBytes > standard.estimatedPeakBytes);
-  assert.match(colossal.warning ?? "", /evaluates 12 candidates/);
+  assert.ok(standard.estimatedPeakMegabytes >= 240, "the estimate includes a measured runtime baseline rather than reporting only tile arrays");
+  assert.ok(colossal.estimatedPeakMegabytes >= 409, "the conservative envelope must not understate the observed Colossal Node RSS calibration point");
+  assert.match(colossal.warning ?? "", /starts with 12 candidates/);
+  assert.match(colossal.warning ?? "", new RegExp(`up to ${colossal.maximumCandidateEvaluations} total evaluations`));
+  assert.match(colossal.warning ?? "", /conservative process working-set envelope/);
+  assert.match(colossal.warning ?? "", /actual browser and container peaks vary/);
 });
 
 test("cooperative cancellation stops a candidate run without mutating an installed map", () => {
@@ -453,6 +545,22 @@ test("tile and semantic protection constrain selective replacement without mutat
   assert.notEqual(result.map.tiles, candidate.tiles);
 });
 
+test("protection merging preserves candidate evidence state and invalidates only actual authored differences", () => {
+  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "DYNAMIC_EARTH", size: "DUEL", players: 2, cityStates: 0, seed: "protection-evidence-source" });
+  const protectedIndex = source.tiles.findIndex((tile) => tile.terrain >= 2 && tile.elevation < 2);
+  assert.ok(protectedIndex >= 0);
+  const state = protectTiles(emptyProtectionState(), source.width, source.height, [protectedIndex], ["TOPOLOGY", "ELEVATION"], "No-op anchor");
+  const noOp = applyProtectionState(source, structuredClone(source), state);
+  assert.equal(noOp.blocked, false);
+  assert.equal(noOp.map.structure?.evidenceState, "CURRENT", "selected protection channels alone must not manufacture stale evidence");
+
+  const selective = regenerateMapStage(source, source.generation!, "RIVERS", 19);
+  assert.equal(selective.structure?.evidenceState, "STALE");
+  const mergedSelective = applyProtectionState(source, selective, emptyProtectionState());
+  assert.equal(mergedSelective.map.structure?.evidenceState, "STALE", "lineage attachment must not promote stale selective evidence");
+  assert.equal(mergedSelective.map.structure?.passEvidence?.find((entry) => entry.passId === "HYDROLOGY")?.state, "STALE");
+});
+
 test("Exact, Shape, Function, and Relationship protections compile materially different merges", () => {
   const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "GREAT_WATERSHEDS", size: "DUEL", players: 2, cityStates: 0, seed: "policy-source" });
   const candidate = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "GREAT_WATERSHEDS", size: "DUEL", players: 2, cityStates: 0, seed: "policy-candidate" });
@@ -470,14 +578,14 @@ test("Exact, Shape, Function, and Relationship protections compile materially di
 });
 
 test("imported watersheds expose confidence and preserve continuous mountain-to-water function", () => {
-  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "GREAT_WATERSHEDS", size: "SMALL", players: 4, cityStates: 2, seed: "imported-watershed-source" });
+  const generated = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "MONSOON_CONTINENTS", size: "SMALL", players: 4, cityStates: 2, seed: "imported-watershed-source" });
   const imported = parseCiv5Map(serializeCiv5Map(generated), "imported-watershed.Civ5Map");
   const watershed = protectableSemantics(imported).find((object) => object.objectKind === "RIVER_SYSTEM" && object.outlet !== undefined);
   assert.ok(watershed);
   assert.equal(watershed!.inference.source, "IMPORTED");
   assert.ok(watershed!.inference.confidence >= 0.7);
   const state = protectSemanticObject(emptyProtectionState(), imported, watershed!.semanticId, "FUNCTION", true);
-  const candidate = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "GREAT_WATERSHEDS", size: "SMALL", players: 4, cityStates: 2, seed: "imported-watershed-candidate" });
+  const candidate = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "PHYSICAL", preset: "MONSOON_CONTINENTS", size: "SMALL", players: 4, cityStates: 2, seed: "imported-watershed-candidate" });
   const result = applyProtectionState(imported, candidate, state);
   assert.equal(result.blocked, false, result.conflicts.join(" "));
   assert.equal(result.report.findings[0].status, "SATISFIED");
@@ -486,10 +594,10 @@ test("imported watersheds expose confidence and preserve continuous mountain-to-
   assert.equal(riverErrors.length, 0, riverErrors.map((issue) => issue.detail).join(" "));
 });
 
-test("protection constraints enter every engine before the exact post-generation merge", () => {
+test("protection constraints enter every owner engine before final legality normalization", () => {
   const configurations = [
     ["EXCOGITARE", "CONTINENTS", "EXCOGITARE_FIELDS"],
-    ["ECCENTRIC", "WILD_REGIONS", "ECCENTRIC_GRAPH"],
+    ["ECCENTRIC", "LIVING_WORLD", "ECCENTRIC_GRAPH"],
     ["PHYSICAL", "DYNAMIC_EARTH", "PHYSICAL_BOUNDARY"],
     ["POLIS", "IMPERIAL_RING", "POLIS_STRATEGIC"],
   ] as const;
@@ -542,7 +650,7 @@ test("Polis compiles protected semantic relationships into its strategic graph p
 });
 
 test("Eccentric compiles protected semantic relationships into polygon paths", () => {
-  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "WILD_REGIONS", size: "DUEL", players: 2, cityStates: 0, seed: "native-eccentric-relationship" });
+  const source = generateMap({ ...DEFAULT_GENERATION_OPTIONS, engine: "ECCENTRIC", preset: "LIVING_WORLD", size: "DUEL", players: 2, cityStates: 0, seed: "native-eccentric-relationship" });
   const landObjects = protectableSemantics(source).filter((object) => object.tileIndices.length >= 4 && source.tiles[object.tileIndices[0]]?.terrain >= 2);
   assert.ok(landObjects.length >= 2);
   const state = protectSemanticObject(emptyProtectionState(), source, landObjects[0].semanticId, "RELATIONSHIP", false);

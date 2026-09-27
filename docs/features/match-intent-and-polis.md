@@ -2,7 +2,7 @@
 
 ## Contract
 
-- **Status:** Verified for the approved Phase 6 boundary.
+- **Status:** Verified within the implemented geographic-planning and explanatory-assessment contract. All seven Polis native plans and strict final-state proofs pass the current reconstruction matrix.
 - **User outcome:** A user can describe who is expected to play and which victory paths deserve emphasis, and Polis turns that intent into meaningful strategic geography while every engine explains likely suitability.
 - **Scope:** Human/AI/Flexible counts, advanced seats, teams, victory states, competitive strictness, AI accommodation, feasibility reports and all seven Polis Narrative Map Types.
 - **Dependencies:** [`generation-substrate.md`](generation-substrate.md), [`create-authoring-workflow.md`](create-authoring-workflow.md), Narrative Profiles, start correctness and Scenario handoff.
@@ -18,17 +18,19 @@ Each victory is Disabled, Enabled or Emphasized. Emphasized is a subset of Enabl
 
 Polis consumes Match Intent while constructing strategic nodes, routes, territories and objectives. AI accommodation favors legible expansion basins, wider primary corridors, route redundancy, reachable strategic resources and fewer plans dependent on one-tile tricks. Human seats receive demanding geography only through explicit seat assignment.
 
-Excogitare, Eccentric and Physical consume Match Intent for start/content placement and assessment without pretending to be strategic-graph engines. Review reports Domination, Science, Culture, Diplomacy and Time feasibility separately rather than collapsing them into one balance number.
+Excogitare, Eccentric and Physical consume Match Intent for start/content placement and assessment without pretending to be strategic-graph engines. Review reports Domination, Science, Culture, Diplomacy and Time feasibility separately rather than collapsing them into one balance number. These findings explain geographic opportunity and pressure; they are not observations of an actual victory, proof of AI behavior or predictions of a human match outcome.
 
 ## Polis catalogue
 
-Imperial Ring, Opposing Fronts, Contested Heartland and Rival Continents are rebuilt against Match Intent. Three Realms, Thalassic League and Unequal Realms enter runtime as distinct types. Team-count and role requirements are hard, disclosed contracts. Unequal Realms is intentionally asymmetric and cannot enter ordinary competitive Randomise without confirmation.
+Imperial Ring, Opposing Fronts, Contested Heartland and Rival Continents are implemented against Match Intent. Three Realms, Thalassic League and Unequal Realms run as distinct native types. Team-count, roster-cardinality, route-media and role requirements are strict, disclosed contracts. Unequal Realms is intentionally asymmetric and cannot enter ordinary competitive Randomise without confirmation.
 
 ## Failure and persistence
 
 Impossible counts or team contracts block generation or offer a disclosed adjustment. Protected terrain, Scale or geometry conflicts identify the exact failed route or role. Explicit seat assignments persist in `.excogitare`; Civ5Map receives them only through verified Scenario records.
 
-## Completion gates
+## Historical Phase 6 completion gates
+
+These checks record the pre-reconstruction Phase 6 checkpoint. They do not prove the stricter roster-aware native-plan, exact-route and final-geography contracts now required by the Narrative-native reconstruction.
 
 - [x] Match Intent schema, normalization and migrations implemented.
 - [x] Refine exposes simple Human/AI counts and derives Flexible seats without assigning specific civilizations.
@@ -57,4 +59,10 @@ Runtime contracts:
 - **Thalassic League:** redundant naval lanes, port starts and contestable city-state diplomacy.
 - **Unequal Realms:** explicit Tall, Wide, War and Turtle geographic roles; it is excluded from ordinary Randomise because its imbalance is intentional.
 
-Final verification passes 119 TypeScript domain tests and 20 rendered-shell tests, TypeScript `--noEmit`, ESLint, `git diff --check`, the vinext production build, the Next.js static Pages build and its export verifier. The rebuilt `node:24-alpine` image `excogitare:1.3.0` is running locally on port 3001 and returns HTTP 200. No manual Civ V load was performed during Phase 6; Civ V remains the final authority for game behavior.
+At the historical Phase 6 checkpoint, verification passed 119 TypeScript domain tests and 20 rendered-shell tests, TypeScript `--noEmit`, ESLint, `git diff --check`, the vinext production build, the Next.js static Pages build and its export verifier. The then-current `node:24-alpine` image `excogitare:1.3.0` returned HTTP 200 on port 3001. Those results predate the current native-plan reconstruction and are not current packaging evidence. No manual Civ V load was performed during Phase 6; Civ V remains the final authority for game behavior.
+
+## Current native verification — 2026-08-16
+
+All seven Polis contracts now pass strict final-state proof with the requested roster cardinality, complete role homes and objectives, exact bound route media, required redundancy and type-specific content obligations. Their 2/4/8-player and aligned Create cases are part of the complete **278/278** TypeScript corpus after Lua-workspace retirement and the repeated **33/33** owner audit whose digest begins `47a2fc…`. Type checking, lint, diff checking, the fresh rendered shell, Vinext production, Pages/static export and Node 24 Alpine HTTP checks also pass.
+
+This verifies that the implemented geography and retained strategic evidence satisfy the authored Match Intent contracts. It does not demonstrate that Civ V's AI will exploit that geography, that a particular victory will occur, or that human outcomes will match the assessment. Those are empirical game-play questions, and real Civ V load/runtime verification remains open.

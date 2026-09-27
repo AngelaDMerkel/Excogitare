@@ -9,6 +9,7 @@ import {
   restoreMapCheckpoint,
 } from "../lib/map-design.ts";
 import { DEFAULT_GENERATION_OPTIONS, generateMap } from "../lib/map-generator.ts";
+import { mapForRegenerationWorker, mergeRegenerationWorkerResult } from "../lib/regeneration-worker-transport.ts";
 
 const options = {
   ...DEFAULT_GENERATION_OPTIONS,
@@ -32,6 +33,32 @@ test("selective generation passes preserve unrelated map structure", () => {
   assert.deepEqual(content.tiles.map((tile) => [tile.terrain, tile.elevation, tile.river]), map.tiles.map((tile) => [tile.terrain, tile.elevation, tile.river]));
   assert.deepEqual(starts.tiles.map((tile) => [tile.terrain, tile.elevation]), map.tiles.map((tile) => [tile.terrain, tile.elevation]));
   assert.equal(starts.startLocations.filter((start) => !start.cityState).length, options.players);
+});
+
+test("start rebalancing uses a bounded worker payload and restores authoritative metadata", () => {
+  const map = generateMap({ ...options, engine: "ECCENTRIC", preset: "PENINSULA_REALM" });
+  assert.ok(map.structure);
+  assert.ok(map.recipe);
+  const workerMap = mapForRegenerationWorker(map, "STARTS");
+  assert.equal(workerMap.structure, undefined);
+  assert.equal(workerMap.recipe, undefined);
+  assert.equal(mapForRegenerationWorker(map, "CONTENT"), map);
+
+  const workerResult = regenerateMapStage(structuredClone(workerMap), options, "STARTS", 7);
+  const requestedRecipe = { ...structuredClone(map.recipe!), scale: "LOCAL" as const, effort: "EXHAUSTIVE" as const };
+  const merged = mergeRegenerationWorkerResult(map, workerResult, "STARTS", requestedRecipe);
+  assert.equal(merged.name, map.name);
+  assert.equal(merged.description, map.description);
+  assert.deepEqual(merged.recipe, requestedRecipe);
+  assert.notEqual(merged.recipe, requestedRecipe);
+  assert.ok(merged.structure);
+  assert.deepEqual(merged.structure?.narrativeNativePlan, map.structure?.narrativeNativePlan);
+  assert.equal(merged.structure?.passEvidence?.find((entry) => entry.passId === "STARTS")?.state, "STALE");
+  assert.equal(merged.startLocations.filter((start) => !start.cityState).length, options.players);
+  assert.notEqual(merged.tiles, map.tiles);
+  workerResult.tiles[0].terrain = workerResult.tiles[0].terrain < 2 ? 2 : 0;
+  assert.notEqual(merged.tiles[0].terrain, workerResult.tiles[0].terrain);
+  assert.equal(mergeRegenerationWorkerResult(map, workerResult, "CONTENT"), workerResult);
 });
 
 test("selective regeneration applies World Character only to the requested layer", () => {

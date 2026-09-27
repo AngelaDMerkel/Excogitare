@@ -1,4 +1,5 @@
 import type { Civ5Map } from "./civ5-map.ts";
+import type { DerivedEvidence } from "./authoring-schema.ts";
 import { cloneGenerationStructure } from "./generation-structure.ts";
 import { cloneGenerationRecipe } from "./generation-recipe.ts";
 
@@ -12,6 +13,7 @@ export type GenerationHistoryEntry = {
   operation: GenerationHistoryOperation;
   createdAt: string;
   map: Civ5Map;
+  derived?: DerivedEvidence;
 };
 
 function snapshotMap(map: Civ5Map): Civ5Map {
@@ -26,8 +28,8 @@ function snapshotMap(map: Civ5Map): Civ5Map {
   };
 }
 
-export function addGenerationToHistory(history: GenerationHistoryEntry[], map: Civ5Map, id: number, metadata: { parentId?: number; operation?: GenerationHistoryOperation; createdAt?: string } = {}) {
-  return [{ id, parentId: metadata.parentId, operation: metadata.operation ?? "GENERATE", createdAt: metadata.createdAt ?? new Date().toISOString(), map: snapshotMap(map) }, ...history].slice(0, MAX_GENERATION_HISTORY);
+export function addGenerationToHistory(history: GenerationHistoryEntry[], map: Civ5Map, id: number, metadata: { parentId?: number; operation?: GenerationHistoryOperation; createdAt?: string; derived?: DerivedEvidence } = {}) {
+  return [{ id, parentId: metadata.parentId, operation: metadata.operation ?? "GENERATE", createdAt: metadata.createdAt ?? new Date().toISOString(), map: snapshotMap(map), derived: metadata.derived ? structuredClone(metadata.derived) : undefined }, ...history].slice(0, MAX_GENERATION_HISTORY);
 }
 
 export function restoreGeneration(entry: GenerationHistoryEntry) {

@@ -1,5 +1,5 @@
 import type { Civ5Map, Civ5Tile } from "./civ5-map.ts";
-import type { ProtectionState } from "./authoring-schema.ts";
+import type { DerivedEvidence, ProtectionState } from "./authoring-schema.ts";
 import { cloneGenerationStructure, markGenerationStructureStale } from "./generation-structure.ts";
 import { cloneGenerationRecipe, generationRecipeFromOptions, type GenerationRecipe } from "./generation-recipe.ts";
 import { applyArchetypeContentEcology, applyWorldArchetype } from "./world-archetype.ts";
@@ -35,6 +35,7 @@ export type MapCheckpoint = {
   name: string;
   createdAt: number;
   map: Civ5Map;
+  derived?: DerivedEvidence;
 };
 
 function snapshotMap(map: Civ5Map): Civ5Map {
@@ -49,8 +50,8 @@ function snapshotMap(map: Civ5Map): Civ5Map {
   };
 }
 
-export function createMapCheckpoint(map: Civ5Map, name: string, id: number, createdAt = Date.now()): MapCheckpoint {
-  return { id, name: name.trim() || `Checkpoint ${id}`, createdAt, map: snapshotMap(map) };
+export function createMapCheckpoint(map: Civ5Map, name: string, id: number, createdAt = Date.now(), derived?: DerivedEvidence): MapCheckpoint {
+  return { id, name: name.trim() || `Checkpoint ${id}`, createdAt, map: snapshotMap(map), derived: derived ? structuredClone(derived) : undefined };
 }
 
 export function restoreMapCheckpoint(checkpoint: MapCheckpoint) {

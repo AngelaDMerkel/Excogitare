@@ -2,7 +2,7 @@
 
 ## Contract
 
-- **Status:** Verified. The authoring, inference, native engine compilation, candidate search, exact merge, reporting and project workflow are implemented and covered by deterministic all-engine regressions.
+- **Status:** Verified. The approved protection workflow reached its verified checkpoint. Reconstruction-specific native-plan and evidence-invalidation changes are implemented with focused all-engine coverage; their complete current regression and packaging rerun remains owned by the reconstruction record.
 - **User outcome:** A user can preserve exact authored tiles or the identity and function of a geographic system while regenerating everything else, with conflicts explained before the current map changes.
 - **Scope:** Channel masks, named regions, Drag to Preserve, semantic objects, stable lineage, Exact/Shape/Function/Relationship policies, imported inference, all-engine constraint compilation, undo and history.
 - **Dependencies:** [`generation-substrate.md`](generation-substrate.md), Create Edit/Iterate, retained structures, all four engines and project files.
@@ -41,8 +41,9 @@ Protected illegal content blocks only touched operations and relevant export whi
 - [x] Engines consume constraints before construction, not only after generation.
 - [x] Hard failures are atomic and soft degradation is disclosed.
 - [x] Project download/reimport retains every constraint; Civ5Map remains clean.
-- [x] Validation, Repair, determinism, builds and Alpine runtime pass.
-- [x] Documentation and completion claims reconcile with evidence.
+- [x] Validation, Repair, determinism, builds and Alpine runtime passed at the original protection checkpoint.
+- [ ] Rerun the complete current validation, Repair, determinism, build and Alpine matrix after native reconstruction hardening.
+- [ ] Reconcile final completion claims after that current matrix passes.
 
 ## Engine boundary
 
@@ -54,3 +55,5 @@ All four engines use deterministic four-candidate searches and receive the same 
 - Polis pins protected starts and semantic anchors, adds protected relationship edges to its strategic graph, and treats retained territories and routes as land-budget constraints.
 
 Candidate scoring still chooses among lawful deterministic alternatives. The later merge remains necessary as an exact Civ V byte-level guarantee for channels such as resources, scenario records and river seams; it is no longer the first or only point at which the engines see protection. Direct pre-merge regressions verify adapter consumption, semantic relationships, deterministic output and Repair-clean results.
+
+Evidence invalidation follows the actual selected-candidate-to-merged-map difference, not merely the list of protection channels the user selected. A native candidate that already satisfies an Exact mask remains current; a lawful merge that really changes topology, relief, climate, hydrology, content or starts invalidates that pass and its dependents. Attaching semantic lineage never promotes an already-stale selective Climate, River, Content or Start result back to current.

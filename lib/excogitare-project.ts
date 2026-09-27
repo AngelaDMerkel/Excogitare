@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { parseCiv5Map, serializeCiv5Map, type Civ5Map } from "./civ5-map.ts";
 import type {
+  DerivedEvidence,
   ExcogitareProject,
   ProjectCheckpoint,
   ProjectEditorState,
@@ -11,10 +12,12 @@ import type {
   ScenarioDraft,
 } from "./authoring-schema.ts";
 import { cloneGenerationRecipe, normalizeGenerationRecipe, type GenerationRecipe } from "./generation-recipe.ts";
-import { cloneGenerationStructure } from "./generation-structure.ts";
+import { cloneGenerationStructure, markGenerationStructureStale } from "./generation-structure.ts";
 import { DEFAULT_GENERATION_OPTIONS } from "./map-generator.ts";
 import { cloneProtectionState } from "./map-protection.ts";
 import { scenarioDraftFromMap } from "./scenario-authoring.ts";
+import { createNarrativeEvidence, markNarrativeEvidenceStale, narrativeEvidenceMatchesMap, validateNarrativeEvidence } from "./narrative-evidence.ts";
+import { extractNarrativeSemantics } from "./narrative-semantics.ts";
 
 export const EXCOGITARE_PROJECT_SCHEMA_VERSION = 2 as const;
 export const MAX_PROJECT_BYTES = 64 * 1024 * 1024;
@@ -27,8 +30,8 @@ type LegacyProjectFile = { format: "EXCOGITARE_PROJECT"; schemaVersion: 1; proje
 type BundleIndex = {
   schemaVersion: 1;
   activeEntryId?: string;
-  entries: Array<Omit<ProjectHistoryEntry, "map" | "recipe" | "provenance"> & { snapshot: string }>;
-  checkpoints: Array<Omit<ProjectCheckpoint, "map" | "recipe" | "provenance"> & { snapshot: string }>;
+  entries: Array<Omit<ProjectHistoryEntry, "map" | "recipe" | "provenance" | "derived"> & { snapshot: string }>;
+  checkpoints: Array<Omit<ProjectCheckpoint, "map" | "recipe" | "provenance" | "derived"> & { snapshot: string }>;
 };
 
 const encoder = new TextEncoder();
@@ -40,6 +43,8 @@ const SUPPORTED_CAPABILITIES = new Set([
   "scenario-draft-v1",
   "history-checkpoints-v1",
   "zip-bundle-v2",
+  "narrative-semantic-evidence-v1",
+  "narrative-native-plan-v1",
 ]);
 const REQUIRED_PATHS = ["project.json", "map.json", "map.civ5map", "recipe.json", "protection/state.json", "scenario/draft.json", "history/index.json"] as const;
 const EXECUTABLE_EXTENSION = /\.(?:exe|dll|dylib|so|com|bat|cmd|ps1|sh|bash|zsh|js|mjs|cjs|wasm|app|jar)$/i;
@@ -135,6 +140,73 @@ function legacyPayloadHashes(project: Omit<ExcogitareProject, "manifest">) {
   return Object.fromEntries(Object.entries(project).filter(([, value]) => value !== undefined).map(([key, value]) => [key, legacyChecksum(value)]));
 }
 
+function retainedSemanticModelMatchesMap(map: Civ5Map) {
+  const retained = map.structure?.narrativeSemanticModel;
+  return !retained || extractNarrativeSemantics(map).inputHash === retained.inputHash;
+}
+
+/**
+ * Reconcile durable derived evidence with the map that is actually being
+ * saved. The active map's retained structure is authoritative: an earlier
+ * project's derived payload must never overwrite a newly generated or edited
+ * map when the bundle is opened again.
+ */
+export function projectDerivedEvidenceForMap(derived: DerivedEvidence | undefined, map: Civ5Map): DerivedEvidence | undefined {
+  const structure = map.structure;
+  const evidence = derived?.narrativeSemantics;
+  if (!structure) {
+    if (!derived) return undefined;
+    if (!evidence || evidence.state === "STALE" || narrativeEvidenceMatchesMap(evidence, map)) return structuredClone(derived);
+    return { ...structuredClone(derived), narrativeSemantics: markNarrativeEvidenceStale(evidence, "The authored map changed after narrative evaluation.") };
+  }
+
+  const inputHash = structure.inputHash ?? derived?.inputHash;
+  const generatorVersion = structure.generatorVersion ?? derived?.generatorVersion;
+  if (!inputHash || !generatorVersion) return derived ? { ...structuredClone(derived), structure: cloneGenerationStructure(structure) } : undefined;
+  const base: DerivedEvidence = {
+    inputHash,
+    generatorVersion,
+    passVersions: Object.fromEntries((structure.provenance ?? []).map((entry) => [entry.passId, entry.passVersion])),
+    structure: cloneGenerationStructure(structure),
+    narrative: structure.narrativeAssessment ? structuredClone(structure.narrativeAssessment) : undefined,
+  };
+  if (structure.evidenceState === "CURRENT" && !retainedSemanticModelMatchesMap(map)) {
+    const reason = "The authored map no longer matches its retained narrative semantic model.";
+    base.structure = markGenerationStructureStale(structure, reason);
+    if (evidence) base.narrativeSemantics = markNarrativeEvidenceStale(evidence, reason);
+    return base;
+  }
+  const completeCurrentNarrative = structure.evidenceState === "CURRENT"
+    && structure.narrativeProgram
+    && structure.narrativeSemanticModel
+    && structure.narrativeEvaluation;
+  if (completeCurrentNarrative) {
+    return {
+      ...base,
+      narrativeSemantics: evidence && evidence.state !== "STALE" && narrativeEvidenceMatchesMap(evidence, map)
+        ? structuredClone(evidence)
+        : createNarrativeEvidence(map, structure.narrativeProgram!, structure.narrativeSemanticModel!, structure.narrativeEvaluation!),
+    };
+  }
+  if (evidence) {
+    base.narrativeSemantics = evidence.state === "STALE"
+      ? structuredClone(evidence)
+      : markNarrativeEvidenceStale(evidence, structure.staleReason ?? "The authored map changed after narrative evaluation.");
+  }
+  return base;
+}
+
+function retainedStructureEvidence(map: Civ5Map): DerivedEvidence | undefined {
+  if (!map.structure?.inputHash || !map.structure.generatorVersion) return undefined;
+  return {
+    inputHash: map.structure.inputHash,
+    generatorVersion: map.structure.generatorVersion,
+    passVersions: Object.fromEntries((map.structure.provenance ?? []).map((entry) => [entry.passId, entry.passVersion])),
+    structure: cloneGenerationStructure(map.structure),
+    narrative: map.structure.narrativeAssessment ? structuredClone(map.structure.narrativeAssessment) : undefined,
+  };
+}
+
 export function createExcogitareProject(input: {
   projectName: string;
   map: Civ5Map;
@@ -143,27 +215,30 @@ export function createExcogitareProject(input: {
   protection?: ProtectionState;
   scenario?: ScenarioDraft;
   editorState?: ProjectEditorState;
+  derived?: DerivedEvidence;
   excogitareVersion: string;
   now?: string;
   projectId?: string;
 }): ExcogitareProject {
   const now = input.now ?? new Date().toISOString();
   const projectId = input.projectId ?? `project-${legacyChecksum(`${input.projectName}:${now}:${input.recipe.settings.seed}`)}`;
+  const map = cloneMap(input.map);
+  const derived = projectDerivedEvidenceForMap(input.derived, map);
+  // A direct authored tile mutation can leave the map's retained semantic
+  // model marked CURRENT. Reconciliation detects that mismatch; reflect its
+  // stale structure in the in-memory project immediately, not only when the
+  // project is later serialized. A bare imported Civ5Map has no structure and
+  // must remain evidence-absent even if a caller supplies obsolete derived data.
+  if (map.structure && derived?.structure) map.structure = cloneGenerationStructure(derived.structure);
   const payload = {
     schemaVersion: 1 as const,
-    map: cloneMap(input.map),
+    map,
     recipe: cloneGenerationRecipe(input.recipe)!,
     protection: cloneProtectionState(input.protection ?? defaultProtection()),
     scenario: input.scenario ? scenarioDraftFromMap(input.map, input.scenario) : defaultScenario(input.map),
     history: input.history ? structuredClone(input.history) : { schemaVersion: 1 as const, entries: [], checkpoints: [] },
     editorState: input.editorState ? structuredClone(input.editorState) : undefined,
-    derived: input.map.structure?.inputHash && input.map.structure.generatorVersion ? {
-      inputHash: input.map.structure.inputHash,
-      generatorVersion: input.map.structure.generatorVersion,
-      passVersions: Object.fromEntries((input.map.structure.provenance ?? []).map((entry) => [entry.passId, entry.passVersion])),
-      structure: cloneGenerationStructure(input.map.structure),
-      narrative: cloneGenerationStructure(input.map.structure)?.narrativeAssessment,
-    } : undefined,
+    derived,
   } satisfies Omit<ExcogitareProject, "manifest">;
   return {
     ...payload,
@@ -175,7 +250,16 @@ export function createExcogitareProject(input: {
       updatedAt: now,
       excogitareVersion: input.excogitareVersion,
       payloadHashes: {},
-      requiredCapabilities: ["generation-recipe-v1", "civ5map-snapshot-v1", "protection-v1", "scenario-draft-v1", "history-checkpoints-v1", "zip-bundle-v2"],
+      requiredCapabilities: [
+        "generation-recipe-v1",
+        "civ5map-snapshot-v1",
+        "protection-v1",
+        "scenario-draft-v1",
+        "history-checkpoints-v1",
+        "zip-bundle-v2",
+        ...(payload.derived?.narrativeSemantics || payload.history.entries.some((entry) => entry.derived?.narrativeSemantics) || payload.history.checkpoints?.some((checkpoint) => checkpoint.derived?.narrativeSemantics) ? ["narrative-semantic-evidence-v1"] : []),
+        ...(payload.derived?.structure?.narrativeNativePlan || payload.history.entries.some((entry) => entry.map.structure?.narrativeNativePlan) || payload.history.checkpoints?.some((checkpoint) => checkpoint.map.structure?.narrativeNativePlan) ? ["narrative-native-plan-v1"] : []),
+      ],
       bundleVersion: 2,
       compression: "DEFLATE",
       hashAlgorithm: "SHA-256",
@@ -220,14 +304,14 @@ function addHistoryEntries(entries: Record<string, Uint8Array>, history: Project
     const snapshot = `history/snapshots/${safeEntryId(item.id)}.json`;
     if (usedPaths.has(snapshot)) throw new Error("Project history identifiers collide after safe filename normalization.");
     usedPaths.add(snapshot);
-    entries[snapshot] = jsonBytes({ map: authoredMap(item.map), recipe: item.recipe, provenance: item.provenance, structure: cloneGenerationStructure(item.map.structure) });
+    entries[snapshot] = jsonBytes({ map: authoredMap(item.map), recipe: item.recipe, provenance: item.provenance, structure: cloneGenerationStructure(item.map.structure), derived: item.derived ? structuredClone(item.derived) : undefined });
     index.entries.push({ id: item.id, parentId: item.parentId, operation: item.operation, createdAt: item.createdAt, snapshot });
   }
   for (const checkpoint of checkpoints) {
     const snapshot = `history/checkpoints/${safeEntryId(checkpoint.id)}.json`;
     if (usedPaths.has(snapshot)) throw new Error("Project checkpoint identifiers collide after safe filename normalization.");
     usedPaths.add(snapshot);
-    entries[snapshot] = jsonBytes({ map: authoredMap(checkpoint.map), recipe: checkpoint.recipe, provenance: checkpoint.provenance, structure: cloneGenerationStructure(checkpoint.map.structure) });
+    entries[snapshot] = jsonBytes({ map: authoredMap(checkpoint.map), recipe: checkpoint.recipe, provenance: checkpoint.provenance, structure: cloneGenerationStructure(checkpoint.map.structure), derived: checkpoint.derived ? structuredClone(checkpoint.derived) : undefined });
     index.checkpoints.push({ id: checkpoint.id, name: checkpoint.name, createdAt: checkpoint.createdAt, snapshot });
   }
   entries["history/index.json"] = jsonBytes(index);
@@ -246,6 +330,23 @@ function extensionMetadata(extensions: Record<string, unknown> | undefined) {
 }
 
 export function serializeExcogitareProject(project: ExcogitareProject, options: { historyPolicy?: ProjectHistoryPolicy; now?: string } = {}) {
+  if (project.derived?.narrativeSemantics) validateNarrativeEvidence(project.derived.narrativeSemantics);
+  const semanticModelMismatch = project.map.structure?.evidenceState === "CURRENT" && !retainedSemanticModelMatchesMap(project.map);
+  const currentEvidenceMismatch = Boolean(project.derived?.narrativeSemantics
+    && project.derived.narrativeSemantics.state !== "STALE"
+    && !narrativeEvidenceMatchesMap(project.derived.narrativeSemantics, project.map));
+  if (semanticModelMismatch || currentEvidenceMismatch) {
+    const reason = semanticModelMismatch
+      ? "The authored map no longer matches its retained narrative semantic model."
+      : "The authored map changed after narrative evaluation.";
+    project.map = { ...project.map, structure: markGenerationStructureStale(project.map.structure, reason) };
+    if (project.derived?.narrativeSemantics) project.derived.narrativeSemantics = markNarrativeEvidenceStale(project.derived.narrativeSemantics, reason);
+  }
+  const retained = retainedStructureEvidence(project.map);
+  project.derived = retained
+    ? { ...(project.derived ? structuredClone(project.derived) : {}), ...retained, narrativeSemantics: project.derived?.narrativeSemantics ? structuredClone(project.derived.narrativeSemantics) : undefined }
+    : project.derived ? structuredClone(project.derived) : undefined;
+  synchronizeNarrativeCapability(project);
   validateProject(project);
   const historyPolicy = options.historyPolicy ?? project.manifest.historyPolicy ?? "FULL";
   const entries: Record<string, Uint8Array> = {
@@ -267,7 +368,17 @@ export function serializeExcogitareProject(project: ExcogitareProject, options: 
     ...project.manifest,
     updatedAt: options.now ?? new Date().toISOString(),
     payloadHashes: Object.fromEntries(Object.entries(payloads).map(([path, descriptor]) => [path, descriptor.sha256])),
-    requiredCapabilities: [...new Set([...project.manifest.requiredCapabilities.filter((capability) => capability !== "monolithic-json-v1"), "generation-recipe-v1", "civ5map-snapshot-v1", "protection-v1", "scenario-draft-v1", "history-checkpoints-v1", "zip-bundle-v2"])],
+    requiredCapabilities: [...new Set([
+      ...project.manifest.requiredCapabilities.filter((capability) => capability !== "monolithic-json-v1" && capability !== "narrative-semantic-evidence-v1" && capability !== "narrative-native-plan-v1"),
+      "generation-recipe-v1",
+      "civ5map-snapshot-v1",
+      "protection-v1",
+      "scenario-draft-v1",
+      "history-checkpoints-v1",
+      "zip-bundle-v2",
+      ...(serializedProjectHasNarrativeEvidence(project, historyPolicy) ? ["narrative-semantic-evidence-v1"] : []),
+      ...(serializedProjectHasNativePlan(project, historyPolicy) ? ["narrative-native-plan-v1"] : []),
+    ])],
     bundleVersion: 2,
     compression: "DEFLATE",
     hashAlgorithm: "SHA-256",
@@ -311,6 +422,58 @@ function validateProtectionState(project: ExcogitareProject) {
   if (protection.semantic.some((semantic) => semantic.schemaVersion !== 1 || !semantic.id || !semantic.sourceSemanticId || !Array.isArray(semantic.channels) || !Array.isArray(semantic.invariants) || semantic.sourceTileIndices?.some((index) => !Number.isInteger(index) || index < 0 || index >= tileCount) || (semantic.inference && (!Number.isFinite(semantic.inference.confidence) || semantic.inference.confidence < 0 || semantic.inference.confidence > 1)))) throw new Error("The project contains an invalid semantic protection constraint.");
 }
 
+function projectHasNarrativeEvidence(project: ExcogitareProject) {
+  return Boolean(
+    project.derived?.narrativeSemantics
+    || project.history.entries.some((entry) => entry.derived?.narrativeSemantics)
+    || (project.history.checkpoints ?? []).some((checkpoint) => checkpoint.derived?.narrativeSemantics),
+  );
+}
+
+function serializedProjectHasNarrativeEvidence(project: ExcogitareProject, historyPolicy: ProjectHistoryPolicy) {
+  return Boolean(
+    project.derived?.narrativeSemantics
+    || (project.history.checkpoints ?? []).some((checkpoint) => checkpoint.derived?.narrativeSemantics)
+    || (historyPolicy === "FULL" && project.history.entries.some((entry) => entry.derived?.narrativeSemantics)),
+  );
+}
+
+function projectHasNativePlan(project: ExcogitareProject) {
+  return Boolean(
+    project.map.structure?.narrativeNativePlan
+    || project.derived?.structure?.narrativeNativePlan
+    || project.history.entries.some((entry) => entry.map.structure?.narrativeNativePlan)
+    || (project.history.checkpoints ?? []).some((checkpoint) => checkpoint.map.structure?.narrativeNativePlan),
+  );
+}
+
+function serializedProjectHasNativePlan(project: ExcogitareProject, historyPolicy: ProjectHistoryPolicy) {
+  return Boolean(
+    project.map.structure?.narrativeNativePlan
+    || project.derived?.structure?.narrativeNativePlan
+    || (project.history.checkpoints ?? []).some((checkpoint) => checkpoint.map.structure?.narrativeNativePlan)
+    || (historyPolicy === "FULL" && project.history.entries.some((entry) => entry.map.structure?.narrativeNativePlan)),
+  );
+}
+
+function synchronizeNarrativeCapability(project: ExcogitareProject) {
+  const semanticCapability = "narrative-semantic-evidence-v1";
+  const nativeCapability = "narrative-native-plan-v1";
+  const capabilities = project.manifest.requiredCapabilities.filter((candidate) => candidate !== semanticCapability && candidate !== nativeCapability);
+  if (projectHasNarrativeEvidence(project)) capabilities.push(semanticCapability);
+  if (projectHasNativePlan(project)) capabilities.push(nativeCapability);
+  project.manifest.requiredCapabilities = [...new Set(capabilities)];
+}
+
+function validateDerivedEvidence(evidence: DerivedEvidence | undefined, map: Civ5Map, label: string) {
+  if (!evidence?.narrativeSemantics) return;
+  try {
+    validateNarrativeEvidence(evidence.narrativeSemantics, map);
+  } catch (error) {
+    throw new Error(`${label}: ${error instanceof Error ? error.message : "Narrative evidence is malformed."}`);
+  }
+}
+
 function validateProject(project: ExcogitareProject) {
   if (!project || project.schemaVersion !== 1 || project.manifest?.schemaVersion !== 1 || project.recipe?.schemaVersion !== 1) throw new Error("The project is missing required versioned authoring data.");
   if (!project.manifest.projectId || project.manifest.projectId.length > 160 || !project.manifest.projectName?.trim() || project.manifest.projectName.length > 160 || !Array.isArray(project.manifest.requiredCapabilities)) throw new Error("The project manifest identity is malformed.");
@@ -320,6 +483,19 @@ function validateProject(project: ExcogitareProject) {
   project.scenario = scenarioDraftFromMap(project.map, project.scenario);
   if (project.editorState && (project.editorState.schemaVersion !== 1 || !Number.isFinite(project.editorState.view?.zoom) || !Number.isFinite(project.editorState.view?.x) || !Number.isFinite(project.editorState.view?.y))) throw new Error("The project contains invalid editor state.");
   for (const capability of project.manifest.requiredCapabilities) if (!SUPPORTED_CAPABILITIES.has(capability) && capability !== "monolithic-json-v1") throw new Error(`This project requires unsupported capability ${capability}.`);
+  const hasNarrativeEvidence = projectHasNarrativeEvidence(project);
+  const advertisesNarrativeEvidence = project.manifest.requiredCapabilities.includes("narrative-semantic-evidence-v1");
+  if (hasNarrativeEvidence !== advertisesNarrativeEvidence) throw new Error(hasNarrativeEvidence
+    ? "The project contains narrative semantic evidence without declaring its required capability."
+    : "The project declares narrative semantic evidence but contains no matching payload.");
+  const hasNativePlan = projectHasNativePlan(project);
+  const advertisesNativePlan = project.manifest.requiredCapabilities.includes("narrative-native-plan-v1");
+  if (hasNativePlan !== advertisesNativePlan) throw new Error(hasNativePlan
+    ? "The project contains an engine-native narrative plan without declaring its required capability."
+    : "The project declares an engine-native narrative plan but contains no matching payload.");
+  validateDerivedEvidence(project.derived, project.map, "Current project evidence is invalid");
+  for (const entry of project.history.entries) validateDerivedEvidence(entry.derived, entry.map, `History entry ${entry.id} evidence is invalid`);
+  for (const checkpoint of project.history.checkpoints ?? []) validateDerivedEvidence(checkpoint.derived, checkpoint.map, `Checkpoint ${checkpoint.id} evidence is invalid`);
   project.recipe = normalizeGenerationRecipe(project.recipe, project.map.generation ?? DEFAULT_GENERATION_OPTIONS);
   validateProtectionState(project);
   return project;
@@ -398,11 +574,11 @@ function allowedPath(path: string) {
 }
 
 function parseSnapshot(entries: Record<string, Uint8Array>, path: string, label: string) {
-  const snapshot = parseJson(entries[path], label) as { map?: Civ5Map; recipe?: GenerationRecipe; provenance?: ProjectHistoryEntry["provenance"]; structure?: Civ5Map["structure"] };
+  const snapshot = parseJson(entries[path], label) as { map?: Civ5Map; recipe?: GenerationRecipe; provenance?: ProjectHistoryEntry["provenance"]; structure?: Civ5Map["structure"]; derived?: DerivedEvidence };
   if (!snapshot.map || !snapshot.recipe || !Array.isArray(snapshot.provenance)) throw new Error(`${label} is incomplete.`);
   snapshot.map.recipe = normalizeGenerationRecipe(snapshot.recipe, snapshot.map.generation ?? DEFAULT_GENERATION_OPTIONS);
   snapshot.map.structure = cloneGenerationStructure(snapshot.structure);
-  return snapshot as { map: Civ5Map; recipe: GenerationRecipe; provenance: ProjectHistoryEntry["provenance"] };
+  return snapshot as { map: Civ5Map; recipe: GenerationRecipe; provenance: ProjectHistoryEntry["provenance"]; derived?: DerivedEvidence };
 }
 
 function parseBundle(bytes: Uint8Array) {
@@ -476,6 +652,7 @@ export function parseExcogitareProject(source: string | ArrayBuffer | Uint8Array
 }
 
 export function serializeLegacyExcogitareProjectV1(project: ExcogitareProject) {
+  synchronizeNarrativeCapability(project);
   const payload = { ...project };
   delete (payload as Partial<ExcogitareProject>).manifest;
   const legacyProject = { ...project, manifest: { ...project.manifest, payloadHashes: legacyPayloadHashes(payload as Omit<ExcogitareProject, "manifest">), requiredCapabilities: project.manifest.requiredCapabilities.filter((capability) => capability !== "zip-bundle-v2") } };

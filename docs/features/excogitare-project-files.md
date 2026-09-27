@@ -2,7 +2,7 @@
 
 ## Contract
 
-- **Status:** Verified.
+- **Status:** Verified. The Phase 9 bundle and lifecycle contract reached its verified checkpoint. The additive native-plan/evidence capability is implemented with focused coverage; its current whole-suite and packaging rerun belongs to the in-progress narrative reconstruction.
 - **User outcome:** A user can download the complete authoring state as `.excogitare`, close Excogitare, and safely reimport that file in a later clean session without losing the active recipe, map, history choice, named checkpoints, protection, Scenario draft, derived evidence or editor continuity.
 - **Scope:** Bundle layout, manifest, ownership, selectable history, legacy migration, transactional import, archive safety, project identity, unsaved warnings and imported-map promotion.
 - **Dependencies:** [`generation-substrate.md`](generation-substrate.md), [`protection-and-selective-regeneration.md`](protection-and-selective-regeneration.md), history and Scenario schemas.
@@ -35,7 +35,7 @@ project.excogitare
 └── extensions/**/*.json           (optional, safe namespace)
 ```
 
-The readable manifest records bundle version, Excogitare version, compression, required capabilities, history policy and a SHA-256 digest plus expanded byte count for every payload. Required payloads are explicitly marked. The embedded `map.civ5map` is serialized through the ordinary Civ5Map writer and reparsed during import to confirm that it is a structurally readable map of the declared dimensions.
+The readable manifest records bundle version, Excogitare version, compression, required capabilities, history policy and a SHA-256 digest plus expanded byte count for every payload. Required payloads are explicitly marked. When current semantic evidence is present, the project declares `narrative-semantic-evidence-v1`; when an exact selected native plan is present, it separately declares `narrative-native-plan-v1`. A bare Civ5Map import, legacy project or compact bundle whose retained snapshots contain neither payload omits the corresponding capability rather than fabricating evidence. The embedded `map.civ5map` is serialized through the ordinary Civ5Map writer and reparsed during import to confirm that it is a structurally readable map of the declared dimensions.
 
 Two export policies are supported:
 
@@ -72,6 +72,8 @@ Safe unknown root fields, manifest fields, extension metadata and `extensions/**
 
 Downloaded files are the only durable persistence contract. No part of this implementation relies on localStorage, IndexedDB, an account, a server or a cloud save. Browser download success is the handoff boundary; users must retain and later reimport the downloaded file.
 
+Before a bundle is written, the current map replaces any obsolete `derived.structure` inherited from an earlier opened project. The semantic model hash is compared against the authored map; a direct geography edit makes retained Review and semantic evidence explicitly stale instead of allowing an old plan to return as current after reimport.
+
 ## Failure behavior and limits
 
 Import errors are reported in the existing status surface and do not install any partially decoded state. Export refuses malformed projects and reports the 64 MB boundary, recommending the compact history policy where appropriate. Optional extensions may contain JSON data only; arbitrary files and executable content are intentionally unsupported. Civ V itself remains the final runtime authority for the embedded clean map even after structural reparse and application validation pass.
@@ -89,7 +91,8 @@ Import errors are reported in the existing status surface and do not install any
 - [x] Unsaved warnings, project/map identity, New, Save, Open and imported-map promotion are explicit.
 - [x] History and checkpoint snapshots retain recipe, structure and provenance; compact export materially reduces a thirty-generation project.
 - [x] Civ5Map exports remain independent and contain no private Excogitare payload.
-- [x] Full regression, type checking, lint, production build, Pages build, Alpine image and live interface pass.
+- [x] The Phase 9 full regression, type checking, lint, production, Pages, Alpine and live-interface checkpoint passed before the native reconstruction.
+- [x] Complete regression and packaging matrix rerun for the additive native-plan/evidence capability as part of the reconstruction.
 - [x] README/help accurately explains ZIP contents, risks, policies and file-only durability.
 
 ## Evidence
@@ -98,4 +101,5 @@ Import errors are reported in the existing status surface and do not install any
 - Legacy migration fixture: `tests/fixtures/excogitare-project-v1-migration.json`.
 - Interface/document contract regression: `tests/rendered-html.test.mjs`.
 - Implementation: `lib/excogitare-project.ts`, `lib/authoring-schema.ts`, `app/civ5-map-viewer.tsx` and `app/globals.css`.
-- Verification: 135 domain tests and 22 rendered-shell tests pass; TypeScript and repository ESLint pass; Vinext production and GitHub Pages builds pass; the static verifier reports 25 correctly based JavaScript bundles; `node:24-alpine` image `excogitare:1.3.0` responds at port 3001. Live checks cover the non-overlapping 1280px/1024px header, save modal, both history policies, project naming, Unsaved status, Escape dismissal and zero browser console errors.
+- Historical Phase 9 verification: 135 domain tests and 22 rendered-shell tests passed; TypeScript and repository ESLint passed; the then-current Vinext and GitHub Pages builds passed; the static verifier reported 25 correctly based JavaScript bundles; and a `node:24-alpine` image responded at port 3001. Live checks covered the non-overlapping 1280px/1024px header, save modal, both history policies, project naming, Unsaved status, Escape dismissal and zero browser console errors. These counts and packaging results predate the additive reconstruction payload.
+- Current reconstruction evidence: generated projects retain exact owner-engine plans, current/history/checkpoint copies are alias-safe, optional capabilities are omitted with absent payloads, obsolete derived structures cannot replace a newer active map, direct semantic mismatches become stale, and project-only plan/evidence changes leave ordinary Civ5Map bytes unchanged. The complete current regression and packaging matrix passes.

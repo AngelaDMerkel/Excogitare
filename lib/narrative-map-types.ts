@@ -1,7 +1,9 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
-import { connectedTileObjects, type GenerationStructure, type GeographicObject } from "./generation-structure.ts";
+import { resourcePlacementVerdict } from "./civ5-rules.ts";
+import type { GenerationStructure, GeographicObject } from "./generation-structure.ts";
 import type { GenerationRecipe, WorldScale } from "./generation-recipe.ts";
 import type { GenerationStyle, MapGenerationOptions, MapPresetId } from "./map-generator.ts";
+import type { NarrativeGenerativeContract } from "./narrative-native-contracts.ts";
 import type { NarrativeAssessment, NarrativeFinding, NarrativeProfile, NarrativeProfileId, NarrativeSkeleton, NarrativeSkeletonRegion } from "./narrative-types.ts";
 
 const ALL_SCALES: WorldScale[] = ["GLOBAL", "CONTINENTAL", "REGIONAL", "PROVINCIAL", "LOCAL"];
@@ -44,7 +46,7 @@ const NARRATIVE_ENVELOPES: Record<MapPresetId, NarrativeEnvelope> = {
   COLLIDING_PLATES: { water: [38, 62], mountains: [18, 34], preferredWater: 54, preferredMountains: 23 },
   ANCIENT_CRATONS: { water: [25, 58], mountains: [2, 14], preferredWater: 48, preferredMountains: 8, preferredRiverDensity: "DENSE" },
   ISLAND_ARC_EARTH: { water: [68, 84], mountains: [12, 30], preferredWater: 74, preferredMountains: 18 },
-  SUPERCONTINENT_INTERIOR: { water: [0, 18], mountains: [10, 24], preferredWater: 0, preferredMountains: 14, preferredRiverDensity: "SPARSE" },
+  SUPERCONTINENT_INTERIOR: { water: [0, 42], mountains: [10, 26], preferredWater: 30, preferredMountains: 17, preferredRiverDensity: "DENSE" },
   MONSOON_CONTINENTS: { water: [42, 68], mountains: [10, 24], preferredWater: 57, preferredMountains: 15, preferredRiverDensity: "DENSE" },
   ICEHOUSE_EARTH: { water: [28, 54], mountains: [8, 25], preferredWater: 40, preferredMountains: 15 },
   IMPERIAL_RING: { water: [15, 45], mountains: [10, 26], preferredWater: 34, preferredMountains: 16 },
@@ -103,7 +105,7 @@ export const NARRATIVE_PROFILES = {
   COLLIDING_PLATES: profile({ id: "COLLIDING_PLATES", label: "Colliding Plates", engine: "PHYSICAL", verb: "Crushes", premise: "Global convergence creates long collision belts, high ranges and difficult forelands.", requiredMotifs: [m("collision-belts", "Long convergent collision belts"), m("forelands", "Plateaus and forelands")], forbiddenMotifs: [m("quiet-interiors", "Globally quiet relief")], nearestConfusions: ["TECTONIC_CONTINENTS", "DYNAMIC_EARTH"], blindRecognition: "Continents are being crushed together along monumental mountain fronts." }),
   ANCIENT_CRATONS: profile({ id: "ANCIENT_CRATONS", label: "Ancient Continental Shields", engine: "PHYSICAL", verb: "Endures", premise: "Old eroded shields, ghost ranges and mature drainage expose deep geological time.", requiredMotifs: [m("shield-cores", "Ancient shield cores"), m("mature-drainage", "Mature rivers and basins")], forbiddenMotifs: [m("young-global-relief", "Globally young relief")], nearestConfusions: ["DYNAMIC_EARTH", "SUPERCONTINENT_INTERIOR"], blindRecognition: "The continents feel ancient, worn down and mineral-rich." }),
   ISLAND_ARC_EARTH: profile({ id: "ISLAND_ARC_EARTH", label: "Volcanic Island Arcs", engine: "PHYSICAL", verb: "Subducts", premise: "Rugged strings of volcanic pearls curve around sheltered seas and age toward atolls.", requiredMotifs: [m("volcanic-arcs", "Volcanic pearl arcs"), m("trench-offset", "Arc and trench association")], forbiddenMotifs: [m("random-volcanism", "Random volcanic scatter")], nearestConfusions: ["SHATTERED_ARCHIPELAGO", "ARCHIPELAGO"], blindRecognition: "Rugged volcanic pearls curve around sheltered, nearly atoll-like seas." }),
-  SUPERCONTINENT_INTERIOR: profile({ id: "SUPERCONTINENT_INTERIOR", label: "Inland Supercontinent", engine: "PHYSICAL", verb: "Desiccates", premise: "A ring of highlands surrounds an oceanless continental heart drained by lakes and dry basins.", requiredMotifs: [m("landbound-heart", "Landbound continental heart"), m("inward-drainage", "Inward lakes and drainage")], forbiddenMotifs: [m("open-ocean-dominance", "Open-ocean dominance")], nearestConfusions: ["ANCIENT_CRATONS", "INLAND_SEAS"], blindRecognition: "An Australia-like ring of highlands encloses a vast interior heartland." }),
+  SUPERCONTINENT_INTERIOR: profile({ id: "SUPERCONTINENT_INTERIOR", label: "Inland Supercontinent", engine: "PHYSICAL", verb: "Desiccates", premise: "A dominant continental framework surrounds a great interior sea, inward drainage and broken peripheral highlands.", requiredMotifs: [m("landbound-heart", "Landbound interior sea"), m("inward-drainage", "Inward lakes and drainage")], forbiddenMotifs: [m("open-ocean-dominance", "Open-ocean dominance")], nearestConfusions: ["ANCIENT_CRATONS", "INLAND_SEAS"], blindRecognition: "An Australia-like continent encloses a valuable interior sea behind broken peripheral highlands." }),
   MONSOON_CONTINENTS: profile({ id: "MONSOON_CONTINENTS", label: "Monsoon Continents", engine: "PHYSICAL", verb: "Pulses", premise: "Seasonal thermal contrast funnels maritime deluge into enormous rivers beside dry interiors.", requiredMotifs: [m("seasonal-deluge", "Seasonal maritime deluge"), m("dry-wet-contrast", "Wet coasts and dry interiors")], forbiddenMotifs: [m("uniform-rain", "Uniform rainfall")], nearestConfusions: ["GREAT_WATERSHEDS", "LIVING_WORLD"], blindRecognition: "Enormous seasonal rivers carry maritime deluge into dry continental interiors." }),
   ICEHOUSE_EARTH: profile({ id: "ICEHOUSE_EARTH", label: "Glacial World", engine: "PHYSICAL", verb: "Encroaches", premise: "Ice devours the world while productive refuges depend on valuable frozen frontiers.", preferredScales: ["GLOBAL", "CONTINENTAL", "REGIONAL"], parameterEnvelope: { water: [28, 54], mountains: [8, 25], preferredWater: 40, preferredMountains: 15 }, requiredMotifs: [m("broad-ice-sheets", "Broad irregular continental ice sheets"), m("temperate-refuges", "Limited productive temperate refuges"), m("frontier-value", "Valuable cold frontier provinces")], forbiddenMotifs: [m("straight-polar-bands", "Straight polar biome bands"), m("worthless-cold", "Worthless frozen reaches")], topologyProgram: { kind: "ice-lobes-and-refuges", regionRange: [3, 12], relationships: ["ice-sheet", "lobe", "refuge", "supply"] }, surfaceBiases: { terrain: ["snow sheets", "tundra margins", "temperate refuges"], features: ["ice", "sparse boreal forest"], resources: ["cold luxuries", "frontier strategic geology"] }, gameplayContract: { objective: "Make supplied settlement of hostile but valuable cold frontiers attractive.", populationRule: "Give capitals strong food but incomplete strategic and luxury access; keep cold sites viable and reachable." }, nearestConfusions: ["ANCIENT_CRATONS", "SUPERCONTINENT_INTERIOR"], blindRecognition: "A world being devoured by ice forces civilizations to support distant valuable cold settlements." }),
   IMPERIAL_RING: profile({ id: "IMPERIAL_RING", label: "Imperial Ring", engine: "POLIS", verb: "Converges", premise: "Rivals occupy a broad ring around a shared contested interior.", requiredMotifs: [m("start-ring", "Start ring"), m("shared-axle", "Shared contested centre")], forbiddenMotifs: [m("radial-only", "No lateral alternatives")], nearestConfusions: ["CONTESTED_HEARTLAND"], blindRecognition: "Rivals circle a shared centre while retaining routes around one another." }),
@@ -121,15 +123,35 @@ export function benchmarkNarrative(id: MapPresetId) { return COMPILED_IDENTITIES
 function seedHash(value: string) { let hash = 2166136261; for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619); return hash >>> 0; }
 function randomFactory(seed: number) { let state = seed || 1; return () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 0x100000000; }; }
 function clamp(value: number, minimum = 0, maximum = 1) { return Math.max(minimum, Math.min(maximum, value)); }
-function deterministicNoise(value: number, seed: number) { const wave = Math.sin(value * 12.9898 + seed * 0.001) * 43758.5453; return wave - Math.floor(wave); }
 function wrappedDistance(one: { x: number; y: number }, two: { x: number; y: number }, wraps: boolean) { let dx = Math.abs(one.x - two.x); if (wraps) dx = Math.min(dx, 1 - dx); return Math.hypot(dx, (one.y - two.y) * 0.866); }
 
 function separatedPoints(count: number, random: () => number, wraps: boolean, margin = 0.08) {
   const points = [{ x: margin + random() * (1 - margin * 2), y: margin + random() * (1 - margin * 2) }];
+  const minimumSpacing = 0.55 / Math.sqrt(Math.max(1, count));
   while (points.length < count) {
     let best = { x: random(), y: random() };
     let bestDistance = -1;
+    let accepted: typeof best | undefined;
     for (let attempt = 0; attempt < 80; attempt += 1) {
+      const candidate = { x: margin + random() * (1 - margin * 2), y: margin + random() * (1 - margin * 2) };
+      const distance = Math.min(...points.map((point) => wrappedDistance(candidate, point, wraps)));
+      if (distance > bestDistance) { best = candidate; bestDistance = distance; }
+      // Accept a safe candidate stochastically instead of always choosing the
+      // farthest point. This retains separation while avoiding equal token-like
+      // spacing and repeated quadrant layouts.
+      if (distance >= minimumSpacing * (0.86 + random() * 0.2) && random() < 0.3) { accepted = candidate; break; }
+    }
+    points.push(accepted ?? best);
+  }
+  return points;
+}
+
+function farthestPoints(count: number, random: () => number, wraps: boolean, margin = 0.08) {
+  const points = [{ x: margin + random() * (1 - margin * 2), y: margin + random() * (1 - margin * 2) }];
+  while (points.length < count) {
+    let best = { x: random(), y: random() };
+    let bestDistance = -1;
+    for (let attempt = 0; attempt < 96; attempt += 1) {
       const candidate = { x: margin + random() * (1 - margin * 2), y: margin + random() * (1 - margin * 2) };
       const distance = Math.min(...points.map((point) => wrappedDistance(candidate, point, wraps)));
       if (distance > bestDistance) { best = candidate; bestDistance = distance; }
@@ -140,11 +162,34 @@ function separatedPoints(count: number, random: () => number, wraps: boolean, ma
 }
 
 function narrativePath(from: { x: number; y: number }, to: { x: number; y: number }, bend: number, steps = 9) {
+  const phase = ((from.x * 31 + from.y * 47 + to.x * 59 + to.y * 71) % 1) * Math.PI * 2;
   return Array.from({ length: steps }, (_value, index) => {
     const t = index / (steps - 1);
-    const wave = Math.sin(t * Math.PI) * bend;
+    const envelope = Math.sin(t * Math.PI);
+    const wave = envelope * bend * (1 + Math.sin(t * Math.PI * 2 + phase) * 0.24)
+      + envelope * Math.sin(t * Math.PI * 3 + phase * 0.7) * Math.abs(bend) * 0.1;
     return { x: clamp(from.x * (1 - t) + to.x * t + wave * (to.y - from.y), 0.015, 0.985), y: clamp(from.y * (1 - t) + to.y * t - wave * (to.x - from.x), 0.015, 0.985) };
   });
+}
+
+function spanningPairs(points: readonly { x: number; y: number }[], random: () => number, wraps: boolean) {
+  const parent = points.map((_point, index) => index);
+  const find = (index: number): number => parent[index] === index ? index : (parent[index] = find(parent[index]));
+  const candidates = points.flatMap((one, left) => points.slice(left + 1).map((two, offset) => ({
+    left,
+    right: left + offset + 1,
+    score: wrappedDistance(one, two, wraps) + random() * 0.025,
+  }))).sort((one, two) => one.score - two.score || one.left - two.left || one.right - two.right);
+  const selected: Array<{ left: number; right: number }> = [];
+  for (const edge of candidates) {
+    const left = find(edge.left);
+    const right = find(edge.right);
+    if (left === right) continue;
+    parent[left] = right;
+    selected.push(edge);
+    if (selected.length === points.length - 1) break;
+  }
+  return selected;
 }
 
 function compileCatalogSkeleton(
@@ -152,6 +197,7 @@ function compileCatalogSkeleton(
   scale: WorldScale,
   random: () => number,
   wraps: boolean,
+  players: number,
   regions: NarrativeSkeleton["regions"],
   relationships: NarrativeSkeleton["relationships"],
   targets: Record<string, number>,
@@ -168,19 +214,21 @@ function compileCatalogSkeleton(
   const scaleCount = (global: number, local: number) => scale === "LOCAL" ? local : scale === "PROVINCIAL" ? Math.max(local, global - 2) : global;
 
   if (id === "CONTINENTS") {
-    const cores = points(scaleCount(4, 2), 0.1).map((point) => add("CONTINENT_CORE", "LAND", point, 0.15, 1.2));
-    for (const core of cores) for (let lobe = 0; lobe < 3; lobe += 1) {
+    const coreCount = scale === "LOCAL" ? 2 : scale === "PROVINCIAL" ? 3 : 3 + Math.floor(random() * 3);
+    const cores = points(coreCount, 0.1).map((point) => add("CONTINENT_CORE", "LAND", point, 0.13 + random() * 0.05, 1.2));
+    for (const core of cores) for (let lobe = 0, lobeCount = 2 + Math.floor(random() * 3); lobe < lobeCount; lobe += 1) {
       const angle = random() * Math.PI * 2;
-      const child = add("CROOKED_LOBE", "LAND", { x: clamp(core.x + Math.cos(angle) * 0.13, 0.04, 0.96), y: clamp(core.y + Math.sin(angle) * 0.11, 0.04, 0.96) }, 0.09, 0.85, core.id);
+      const child = add("CROOKED_LOBE", "LAND", { x: clamp(core.x + Math.cos(angle) * (0.1 + random() * 0.07), 0.04, 0.96), y: clamp(core.y + Math.sin(angle) * (0.08 + random() * 0.06), 0.04, 0.96) }, 0.065 + random() * 0.045, 0.85, core.id);
       link("CROOKED_INTERIOR", "LAND_PATH", core, child, (random() - 0.5) * 0.8, 0.9);
     }
     for (let index = 0; index < cores.length; index += 1) link("FJORD_INTRUSION", "WATER_PATH", cores[index], cores[(index + 1) % cores.length], (random() < 0.5 ? -1 : 1) * 0.55, 0.72);
     targets.continents = cores.length; targets.intrusions = cores.length;
   } else if (id === "PANGAEA" || id === "ASTRAL_PANGAEA") {
-    const core = add("DOMINANT_CONTINENT", "LAND", { x: 0.5, y: 0.52 }, id === "PANGAEA" ? 0.3 : 0.32, 1.35);
+    const corePoint = { x: 0.43 + random() * 0.14, y: 0.45 + random() * 0.14 };
+    const core = add("DOMINANT_CONTINENT", "LAND", corePoint, id === "PANGAEA" ? 0.28 + random() * 0.055 : 0.3 + random() * 0.05, 1.35);
     const lobes = Array.from({ length: scaleCount(id === "PANGAEA" ? 5 : 7, 3) }, (_v, index) => {
       const angle = index / scaleCount(id === "PANGAEA" ? 5 : 7, 3) * Math.PI * 2 + random() * 0.45;
-      const lobe = add(id === "PANGAEA" ? "CONTINENT_LOBE" : "ASTRAL_LOBE", "LAND", { x: clamp(0.5 + Math.cos(angle) * (0.19 + random() * 0.07), 0.04, 0.96), y: clamp(0.52 + Math.sin(angle) * (0.16 + random() * 0.06), 0.05, 0.95) }, 0.13, 1, core.id);
+      const lobe = add(id === "PANGAEA" ? "CONTINENT_LOBE" : "ASTRAL_LOBE", "LAND", { x: clamp(core.x + Math.cos(angle) * (0.19 + random() * 0.08), 0.04, 0.96), y: clamp(core.y + Math.sin(angle) * (0.15 + random() * 0.075), 0.05, 0.95) }, 0.1 + random() * 0.055, 1, core.id);
       link("CONTINENT_BOND", "LAND_PATH", core, lobe, (random() - 0.5) * 0.45, 1);
       return lobe;
     });
@@ -188,10 +236,12 @@ function compileCatalogSkeleton(
     for (let index = 0; index < scars; index += 1) link(id === "PANGAEA" ? "CREDIBLE_FRACTURE" : "ALIEN_SCAR", index % 3 === 2 ? "RIDGE_PATH" : "WATER_PATH", lobes[index % lobes.length], lobes[(index + Math.floor(lobes.length / 2)) % lobes.length], id === "PANGAEA" ? (random() - 0.5) * 0.35 : (index % 2 ? -0.95 : 0.95), 1);
     targets.dominantContinents = 1; targets.fractures = scars;
   } else if (id === "ARCHIPELAGO" || id === "EARTHSEA") {
-    const count = scaleCount(id === "ARCHIPELAGO" ? 5 : 4, 3);
+    const count = id === "EARTHSEA"
+      ? scale === "LOCAL" ? Math.max(3, Math.min(players, 4)) : Math.max(4, Math.min(players, 8))
+      : scale === "LOCAL" ? 3 : 4 + Math.floor(random() * 3);
     for (const [cluster, center] of points(count, 0.11).entries()) {
-      const anchor = add(id === "ARCHIPELAGO" ? "DROWNED_SHELF" : "ISLAND_CONTINENT", "LAND", center, id === "ARCHIPELAGO" ? 0.08 : 0.14, 1.25);
-      const satellites = id === "ARCHIPELAGO" ? 4 : 2;
+      const anchor = add(id === "ARCHIPELAGO" ? "DROWNED_SHELF" : "ISLAND_CONTINENT", "LAND", center, id === "ARCHIPELAGO" ? 0.065 + random() * 0.04 : clamp(0.15 * Math.sqrt(4 / count) * (0.86 + random() * 0.28), 0.09, 0.17), 1.25);
+      const satellites = id === "ARCHIPELAGO" ? 2 + Math.floor(random() * 4) : 1 + Math.floor(random() * 3);
       for (let index = 0; index < satellites; index += 1) {
         const angle = index / satellites * Math.PI * 2 + random();
         const fragment = add("SHELF_FRAGMENT", "LAND", { x: clamp(center.x + Math.cos(angle) * (0.07 + random() * 0.05), 0.03, 0.97), y: clamp(center.y + Math.sin(angle) * (0.06 + random() * 0.04), 0.03, 0.97) }, id === "ARCHIPELAGO" ? 0.035 : 0.055, 0.72, anchor.id);
@@ -203,27 +253,60 @@ function compileCatalogSkeleton(
   } else if (id === "INLAND_SEAS" || id === "ENCIRCLING_LANDS") {
     const ringCount = scaleCount(10, 6);
     const ring: NarrativeSkeletonRegion[] = [];
+    const ringCenter = { x: 0.46 + random() * 0.08, y: 0.45 + random() * 0.1 };
+    const rotation = random() * Math.PI * 2;
     for (let index = 0; index < ringCount; index += 1) {
-      const angle = index / ringCount * Math.PI * 2;
-      ring.push(add("ENCLOSING_LAND", "LAND", { x: 0.5 + Math.cos(angle) * 0.39, y: 0.5 + Math.sin(angle) * 0.38 }, id === "ENCIRCLING_LANDS" ? 0.14 : 0.18, 1.15));
+      const angle = rotation + index / ringCount * Math.PI * 2 + (random() - 0.5) * 0.16;
+      const radius = 0.84 + random() * 0.3;
+      ring.push(add("ENCLOSING_LAND", "LAND", { x: clamp(ringCenter.x + Math.cos(angle) * 0.39 * radius, 0.03, 0.97), y: clamp(ringCenter.y + Math.sin(angle) * 0.36 * radius, 0.04, 0.96) }, (id === "ENCIRCLING_LANDS" ? 0.12 : 0.16) * (0.86 + random() * 0.28), 1.15));
     }
     for (let index = 0; index < ring.length; index += 1) link("OUTER_CIRCUIT", "LAND_PATH", ring[index], ring[(index + 1) % ring.length], 0.08, 1);
     const seas = points(scaleCount(id === "ENCIRCLING_LANDS" ? 4 : 6, 2), 0.28);
     seas.forEach((point, index) => add(index ? "INLAND_LAKE" : "INLAND_SEA", "WATER", point, index ? 0.07 : 0.14, index ? 0.7 : 1.2));
     targets.enclosedSeas = seas.length; targets.outerCircuit = ring.length;
   } else if (id === "RIFT_REALMS" || id === "RIFTWORLD") {
-    const cells = points(scaleCount(id === "RIFTWORLD" ? 8 : 5, 3), 0.1).map((point) => add("VIABLE_RIFT_CELL", "LAND", point, id === "RIFTWORLD" ? 0.12 : 0.18, 1));
+    const cells = farthestPoints(scaleCount(id === "RIFTWORLD" ? 8 : 5, 3), random, wraps, 0.1).map((point) => add("VIABLE_RIFT_CELL", "LAND", point, id === "RIFTWORLD" ? 0.12 : 0.18, 1));
     const rifts = id === "RIFTWORLD" ? Math.max(5, cells.length - 1) : Math.max(2, cells.length - 2);
-    for (let index = 0; index < rifts; index += 1) link(index < 2 ? "PRIMARY_RIFT" : "SECONDARY_RIFT", "WATER_PATH", cells[index % cells.length], cells[(index * 3 + 2) % cells.length], (index % 2 ? -1 : 1) * (id === "RIFTWORLD" ? 0.7 : 0.28), index < 2 ? 1 : 0.72);
+    const parent = cells.map((_cell, index) => index);
+    const find = (index: number): number => parent[index] === index ? index : (parent[index] = find(parent[index]));
+    const candidates = cells.flatMap((one, left) => cells.slice(left + 1).map((two, offset) => {
+      const right = left + offset + 1;
+      return { left, right, distance: wrappedDistance(one, two, wraps) + random() * 0.08 };
+    })).sort((one, two) => (id === "RIFTWORLD" ? one.distance - two.distance : two.distance - one.distance) || one.left - two.left || one.right - two.right);
+    const selected: Array<{ left: number; right: number }> = [];
+    for (const candidate of candidates) {
+      if (selected.length >= rifts) break;
+      const leftRoot = find(candidate.left);
+      const rightRoot = find(candidate.right);
+      if (id === "RIFTWORLD" && leftRoot === rightRoot) continue;
+      selected.push(candidate);
+      if (leftRoot !== rightRoot) parent[leftRoot] = rightRoot;
+    }
+    for (const candidate of candidates) {
+      if (selected.length >= rifts) break;
+      if (selected.some((edge) => edge.left === candidate.left && edge.right === candidate.right)) continue;
+      selected.push(candidate);
+    }
+    selected.forEach((edge, index) => link(index < 2 ? "PRIMARY_RIFT" : "SECONDARY_RIFT", "WATER_PATH", cells[edge.left], cells[edge.right], (index % 2 ? -1 : 1) * (id === "RIFTWORLD" ? 0.62 + random() * 0.16 : 0.24 + random() * 0.12), index < 2 ? 1 : 0.72));
     targets.riftCells = cells.length; targets.deepRifts = rifts;
   } else if (id === "LABYRINTH") {
     const chambers = points(scaleCount(9, 5), 0.1).map((point) => add("MAZE_CHAMBER", "LAND", point, 0.09 + random() * 0.035, 1));
-    for (let index = 0; index < chambers.length - 1; index += 1) link("WINDING_PASSAGE", "LAND_PATH", chambers[index], chambers[index + 1], (index % 2 ? -1 : 1) * (0.65 + random() * 0.3), 1);
+    const mazeTree = spanningPairs(chambers, random, wraps);
+    mazeTree.forEach((edge, index) => link("WINDING_PASSAGE", "LAND_PATH", chambers[edge.left], chambers[edge.right], (index % 2 ? -1 : 1) * (0.75 + random() * 0.2), 1));
     for (let index = 0; index < chambers.length - 2; index += 2) link("BLIND_WATER_ALLEY", "WATER_PATH", chambers[index], chambers[index + 2], (index % 4 ? -1 : 1) * 0.85, 0.8);
     targets.chambers = chambers.length; targets.tortuousRoutes = chambers.length - 1;
   } else if (id === "WILD_REGIONS") {
     const effects: NarrativeSkeletonRegion["effect"][] = ["WET", "DRY", "HOT", "COLD", "RIDGE", "LOWLAND", "LAND", "BARREN"];
-    const provinces = points(scaleCount(10, 5), 0.08).map((point, index) => add("PATCHWORK_PROVINCE", effects[index % effects.length], point, 0.12, 1));
+    const rawPoints = points(scaleCount(10, 5), 0.08);
+    const orderedPoints = [rawPoints.reduce((best, point) => point.x < best.x || point.x === best.x && point.y < best.y ? point : best, rawPoints[0])];
+    const remaining = new Set(rawPoints.filter((point) => point !== orderedPoints[0]));
+    while (remaining.size) {
+      const prior = orderedPoints.at(-1)!;
+      const next = [...remaining].sort((one, two) => wrappedDistance(prior, one, wraps) - wrappedDistance(prior, two, wraps) || one.x - two.x || one.y - two.y)[0];
+      orderedPoints.push(next);
+      remaining.delete(next);
+    }
+    const provinces = orderedPoints.map((point, index) => add("PATCHWORK_PROVINCE", effects[index % effects.length], point, 0.1 + random() * 0.04, 1));
     for (let index = 0; index < provinces.length - 1; index += 1) link("COMPOSED_BOUNDARY", "TRANSITION", provinces[index], provinces[index + 1], (random() - 0.5) * 0.35, 0.8);
     targets.provinces = provinces.length;
   } else if (id === "LIVING_WORLD" || id === "MONSOON_CONTINENTS") {
@@ -236,7 +319,14 @@ function compileCatalogSkeleton(
     targets.transitions = transect.length - 1; targets.livingCorridors = 1;
   } else if (id === "TECTONIC_CONTINENTS" || id === "DYNAMIC_EARTH") {
     const count = scaleCount(id === "TECTONIC_CONTINENTS" ? 4 : 5, 3);
-    const effects: NarrativeSkeletonRegion["effect"][] = ["VOLCANIC", "RIDGE", "LOWLAND", "DRY", "WET"];
+    // Dynamic Earth must retain three different physical histories even when
+    // Provincial or Local scale reduces it to three process provinces.
+    // VOLCANIC and RIDGE share the same uplift cause, so order the Dynamic
+    // sequence around uplift, subsidence and circulation before repeating a
+    // cause family.
+    const effects: NarrativeSkeletonRegion["effect"][] = id === "DYNAMIC_EARTH"
+      ? ["VOLCANIC", "LOWLAND", "DRY", "RIDGE", "WET"]
+      : ["VOLCANIC", "RIDGE", "LOWLAND", "DRY", "WET"];
     const systems = points(count, 0.12).map((point, index) => add(id === "TECTONIC_CONTINENTS" ? "GEOLOGIC_HISTORY" : "PROCESS_PROVINCE", effects[index % effects.length], point, 0.17, 1));
     for (let index = 0; index < systems.length; index += 1) link(index % 2 ? "RIFT_MARGIN" : "ACTIVE_MARGIN", index % 2 ? "WATER_PATH" : "RIDGE_PATH", systems[index], systems[(index + 1) % systems.length], (index % 2 ? -1 : 1) * 0.38, 0.9);
     targets.processProvinces = systems.length; targets.activeMargins = systems.length;
@@ -286,48 +376,130 @@ function compileCatalogSkeleton(
     targets.cratons = cratons.length; targets.matureRivers = cratons.length - 1;
   } else if (id === "ISLAND_ARC_EARTH") {
     const arcCount = scaleCount(5, 3);
+    const centers = points(arcCount, 0.14);
     for (let arc = 0; arc < arcCount; arc += 1) {
-      const y = 0.14 + arc / Math.max(1, arcCount - 1) * 0.72;
-      const start = add("VOLCANIC_ARC_ANCHOR", "VOLCANIC", { x: 0.16 + random() * 0.08, y }, 0.065, 1.2);
-      const end = add("VOLCANIC_ARC_ANCHOR", "VOLCANIC", { x: 0.78 + random() * 0.08, y: clamp(y + (random() - 0.5) * 0.14, 0.05, 0.95) }, 0.07, 1.2);
-      link("VOLCANIC_PARENT_ARC", "RIDGE_PATH", start, end, (arc % 2 ? -1 : 1) * 0.65, 1);
-      link("ARC_SHELF", "LAND_PATH", start, end, (arc % 2 ? -1 : 1) * 0.58, 0.78);
-      link("SHELTERED_ARC_SEA", "WATER_PATH", start, end, (arc % 2 ? -1 : 1) * 0.42, 0.62);
+      const seedCenter = centers[arc];
+      // Each subduction segment owns a local strike. The previous global
+      // west→east layout produced five parallel ribbon continents regardless
+      // of seed; distributing axial angles over half a turn preserves distinct
+      // systems without forcing one shared planetary bearing.
+      const angle = arc / Math.max(1, arcCount) * Math.PI + (random() - 0.5) * 0.34;
+      const halfLength = 0.145 + random() * 0.045;
+      const marginX = 0.055 + Math.abs(Math.cos(angle)) * halfLength;
+      const marginY = 0.065 + Math.abs(Math.sin(angle)) * halfLength;
+      const center = {
+        x: clamp(seedCenter.x, marginX, 1 - marginX),
+        y: clamp(seedCenter.y, marginY, 1 - marginY),
+      };
+      const startPoint = {
+        x: clamp(center.x - Math.cos(angle) * halfLength, 0.055, 0.945),
+        y: clamp(center.y - Math.sin(angle) * halfLength, 0.065, 0.935),
+      };
+      const endPoint = {
+        x: clamp(center.x + Math.cos(angle) * halfLength, 0.055, 0.945),
+        y: clamp(center.y + Math.sin(angle) * halfLength, 0.065, 0.935),
+      };
+      const start = add("VOLCANIC_ARC_ANCHOR", "VOLCANIC", startPoint, 0.065, 1.2);
+      const end = add("VOLCANIC_ARC_ANCHOR", "VOLCANIC", endPoint, 0.07, 1.2);
+      const polarity = random() < 0.5 ? -1 : 1;
+      const curvature = 0.38 + random() * 0.16;
+      link("VOLCANIC_PARENT_ARC", "RIDGE_PATH", start, end, polarity * curvature, 1);
+      link("ARC_SHELF", "LAND_PATH", start, end, polarity * (curvature - 0.09), 0.78);
+      link("SHELTERED_ARC_SEA", "WATER_PATH", start, end, polarity * (curvature - 0.22), 0.62);
     }
     targets.parentArcs = arcCount; targets.volcanicAnchors = arcCount * 2;
   } else if (id === "SUPERCONTINENT_INTERIOR") {
-    const heart = add("INTERIOR_BASIN", "LOWLAND", { x: 0.5, y: 0.51 }, 0.19, 1.2);
+    const basinCenter = { x: 0.44 + random() * 0.12, y: 0.44 + random() * 0.13 };
+    const heart = add("INTERIOR_SEA", "WATER", basinCenter, 0.16 + random() * 0.055, 1.45);
+    add("INTERIOR_BASIN_MARGIN", "LOWLAND", basinCenter, 0.27 + random() * 0.055, 0.72, heart.id);
     const ring: NarrativeSkeletonRegion[] = [];
     const count = scaleCount(12, 7);
     for (let index = 0; index < count; index += 1) {
-      const angle = index / count * Math.PI * 2;
-      ring.push(add("PERIPHERAL_HIGHLAND", "RIDGE", { x: 0.5 + Math.cos(angle) * 0.34, y: 0.5 + Math.sin(angle) * 0.33 }, 0.1, 1));
+      const angle = index / count * Math.PI * 2 + (random() - 0.5) * 0.14;
+      const radius = 0.88 + random() * 0.26;
+      ring.push(add("PERIPHERAL_HIGHLAND", "RIDGE", { x: clamp(basinCenter.x + Math.cos(angle) * 0.34 * radius, 0.04, 0.96), y: clamp(basinCenter.y + Math.sin(angle) * 0.32 * radius, 0.05, 0.95) }, 0.085 + random() * 0.035, 1));
       link("INWARD_DRAINAGE", "RIVER_PATH", ring.at(-1)!, heart, (index % 2 ? -1 : 1) * 0.2, 0.8);
     }
-    for (let index = 0; index < ring.length; index += 1) link("HIGHLAND_RING", "RIDGE_PATH", ring[index], ring[(index + 1) % ring.length], 0.05, 0.85);
-    targets.oceanless = 1; targets.interiorBasins = 1; targets.highlandRing = count;
-  } else if (["IMPERIAL_RING", "OPPOSING_FRONTS", "CONTESTED_HEARTLAND", "RIVAL_CONTINENTS", "THREE_REALMS", "THALASSIC_LEAGUE", "UNEQUAL_REALMS"].includes(id)) {
-    const count = id === "THREE_REALMS" ? 3 : id === "UNEQUAL_REALMS" ? 4 : id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS" ? 2 : 6;
-    const realmPoints = id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS"
-      ? [{ x: 0.22, y: 0.5 }, { x: 0.78, y: 0.5 }]
-      : id === "THREE_REALMS"
-        ? [{ x: 0.5, y: 0.16 }, { x: 0.2, y: 0.74 }, { x: 0.8, y: 0.74 }]
-        : id === "UNEQUAL_REALMS"
-          ? [{ x: 0.25, y: 0.25 }, { x: 0.72, y: 0.24 }, { x: 0.26, y: 0.74 }, { x: 0.73, y: 0.73 }]
-          : Array.from({ length: count }, (_value, index) => ({ x: 0.5 + Math.cos(index / count * Math.PI * 2) * 0.34, y: 0.5 + Math.sin(index / count * Math.PI * 2) * 0.32 }));
-    const roles = id === "UNEQUAL_REALMS" ? ["TALL", "WIDE", "WAR", "TURTLE"] : realmPoints.map((_point, index) => `REALM_${index + 1}`);
-    const realms = realmPoints.map((point, index) => add(roles[index], id === "THALASSIC_LEAGUE" ? "VALUE" : "LAND", point, id === "UNEQUAL_REALMS" && roles[index] === "WIDE" ? 0.22 : 0.14, 1.1));
-    if (id === "THREE_REALMS") for (let one = 0; one < 3; one += 1) for (let two = one + 1; two < 3; two += 1) link("MUTUAL_BORDER", "LAND_PATH", realms[one], realms[two], (one + two) % 2 ? 0.22 : -0.22, 1);
-    else if (id === "THALASSIC_LEAGUE") for (let index = 0; index < realms.length; index += 1) {
-      link("SEA_LANE", "WATER_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.34 : -0.34, 1);
-      link("REDUNDANT_SEA_LANE", "WATER_PATH", realms[index], realms[(index + 2) % realms.length], index % 2 ? -0.18 : 0.18, 0.8);
-    } else if (id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS") {
-      link("PRIMARY_HINGE", id === "RIVAL_CONTINENTS" ? "WATER_PATH" : "LAND_PATH", realms[0], realms[1], 0.24, 1);
-      link("SECONDARY_HINGE", id === "RIVAL_CONTINENTS" ? "WATER_PATH" : "LAND_PATH", realms[0], realms[1], -0.24, 0.9);
-    } else {
-      for (let index = 0; index < realms.length; index += 1) link(id === "IMPERIAL_RING" ? "LATERAL_RING" : id === "CONTESTED_HEARTLAND" ? "MANY_APPROACHES" : "ROLE_CONTACT", "LAND_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.16 : -0.16, 0.9);
+    for (let index = 0; index < ring.length; index += 1) {
+      if (index % 4 !== 1) link("BROKEN_HIGHLAND_ARC", "RIDGE_PATH", ring[index], ring[(index + 1) % ring.length], 0.05, 0.85);
+      else link("HIGHLAND_PASS", "LAND_PATH", ring[index], ring[(index + 1) % ring.length], -0.08, 0.7);
     }
-    add(id === "THALASSIC_LEAGUE" ? "DIPLOMATIC_PORT" : "SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.5 }, 0.08, 1.5);
+    targets.edgeOcean = 0; targets.interiorBasins = 1; targets.highlandCoveragePercent = 67;
+  } else if (["IMPERIAL_RING", "OPPOSING_FRONTS", "CONTESTED_HEARTLAND", "RIVAL_CONTINENTS", "THREE_REALMS", "THALASSIC_LEAGUE", "UNEQUAL_REALMS"].includes(id)) {
+    const requestedPlayers = Math.max(2, Math.min(22, Math.round(players)));
+    const boardCenter = { x: 0.46 + random() * 0.08, y: 0.45 + random() * 0.1 };
+    const boardRotation = random() * Math.PI * 2;
+    const ringPoints = (count: number, radiusX = 0.34, radiusY = 0.32) => Array.from({ length: count }, (_value, index) => {
+      const angle = boardRotation + index / count * Math.PI * 2 + (random() - 0.5) * 0.18;
+      const radial = 0.82 + random() * 0.34;
+      return { x: clamp(boardCenter.x + Math.cos(angle) * radiusX * radial, 0.04, 0.96), y: clamp(boardCenter.y + Math.sin(angle) * radiusY * radial, 0.05, 0.95) };
+    });
+    let realms: NarrativeSkeletonRegion[] = [];
+    if (id === "IMPERIAL_RING") {
+      const seatCount = Math.max(4, requestedPlayers);
+      realms = ringPoints(seatCount).map((point, index) => add(`RING_SEAT_${index + 1}`, "LAND", point, 0.14, 1.1));
+      for (let index = 0; index < realms.length; index += 1) link("LATERAL_RING", "LAND_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.16 : -0.16, 0.9);
+      const axle = add("SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.5 }, 0.1, 1.5);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.36 }, 0.075, 1.25);
+      for (let player = 0; player < requestedPlayers; player += 1) {
+        const seat = Math.min(realms.length - 1, Math.floor(player * realms.length / requestedPlayers));
+        link("PRIMARY_AXLE_APPROACH", "LAND_PATH", realms[seat], axle, player % 2 ? 0.2 : -0.2, 1);
+        link("SECONDARY_AXLE_APPROACH", "LAND_PATH", realms[seat], axle, player % 2 ? -0.32 : 0.32, 0.88);
+      }
+    } else if (id === "CONTESTED_HEARTLAND") {
+      realms = ringPoints(requestedPlayers).map((point, index) => add(`MAJOR_HOME_${index + 1}`, "LAND", point, 0.14, 1.1));
+      const districtCount = Math.max(3, Math.min(6, Math.ceil(requestedPlayers / 2) + 1));
+      const districts = ringPoints(districtCount, 0.1, 0.085).map((point, index) => add(`HEARTLAND_DISTRICT_${index + 1}`, "VALUE", point, 0.07, 1.45));
+      for (let index = 0; index < realms.length; index += 1) {
+        link("MANY_APPROACHES", "LAND_PATH", realms[index], districts[index % districts.length], index % 2 ? 0.2 : -0.2, 1);
+        link("SECONDARY_APPROACH", "LAND_PATH", realms[index], districts[(index + 1) % districts.length], index % 2 ? -0.3 : 0.3, 0.86);
+      }
+      for (let index = 0; index < districts.length; index += 1) link("HEARTLAND_THROUGH_ROUTE", "LAND_PATH", districts[index], districts[(index + 1) % districts.length], index % 2 ? 0.12 : -0.12, 0.82);
+    } else if (id === "OPPOSING_FRONTS" || id === "RIVAL_CONTINENTS") {
+      const tilt = (random() - 0.5) * 0.24;
+      realms = [{ x: 0.2 + random() * 0.08, y: 0.47 - tilt }, { x: 0.72 + random() * 0.08, y: 0.53 + tilt }]
+        .map((point, index) => add(`TEAM_REALM_${index + 1}`, "LAND", point, 0.18 + random() * 0.055, 1.1));
+      link("PRIMARY_HINGE", id === "RIVAL_CONTINENTS" ? "WATER_PATH" : "LAND_PATH", realms[0], realms[1], 0.24, 1);
+      link("SECONDARY_HINGE", "LAND_PATH", realms[0], realms[1], -0.24, 0.9);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.4 }, 0.08, 1.5);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.6 }, 0.08, 1.35);
+    } else if (id === "THREE_REALMS") {
+      const triangle = Array.from({ length: 3 }, (_value, index) => {
+        const angle = boardRotation + index / 3 * Math.PI * 2 + (random() - 0.5) * 0.22;
+        const radial = 0.27 + random() * 0.09;
+        return { x: clamp(boardCenter.x + Math.cos(angle) * radial, 0.08, 0.92), y: clamp(boardCenter.y + Math.sin(angle) * radial * 0.9, 0.09, 0.91) };
+      });
+      realms = triangle.map((point, index) => add(`TEAM_REALM_${index + 1}`, "LAND", point, 0.18 + random() * 0.05, 1.1));
+      for (let one = 0; one < 3; one += 1) for (let two = one + 1; two < 3; two += 1) {
+        link("MUTUAL_BORDER", "LAND_PATH", realms[one], realms[two], (one + two) % 2 ? 0.22 : -0.22, 1);
+        link("SECONDARY_REALM_BORDER", "LAND_PATH", realms[one], realms[two], (one + two) % 2 ? -0.34 : 0.34, 0.82);
+      }
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.42 }, 0.08, 1.5);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.42, y: 0.57 }, 0.075, 1.35);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.58, y: 0.57 }, 0.075, 1.35);
+    } else if (id === "THALASSIC_LEAGUE") {
+      realms = ringPoints(requestedPlayers).map((point, index) => add(`PORT_REALM_${index + 1}`, "VALUE", point, 0.14, 1.1));
+      for (let index = 0; index < realms.length; index += 1) link("SEA_LANE", "WATER_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.34 : -0.34, 1);
+      const seenSecondary = new Set<string>();
+      for (let index = 0; index < realms.length; index += 1) {
+        const target = realms.length === 3 ? (index + 1) % realms.length : (index + 2) % realms.length;
+        const key = [index, target].sort((one, two) => one - two).join(":");
+        if (realms.length > 3 && seenSecondary.has(key)) continue;
+        seenSecondary.add(key);
+        link("REDUNDANT_SEA_LANE", "WATER_PATH", realms[index], realms[target], index % 2 ? -0.22 : 0.22, 0.82);
+      }
+      add("DIPLOMATIC_PORT", "VALUE", { x: 0.5, y: 0.42 }, 0.08, 1.5);
+      add("DIPLOMATIC_PORT", "VALUE", { x: 0.42, y: 0.57 }, 0.075, 1.35);
+      add("DIPLOMATIC_PORT", "VALUE", { x: 0.58, y: 0.57 }, 0.075, 1.35);
+    } else {
+      const roles = ["TALL", "WIDE", "WAR", "TURTLE"];
+      const rolePoints = ringPoints(4, 0.3, 0.28);
+      realms = rolePoints.map((point, index) => add(roles[index], "LAND", point, roles[index] === "WIDE" ? 0.2 + random() * 0.06 : 0.12 + random() * 0.055, 1.1));
+      for (let index = 0; index < realms.length; index += 1) link("ROLE_CONTACT", "LAND_PATH", realms[index], realms[(index + 1) % realms.length], index % 2 ? 0.16 : -0.16, 0.9);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.5, y: 0.42 }, 0.08, 1.5);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.42, y: 0.57 }, 0.075, 1.35);
+      add("SHARED_OBJECTIVE", "VALUE", { x: 0.58, y: 0.57 }, 0.075, 1.35);
+    }
     targets.realms = realms.length;
     targets.requiredConnections = relationships.length;
     targets.roleContracts = id === "UNEQUAL_REALMS" ? 4 : 0;
@@ -354,17 +526,19 @@ export function compileNarrativeSkeleton(options: MapGenerationOptions, recipe: 
     const requested = Math.max(2, Math.min(22, options.players));
     const count = Math.max(2, Math.min(requested, Math.floor(targetLand / minimumRealmLand)));
     if (count < requested) relaxations.push(`Principal realms reduced from ${requested} to ${count} because the selected water level and tile budget cannot sustain isolated starts.`);
-    separatedPoints(count, random, wraps, 0.11).forEach((point, index) => regions.push({ id: `realm-${index + 1}`, role: "REALM", ...point, radius: Math.sqrt(targetLand / Math.max(1, count) / Math.PI / area) * 1.35, priority: 1 }));
-    for (let one = 0; one < count; one += 1) for (let two = one + 1; two < count; two += 1) relationships.push({ id: `isolation-${one + 1}-${two + 1}`, kind: "ISOLATED_FROM", from: regions[one].id, to: regions[two].id, points: [], strength: 1 });
+    separatedPoints(count, random, wraps, 0.11).forEach((point, index) => regions.push({ id: `realm-${index + 1}`, role: "REALM", effect: "LAND", ...point, radius: Math.sqrt(targetLand / Math.max(1, count) / Math.PI / area) * 1.35, priority: 1 }));
+    for (let one = 0; one < count; one += 1) for (let two = one + 1; two < count; two += 1) relationships.push({ id: `isolation-${one + 1}-${two + 1}`, kind: "ISOLATED_FROM", effect: "TRANSITION", from: regions[one].id, to: regions[two].id, points: [], strength: 1 });
     targets.principalRealms = count;
     targets.minimumRealmLand = minimumRealmLand;
   } else if (recipe.mapType === "SHATTERED_ARCHIPELAGO") {
-    const systemCount = recipe.scale === "LOCAL" ? 3 : recipe.scale === "PROVINCIAL" ? 4 : Math.max(4, Math.min(7, Math.round(4 + random() * 3)));
+    const desiredSystems = recipe.scale === "LOCAL" ? 3 : recipe.scale === "PROVINCIAL" ? 4 : Math.max(4, Math.min(7, Math.round(4 + random() * 3)));
+    const capacitySystems = Math.max(3, Math.min(7, Math.floor(targetLand / 45)));
+    const systemCount = Math.min(desiredSystems, capacitySystems);
     const systemCenters = separatedPoints(systemCount, random, wraps, 0.08);
     for (let system = 0; system < systemCount; system += 1) {
       const center = systemCenters[system];
       const chainId = `chain-${system + 1}`;
-      regions.push({ id: chainId, role: "CHAIN", ...center, radius: 0.18, priority: 0.8 });
+      regions.push({ id: chainId, role: "CHAIN", effect: "LAND", ...center, radius: 0.18, priority: 0.8 });
       const angle = random() * Math.PI * 2;
       const nodes = 5 + Math.floor(random() * 4);
       const points: Array<{ x: number; y: number }> = [];
@@ -374,12 +548,12 @@ export function compileNarrativeSkeleton(options: MapGenerationOptions, recipe: 
         const x = (center.x + Math.cos(angle) * t * 0.3 - Math.sin(angle) * curve + 1) % 1;
         const y = clamp(center.y + Math.sin(angle) * t * 0.26 + Math.cos(angle) * curve, 0.04, 0.96);
         const anchor = node === 1 || node === nodes - 2 || node === Math.floor(nodes / 2);
-        const region: NarrativeSkeletonRegion = { id: `${chainId}-${anchor ? "anchor" : "satellite"}-${node + 1}`, role: anchor ? "ANCHOR" : "GENERIC", x, y, radius: anchor ? 0.045 : 0.022, parentId: chainId, priority: anchor ? 1 : 0.6 };
+        const region: NarrativeSkeletonRegion = { id: `${chainId}-${anchor ? "anchor" : "satellite"}-${node + 1}`, role: anchor ? "ANCHOR" : "GENERIC", effect: "LAND", x, y, radius: anchor ? 0.045 : 0.022, parentId: chainId, priority: anchor ? 1 : 0.6 };
         regions.push(region);
-        relationships.push({ id: `${chainId}-member-${node + 1}`, kind: "BELONGS_TO", from: region.id, to: chainId, points: [], strength: anchor ? 1 : 0.7 });
+        relationships.push({ id: `${chainId}-member-${node + 1}`, kind: "BELONGS_TO", effect: "TRANSITION", from: region.id, to: chainId, points: [], strength: anchor ? 1 : 0.7 });
         points.push({ x, y });
       }
-      relationships.push({ id: `${chainId}-arc`, kind: "FOLLOWS_ARC", from: regions.at(-(nodes))!.id, to: regions.at(-1)!.id, points, strength: 1 });
+      relationships.push({ id: `${chainId}-arc`, kind: "FOLLOWS_ARC", effect: "TRANSITION", from: regions.at(-(nodes))!.id, to: regions.at(-1)!.id, points, strength: 1 });
     }
     targets.parentSystems = systemCount;
   } else if (recipe.mapType === "GREAT_WATERSHEDS") {
@@ -389,16 +563,16 @@ export function compileNarrativeSkeleton(options: MapGenerationOptions, recipe: 
       const center = basins[basin];
       const head = { x: clamp(center.x + (random() - 0.5) * 0.18, 0.05, 0.95), y: clamp(0.13 + random() * 0.18, 0.05, 0.95) };
       const outlet = { x: clamp(center.x + (random() - 0.5) * 0.22, 0.05, 0.95), y: clamp(0.78 + random() * 0.16, 0.05, 0.95) };
-      const basinRegion = { id: `basin-${basin + 1}`, role: "BASIN" as const, ...center, radius: 0.16, priority: 1 };
-      const headRegion = { id: `headwater-${basin + 1}`, role: "HEADWATER" as const, ...head, radius: 0.035, parentId: basinRegion.id, priority: 1 };
-      const outletRegion = { id: `outlet-${basin + 1}`, role: "OUTLET" as const, ...outlet, radius: 0.045, parentId: basinRegion.id, priority: 1 };
+      const basinRegion = { id: `basin-${basin + 1}`, role: "BASIN" as const, effect: "WET" as const, ...center, radius: 0.16, priority: 1 };
+      const headRegion = { id: `headwater-${basin + 1}`, role: "HEADWATER" as const, effect: "RIDGE" as const, ...head, radius: 0.035, parentId: basinRegion.id, priority: 1 };
+      const outletRegion = { id: `outlet-${basin + 1}`, role: "OUTLET" as const, effect: "LOWLAND" as const, ...outlet, radius: 0.045, parentId: basinRegion.id, priority: 1 };
       regions.push(basinRegion, headRegion, outletRegion);
       const trunk = Array.from({ length: 9 }, (_value, step) => { const t = step / 8; return { x: clamp(head.x * (1 - t) + outlet.x * t + Math.sin(t * Math.PI * 2 + basin) * 0.025, 0, 1), y: head.y * (1 - t) + outlet.y * t }; });
-      relationships.push({ id: `trunk-${basin + 1}`, kind: "FLOWS_TO", from: headRegion.id, to: outletRegion.id, points: trunk, strength: 1 });
+      relationships.push({ id: `trunk-${basin + 1}`, kind: "FLOWS_TO", effect: "RIVER_PATH", from: headRegion.id, to: outletRegion.id, points: trunk, strength: 1 });
       for (let tributary = 0; tributary < 2; tributary += 1) {
         const join = trunk[3 + tributary * 2];
         const side = tributary % 2 ? 1 : -1;
-        relationships.push({ id: `tributary-${basin + 1}-${tributary + 1}`, kind: "FLOWS_TO", from: basinRegion.id, to: `trunk-${basin + 1}`, points: [{ x: clamp(join.x + side * (0.12 + random() * 0.06), 0.02, 0.98), y: clamp(join.y - 0.1 - random() * 0.08, 0.02, 0.98) }, join], strength: 0.72 });
+        relationships.push({ id: `tributary-${basin + 1}-${tributary + 1}`, kind: "FLOWS_TO", effect: "RIVER_PATH", from: basinRegion.id, to: `trunk-${basin + 1}`, points: [{ x: clamp(join.x + side * (0.12 + random() * 0.06), 0.02, 0.98), y: clamp(join.y - 0.1 - random() * 0.08, 0.02, 0.98) }, join], strength: 0.72 });
       }
     }
     targets.primaryCatchments = basinCount;
@@ -407,14 +581,14 @@ export function compileNarrativeSkeleton(options: MapGenerationOptions, recipe: 
   } else if (recipe.mapType === "ICEHOUSE_EARTH") {
     const sheetCount = recipe.scale === "LOCAL" ? 1 : 2;
     const sheetCenters = recipe.scale === "LOCAL" ? separatedPoints(1, random, wraps, 0.15) : [{ x: 0.3 + random() * 0.12, y: 0.18 + random() * 0.12 }, { x: 0.64 + random() * 0.12, y: 0.73 + random() * 0.12 }];
-    sheetCenters.forEach((point, index) => regions.push({ id: `ice-sheet-${index + 1}`, role: "ICE_SHEET", ...point, radius: recipe.scale === "GLOBAL" ? 0.38 : 0.31, priority: 1 }));
+    sheetCenters.forEach((point, index) => regions.push({ id: `ice-sheet-${index + 1}`, role: "ICE_SHEET", effect: "COLD", ...point, radius: recipe.scale === "GLOBAL" ? 0.38 : 0.31, priority: 1 }));
     const refugeCount = Math.max(2, Math.min(options.players, recipe.scale === "LOCAL" ? 3 : 6));
-    separatedPoints(refugeCount, random, wraps, 0.1).forEach((point, index) => regions.push({ id: `refuge-${index + 1}`, role: "REFUGE", x: point.x, y: clamp(0.36 + point.y * 0.28, 0.24, 0.76), radius: 0.055, priority: 1 }));
-    for (const refuge of regions.filter((region) => region.role === "REFUGE")) for (const sheet of regions.filter((region) => region.role === "ICE_SHEET")) relationships.push({ id: `${refuge.id}-supplies-${sheet.id}`, kind: "SUPPLIES", from: refuge.id, to: sheet.id, points: [], strength: 0.7 });
+    separatedPoints(refugeCount, random, wraps, 0.1).forEach((point, index) => regions.push({ id: `refuge-${index + 1}`, role: "REFUGE", effect: "VALUE", x: point.x, y: clamp(0.36 + point.y * 0.28, 0.24, 0.76), radius: 0.055, priority: 1 }));
+    for (const refuge of regions.filter((region) => region.role === "REFUGE")) for (const sheet of regions.filter((region) => region.role === "ICE_SHEET")) relationships.push({ id: `${refuge.id}-supplies-${sheet.id}`, kind: "SUPPLIES", effect: "TRANSITION", from: refuge.id, to: sheet.id, points: [], strength: 0.7 });
     targets.iceSheets = sheetCount;
     targets.refuges = refugeCount;
-  } else if (!compileCatalogSkeleton(recipe.mapType, recipe.scale, random, wraps, regions, relationships, targets)) {
-    regions.push({ id: "narrative-region-1", role: "GENERIC", x: 0.5, y: 0.5, radius: 0.3, priority: 1 });
+  } else if (!compileCatalogSkeleton(recipe.mapType, recipe.scale, random, wraps, options.players, regions, relationships, targets)) {
+    regions.push({ id: "narrative-region-1", role: "GENERIC", effect: "LAND", x: 0.5, y: 0.5, radius: 0.3, priority: 1 });
   }
 
   return { schemaVersion: 1, profileId: recipe.mapType, implementation: profile.implementation, scale: recipe.scale, width, height, seed: options.seed, regions, relationships, targets, conflicts, relaxations };
@@ -428,301 +602,87 @@ function tileDistance(index: number, region: { x: number; y: number; radius?: nu
   return Math.hypot(dx * width / Math.max(width, height), (point.y - region.y) * height / Math.max(width, height) * 0.866);
 }
 
-function exactNarrativeMask(scores: number[], landCount: number) {
-  const selected = new Set(scores.map((_value, index) => index).sort((one, two) => scores[two] - scores[one] || one - two).slice(0, Math.max(0, Math.min(scores.length, landCount))));
-  return scores.map((_value, index) => selected.has(index));
-}
-
-function exactNarrativeMaskWithLocks(scores: number[], landCount: number, requiredLand: ReadonlySet<number>, requiredWater: ReadonlySet<number>) {
-  const selected = new Set([...requiredLand].filter((index) => index >= 0 && index < scores.length && !requiredWater.has(index)));
-  const candidates = scores.map((_value, index) => index)
-    .filter((index) => !selected.has(index) && !requiredWater.has(index))
-    .sort((one, two) => scores[two] - scores[one] || one - two);
-  for (const index of candidates) {
-    if (selected.size >= landCount) break;
-    selected.add(index);
-  }
-  if (selected.size > landCount) {
-    const removable = [...selected].filter((index) => !requiredLand.has(index)).sort((one, two) => scores[one] - scores[two] || two - one);
-    while (selected.size > landCount && removable.length) selected.delete(removable.shift()!);
-  }
-  return scores.map((_value, index) => selected.has(index));
-}
-
-function inlandSeaCrossroadsMask(skeleton: NarrativeSkeleton, landCount: number, width: number, height: number, wraps: boolean, seed: number) {
-  const area = width * height;
-  const seas = skeleton.regions.filter((region) => region.role === "GREAT_INLAND_SEA").sort((one, two) => one.x - two.x);
-  const requiredLand = new Set<number>();
-  const requiredWater = new Set<number>();
-  const separators = seas.slice(0, -1).map((sea, index) => ({ x: (sea.x + seas[index + 1].x) / 2, strait: index % 2 === 0, gapY: clamp(0.43 + deterministicNoise(index + 991, seed) * 0.14, 0.38, 0.62), neckY: clamp(0.4 + deterministicNoise(index + 1499, seed) * 0.2, 0.34, 0.66) }));
-  const separatorPaths = separators.map((separator, separatorIndex) => {
-    const base = clamp(Math.round(separator.x * width - 0.5), 1, width - 2);
-    let current = base;
-    return Array.from({ length: height }, (_value, y) => {
-      if (y > 0) {
-        const desired = clamp(Math.round(base + Math.sin(y / Math.max(1, height - 1) * Math.PI * 2 + separatorIndex * 1.7 + seed * 0.004) * Math.min(3, width * 0.025)), 1, width - 2);
-        const allowed = (y - 1) % 2 === 0 ? [current - 1, current] : [current, current + 1];
-        current = allowed.reduce((best, candidate) => Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best, current);
-        current = clamp(current, 1, width - 2);
-      }
-      return current;
-    });
-  });
-  const pathX = (y: number, separatorIndex: number) => separatorPaths[separatorIndex][y];
-
-  for (let x = 0; x < width; x += 1) { requiredLand.add(x); requiredLand.add((height - 1) * width + x); }
-  if (!wraps) for (let y = 1; y < height - 1; y += 1) { requiredLand.add(y * width); requiredLand.add(y * width + width - 1); }
-  separators.forEach((separator, separatorIndex) => {
-    const gapRow = Math.round(separator.gapY * (height - 1));
-    for (let y = 0; y < height; y += 1) {
-      const x = pathX(y, separatorIndex);
-      if (separator.strait && Math.abs(y - gapRow) <= 1) {
-        for (let dx = -1; dx <= 1; dx += 1) requiredWater.add(y * width + clamp(x + dx, 0, width - 1));
-      } else requiredLand.add(y * width + x);
-    }
-  });
-
-  const scores = Array.from({ length: area }, (_value, index) => {
-    const x = index % width; const y = Math.floor(index / width);
-    const nx = (x + 0.5) / width; const ny = (y + 0.5) / height;
-    const edgeTiles = Math.min(x + 0.5, width - x - 0.5, (y + 0.5) * 0.88, (height - y - 0.5) * 0.88);
-    let score = clamp(1 - edgeTiles / Math.max(2, Math.min(width, height) * 0.16)) * 1.9;
-    separators.forEach((separator, separatorIndex) => {
-      const distance = Math.abs(x - pathX(y, separatorIndex));
-      const gapDistance = Math.abs(y / Math.max(1, height - 1) - separator.gapY);
-      const gapSuppression = separator.strait ? clamp(gapDistance / Math.max(0.025, 2.6 / height)) : 1;
-      const neckDistance = Math.abs(y / Math.max(1, height - 1) - separator.neckY);
-      const dividerWidth = separator.strait ? 4.2 : 1.15 + clamp(neckDistance / 0.14) * 4.85;
-      score = Math.max(score, clamp(1 - distance / dividerWidth) * 1.72 * gapSuppression);
-    });
-    for (const sea of seas) score -= clamp(1 - tileDistance(index, sea, width, height, wraps) / Math.max(0.06, sea.radius)) * 0.9;
-    score += Math.sin(nx * 19 + ny * 7 + seed * 0.017) * 0.018 + Math.cos(nx * 11 - ny * 17 + seed * 0.009) * 0.014;
-    return score;
-  });
-  return exactNarrativeMaskWithLocks(scores, landCount, requiredLand, requiredWater);
-}
-
 function narrativeObjects(skeleton: NarrativeSkeleton, landMask: boolean[], width: number, height: number, wraps: boolean) {
-  const regions: GeographicObject[] = skeleton.regions.map((region) => ({ id: `narrative-${region.id}`, name: region.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()), kind: region.role === "ICE_SHEET" ? "ICE_SHEET" : region.role === "REFUGE" ? "REFUGE" : "NARRATIVE_REGION", tileIndices: landMask.flatMap((land, index) => (region.effect === "WATER" ? !land : land) && tileDistance(index, region, width, height, wraps) <= region.radius ? [index] : []), attributes: { role: region.role, effect: region.effect ?? "", parent: region.parentId ?? "", priority: region.priority } }));
-  const paths: GeographicObject[] = skeleton.relationships.filter((relationship) => relationship.points.length).map((relationship) => ({ id: `narrative-${relationship.id}`, name: relationship.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()), kind: "NARRATIVE_PATH", tileIndices: relationship.points.map((point) => Math.min(width * height - 1, Math.max(0, Math.floor(point.y * height) * width + Math.min(width - 1, Math.floor(point.x * width))))), attributes: { relationship: relationship.kind, effect: relationship.effect ?? "", from: relationship.from, to: relationship.to, strength: relationship.strength } }));
+  const greatSeas = skeleton.profileId === "SHATTERED_BASINS" ? skeleton.regions.filter((region) => region.role === "GREAT_INLAND_SEA") : [];
+  const seaTiles = greatSeas.map(() => [] as number[]);
+  if (greatSeas.length) {
+    for (let index = 0; index < landMask.length; index += 1) {
+      if (landMask[index]) continue;
+      let nearest = 0;
+      for (let sea = 1; sea < greatSeas.length; sea += 1) {
+        if (tileDistance(index, greatSeas[sea], width, height, wraps) < tileDistance(index, greatSeas[nearest], width, height, wraps)) nearest = sea;
+      }
+      seaTiles[nearest].push(index);
+    }
+  }
+  const regions: GeographicObject[] = skeleton.regions.map((region) => {
+    const sea = greatSeas.indexOf(region);
+    return {
+      id: `narrative-${region.id}`,
+      name: region.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      kind: sea >= 0 ? "INLAND_SEA" : region.role === "ICE_SHEET" ? "ICE_SHEET" : region.role === "REFUGE" ? "REFUGE" : "NARRATIVE_REGION",
+      tileIndices: sea >= 0
+        ? seaTiles[sea]
+        : landMask.flatMap((land, index) => (region.effect === "WATER" ? !land : land) && tileDistance(index, region, width, height, wraps) <= region.radius ? [index] : []),
+      attributes: { role: region.role, effect: region.effect ?? "", parent: region.parentId ?? "", priority: region.priority, ...(sea >= 0 ? { semanticBasin: true } : {}) },
+    };
+  });
+  const paths: GeographicObject[] = skeleton.relationships.filter((relationship) => relationship.points.length).map((relationship) => {
+    let tileIndices = relationship.points.map((point) => Math.min(width * height - 1, Math.max(0, Math.floor(point.y * height) * width + Math.min(width - 1, Math.floor(point.x * width)))));
+    if (relationship.kind === "CANAL_ISTHMUS" && !tileIndices.some((index) => landMask[index])) {
+      const point = relationship.points[0];
+      const nearest = landMask.reduce((best, land, index) => {
+        if (!land) return best;
+        return best < 0 || tileDistance(index, { ...point, radius: 0 }, width, height, wraps) < tileDistance(best, { ...point, radius: 0 }, width, height, wraps) ? index : best;
+      }, -1);
+      tileIndices = nearest < 0 ? [] : [nearest];
+    }
+    return {
+      id: `narrative-${relationship.id}`,
+      name: relationship.id.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      kind: relationship.kind === "NARROW_STRAIT" ? "STRAIT" : relationship.kind === "CANAL_ISTHMUS" ? "NARRATIVE_REGION" : "NARRATIVE_PATH",
+      tileIndices: [...new Set(tileIndices)],
+      attributes: { relationship: relationship.kind, role: relationship.kind, effect: relationship.effect ?? "", from: relationship.from, to: relationship.to, strength: relationship.strength },
+    };
+  });
   return [...regions, ...paths].filter((object) => object.tileIndices.length);
 }
 
-function rebuildTopologyObjects(structure: GenerationStructure, landMask: boolean[], width: number, height: number, wraps: boolean, skeleton?: NarrativeSkeleton) {
-  const crossroads = skeleton?.profileId === "SHATTERED_BASINS";
-  const replacedKinds = new Set(crossroads ? ["SUPERPOLYGON", "CONTINENT", "OCEAN_BASIN", "INLAND_SEA", "LAKE", "RIFT", "STRAIT", "BAY", "ARCHIPELAGO"] : ["CONTINENT", "OCEAN_BASIN"]);
-  const continents = connectedTileObjects("CONTINENT", landMask, width, height, wraps, "Narrative Landmass");
-  const waters = connectedTileObjects(crossroads ? "INLAND_SEA" : "OCEAN_BASIN", landMask.map((land) => !land), width, height, wraps, crossroads ? "Great Inland Sea" : "Narrative Ocean");
-  if (!crossroads) return [
-    ...structure.objects.filter((object) => !replacedKinds.has(object.kind)).map((object) => ({ ...object, tileIndices: object.tileIndices.filter((index) => index >= 0 && index < landMask.length) })).filter((object) => object.tileIndices.length),
-    ...continents,
-    ...waters,
-  ];
-  const waterIds = new Int32Array(landMask.length).fill(-1);
-  waters.forEach((water, id) => water.tileIndices.forEach((index) => { waterIds[index] = id; }));
-  const canalCandidates = landMask.flatMap((land, index) => {
-    if (!land) return [];
-    const adjacentBasins = new Set(connectedNeighbors(index, width, height, wraps).map((neighbor) => waterIds[neighbor]).filter((id) => id >= 0));
-    return adjacentBasins.size >= 2 ? [index] : [];
-  });
-  const selectedCanals: number[] = [];
-  for (const index of canalCandidates.sort((one, two) => Math.abs(one % width - width / 2) - Math.abs(two % width - width / 2) || one - two)) {
-    if (selectedCanals.every((other) => Math.hypot(index % width - other % width, Math.floor(index / width) - Math.floor(other / width)) >= 6)) selectedCanals.push(index);
-    if (selectedCanals.length >= Math.max(1, skeleton?.targets.isthmuses ?? 1)) break;
-  }
-  const straits = connectedTileObjects("STRAIT", landMask.map((land, index) => !land && connectedNeighbors(index, width, height, wraps).filter((neighbor) => landMask[neighbor]).length >= 3), width, height, wraps, "Narrow Strait")
-    .sort((one, two) => two.tileIndices.length - one.tileIndices.length || Math.abs((one.tileIndices[0] % width) - width / 2) - Math.abs((two.tileIndices[0] % width) - width / 2))
-    .slice(0, Math.max(1, skeleton?.targets.straits ?? 1));
-  return [
-    ...structure.objects.filter((object) => !replacedKinds.has(object.kind)).map((object) => ({ ...object, tileIndices: object.tileIndices.filter((index) => index >= 0 && index < landMask.length) })).filter((object) => object.tileIndices.length),
-    ...continents,
-    ...waters,
-    ...straits,
-    ...selectedCanals.map((index, canal) => ({ id: `canal-isthmus-${canal + 1}`, name: `Canal Isthmus ${canal + 1}`, kind: "NARRATIVE_REGION" as const, tileIndices: [index], attributes: { role: "CANAL_ISTHMUS", settleable: true, adjacentBasins: 2 } })),
-  ];
-}
-
-function nearestLand(index: number, mask: boolean[], elevations: number[], width: number, height: number, wraps: boolean) {
-  const origin = { x: index % width, y: Math.floor(index / width) };
-  let best = -1; let distance = Number.POSITIVE_INFINITY;
-  for (let candidate = 0; candidate < mask.length; candidate += 1) {
-    if (!mask[candidate] || elevations[candidate] === 2) continue;
-    let dx = Math.abs(candidate % width - origin.x); if (wraps) dx = Math.min(dx, width - dx);
-    const dy = Math.abs(Math.floor(candidate / width) - origin.y) * 0.866;
-    const current = Math.hypot(dx, dy);
-    if (current < distance) { best = candidate; distance = current; }
-  }
-  return best;
-}
-
-export function realizeNarrativeGeography<T extends NarrativeGeography>(geography: T, skeleton: NarrativeSkeleton, options: MapGenerationOptions, width: number, height: number, wraps: boolean, seed: number): T {
-  if (skeleton.implementation !== "BENCHMARK" || narrativeProfile(skeleton.profileId).engine === "POLIS") return { ...geography, structure: { ...geography.structure, narrativeSkeleton: skeleton } };
+export function attachNarrativeStructure<T extends NarrativeGeography>(
+  geography: T,
+  skeleton: NarrativeSkeleton,
+  width: number,
+  height: number,
+  wraps: boolean,
+): T {
   const area = width * height;
-  const landCount = area - Math.round(area * clamp(options.waterPercent / 100, 0, 0.9));
-  let landMask = [...geography.landMask];
-  const elevations = [...geography.elevations];
-  const reliefValues = [...geography.reliefValues];
-  const temperatures = geography.temperatures ? [...geography.temperatures] : undefined;
-  const moistures = [...geography.moistures];
-  const riverGuidance = geography.riverGuidance ? [...geography.riverGuidance] : new Array<number>(area).fill(0);
-  let startLocations = geography.startLocations?.map((start) => ({ ...start }));
-  const narrativeEffects = new Array<NarrativeSkeletonRegion["effect"] | undefined>(area);
-
-  if (skeleton.profileId === "LONELY_OCEANS") {
-    const realms = skeleton.regions.filter((region) => region.role === "REALM");
-    const scores = Array.from({ length: area }, (_value, index) => {
-      const x = index % width; const y = Math.floor(index / width);
-      const realm = realms.reduce((best, candidate) => tileDistance(index, candidate, width, height, wraps) < tileDistance(index, best, width, height, wraps) ? candidate : best, realms[0]);
-      const distance = tileDistance(index, realm, width, height, wraps);
-      const noise = Math.sin((x + seed % 17) * 0.51) * 0.0045 + Math.cos((y + seed % 23) * 0.43) * 0.0045;
-      return realm.radius - distance + noise;
-    });
-    landMask = exactNarrativeMask(scores, landCount);
-    startLocations = realms.flatMap((realm, player) => {
-      const origin = Math.min(area - 1, Math.floor(realm.y * height) * width + Math.min(width - 1, Math.floor(realm.x * width)));
-      const index = nearestLand(origin, landMask, elevations, width, height, wraps);
-      return index < 0 ? [] : [{ x: index % width, y: Math.floor(index / width), player, civilization: "", leader: "", team: player, playable: true, cityState: false }];
-    });
-  } else if (skeleton.profileId === "SHATTERED_ARCHIPELAGO") {
-    const islands = skeleton.regions.filter((region) => region.parentId);
-    const scores = Array.from({ length: area }, (_value, index) => {
-      const nearest = islands.reduce((best, candidate) => {
-        const score = candidate.radius * candidate.priority - tileDistance(index, candidate, width, height, wraps);
-        return score > best.score ? { score, candidate } : best;
-      }, { score: Number.NEGATIVE_INFINITY, candidate: islands[0] });
-      const x = index % width; const y = Math.floor(index / width);
-      return nearest.score + Math.sin(x * 1.71 + y * 0.89 + seed) * 0.008;
-    });
-    landMask = exactNarrativeMask(scores, landCount);
-    for (const island of islands.filter((region) => region.role === "ANCHOR")) {
-      const center = Math.min(area - 1, Math.floor(island.y * height) * width + Math.min(width - 1, Math.floor(island.x * width)));
-      for (let index = 0; index < area; index += 1) if (landMask[index] && tileDistance(index, island, width, height, wraps) < island.radius * 0.75) reliefValues[index] += 0.42;
-      elevations[center] = landMask[center] ? 2 : elevations[center];
-    }
-  } else if (skeleton.profileId === "SHATTERED_BASINS") {
-    landMask = inlandSeaCrossroadsMask(skeleton, landCount, width, height, wraps, seed);
-    for (let index = 0; index < area; index += 1) {
-      if (!landMask[index]) { elevations[index] = 0; reliefValues[index] = Math.min(reliefValues[index], 0.18); continue; }
-      const coastDistance = connectedNeighbors(index, width, height, wraps).filter((neighbor) => !landMask[neighbor]).length;
-      if (coastDistance >= 2) elevations[index] = Math.min(elevations[index], 1);
-    }
-  } else if (skeleton.profileId === "GREAT_WATERSHEDS") {
-    for (const relationship of skeleton.relationships.filter((item) => item.kind === "FLOWS_TO")) {
-      relationship.points.forEach((point, pointIndex) => {
-        const center = Math.min(area - 1, Math.floor(point.y * height) * width + Math.min(width - 1, Math.floor(point.x * width)));
-        for (let index = 0; index < area; index += 1) {
-          if (!landMask[index]) continue;
-          const distance = Math.hypot(index % width - center % width, (Math.floor(index / width) - Math.floor(center / width)) * 0.866);
-          if (distance < 1.4) riverGuidance[index] = Math.max(riverGuidance[index], relationship.strength >= 0.9 ? 1 : 0.72);
-          else if (distance < 3) riverGuidance[index] = Math.max(riverGuidance[index], 0.52);
-          if (pointIndex === 0 && distance < 2.4) { reliefValues[index] += 0.5; elevations[index] = distance < 1.25 ? 2 : Math.max(1, elevations[index]); }
-        }
-      });
-    }
-  } else if (skeleton.profileId === "ICEHOUSE_EARTH" && temperatures) {
-    const sheets = skeleton.regions.filter((region) => region.role === "ICE_SHEET");
-    const refuges = skeleton.regions.filter((region) => region.role === "REFUGE");
-    for (let index = 0; index < area; index += 1) {
-      const sheetInfluence = Math.max(...sheets.map((sheet) => clamp(1 - tileDistance(index, sheet, width, height, wraps) / sheet.radius)));
-      const lobe = Math.sin((index % width + seed % 29) * 0.27) * 0.055 + Math.cos((Math.floor(index / width) + seed % 31) * 0.31) * 0.055;
-      const refugeInfluence = Math.max(0, ...refuges.map((refuge) => clamp(1 - tileDistance(index, refuge, width, height, wraps) / refuge.radius)));
-      temperatures[index] = clamp(Math.min(temperatures[index], 0.48 - sheetInfluence * 0.46 + lobe) + refugeInfluence * 0.42);
-      if (landMask[index] && sheetInfluence > 0.66 && refugeInfluence < 0.35) elevations[index] = Math.max(elevations[index], reliefValues[index] > 0.72 ? 2 : 0);
-      moistures[index] = landMask[index] ? clamp(moistures[index] - sheetInfluence * 0.2 + refugeInfluence * 0.18) : moistures[index];
-    }
-  } else {
-    const regionLandWeight: Record<NonNullable<NarrativeSkeletonRegion["effect"]>, number> = {
-      LAND: 1.35, WATER: -1.65, RIDGE: 1.2, LOWLAND: 1.15, WET: 1.18, DRY: 1.18, COLD: 1.18, HOT: 1.18, VALUE: 1.3, BARREN: 1.12, VOLCANIC: 1.24,
-    };
-    const scores = Array.from({ length: area }, (_value, index) => {
-      const x = index % width; const y = Math.floor(index / width);
-      let score = geography.landMask[index] ? 0.12 : -0.12;
-      let strongest = Number.NEGATIVE_INFINITY;
-      for (const region of skeleton.regions) {
-        if (!region.effect) continue;
-        const influence = clamp(1 - tileDistance(index, region, width, height, wraps) / Math.max(0.018, region.radius));
-        if (influence <= 0) continue;
-        score += regionLandWeight[region.effect] * influence * region.priority;
-        if (influence * region.priority > strongest) { strongest = influence * region.priority; narrativeEffects[index] = region.effect; }
-        if (region.effect === "RIDGE" || region.effect === "VOLCANIC") reliefValues[index] += influence * (region.effect === "VOLCANIC" ? 0.58 : 0.46) * region.priority;
-        if (region.effect === "LOWLAND") reliefValues[index] -= influence * 0.3;
-        if (region.effect === "WET") moistures[index] = clamp(moistures[index] + influence * 0.42);
-        if (region.effect === "DRY" || region.effect === "BARREN") moistures[index] = clamp(moistures[index] - influence * 0.48);
-        if (temperatures && region.effect === "COLD") temperatures[index] = clamp(temperatures[index] - influence * 0.4);
-        if (temperatures && (region.effect === "HOT" || region.effect === "VOLCANIC")) temperatures[index] = clamp(temperatures[index] + influence * 0.28);
-      }
-      for (const relationship of skeleton.relationships) {
-        if (!relationship.effect || !relationship.points.length) continue;
-        const distance = Math.min(...relationship.points.map((point) => tileDistance(index, { ...point, radius: 0 }, width, height, wraps)));
-        const widthFactor = relationship.effect === "WATER_PATH" ? 0.032 : relationship.effect === "LAND_PATH" ? 0.026 : 0.022;
-        const influence = clamp(1 - distance / widthFactor) * relationship.strength;
-        if (!influence) continue;
-        if (relationship.effect === "LAND_PATH") score += influence * 1.9;
-        if (relationship.effect === "WATER_PATH") score -= influence * 1.8;
-        if (relationship.effect === "RIDGE_PATH") { score += influence * 0.62; reliefValues[index] += influence * 0.72; }
-        if (relationship.effect === "RIVER_PATH") { score += influence * 0.36; reliefValues[index] -= influence * 0.16; riverGuidance[index] = Math.max(riverGuidance[index], 0.62 + influence * 0.35); moistures[index] = clamp(moistures[index] + influence * 0.28); }
-      }
-      if (skeleton.profileId === "ENCIRCLING_LANDS") {
-        const edge = Math.min((x + 0.5) / width, (width - x - 0.5) / width, (y + 0.5) / height, (height - y - 0.5) / height);
-        score += clamp((0.16 - edge) / 0.16) * 1.2;
-      }
-      if (skeleton.profileId === "INLAND_SEAS") {
-        const edge = Math.min(x, width - x - 1, y, height - y - 1);
-        if (edge < 2) score += 10;
-      }
-      if (skeleton.profileId === "SUPERCONTINENT_INTERIOR") {
-        const edge = Math.min(x, width - x - 1, y, height - y - 1);
-        if (edge < 2) score += 2;
-      }
-      return score + Math.sin(x * 0.71 + y * 0.39 + seed) * 0.012 + Math.cos(x * 0.23 - y * 0.61 + seed * 0.3) * 0.01;
-    });
-    landMask = exactNarrativeMask(scores, landCount);
-    for (let index = 0; index < area; index += 1) {
-      if (!landMask[index]) { elevations[index] = 0; continue; }
-      const effect = narrativeEffects[index];
-      if (effect === "RIDGE" || effect === "VOLCANIC") elevations[index] = reliefValues[index] > 0.72 ? 2 : Math.max(1, elevations[index]);
-      else if (effect === "LOWLAND") elevations[index] = 0;
-      else if (!geography.landMask[index]) elevations[index] = reliefValues[index] > 0.64 ? 1 : 0;
-    }
-  }
-
-  const tiles = geography.tiles.map((source, index): Civ5Tile => {
-    const land = landMask[index];
-    const adjacentLand = connectedNeighbors(index, width, height, wraps).some((neighbor) => landMask[neighbor]);
-    const tile = { ...source, elevation: land ? elevations[index] : 0, continent: land ? source.continent || 1 : 0 };
-    if (!land) { tile.terrain = adjacentLand ? 1 : 0; tile.feature = skeleton.profileId === "ICEHOUSE_EARTH" && (temperatures?.[index] ?? 1) < 0.12 ? 3 : 255; tile.resource = 255; tile.resourceAmount = 0; tile.wonder = 255; tile.river = 0; return tile; }
-    if (source.terrain < 2) {
-      const dominantTerrain = options.dominantTerrains[0];
-      tile.terrain = dominantTerrain === "GRASSLAND" ? 2 : dominantTerrain === "DESERT" ? 4 : dominantTerrain === "TUNDRA" ? 5 : 3;
-      if (options.eccentricExtreme === "SNOWBALL") tile.terrain = index % 5 ? 6 : 5;
-      if (options.eccentricExtreme === "ARRAKIS") tile.terrain = 4;
-      if (options.eccentricExtreme === "JURASSIC" || options.eccentricExtreme === "ARBOREA") tile.terrain = 2;
-      if (options.eccentricExtreme === "JURASSIC") tile.feature = 1;
-      if (options.eccentricExtreme === "ARBOREA") tile.feature = 0;
-    }
-    if (skeleton.profileId === "GREAT_WATERSHEDS") {
-      const downstream = skeleton.relationships.filter((item) => item.kind === "FLOWS_TO" && item.strength >= 0.9).some((relationship) => relationship.points.slice(Math.floor(relationship.points.length * 0.58)).some((point) => tileDistance(index, { ...point, radius: 0 }, width, height, wraps) < 0.026));
-      if (downstream && tile.elevation === 0) { tile.terrain = index % 3 ? 2 : 3; tile.feature = index % 4 ? 2 : 255; }
-    }
-    if (skeleton.profileId === "ICEHOUSE_EARTH" && temperatures) {
-      const temperature = temperatures[index];
-      tile.terrain = temperature < 0.15 ? 6 : temperature < 0.31 ? 5 : temperature < 0.43 ? 3 : 2;
-      tile.feature = tile.elevation === 2 || tile.terrain === 6 ? 255 : temperature < 0.38 && moistures[index] > 0.46 && index % 5 === 0 ? 0 : tile.feature === 1 ? 255 : tile.feature;
-    }
-    const effect = narrativeEffects[index];
-    if (effect && tile.elevation < 2 && options.eccentricExtreme === "NONE" && options.dominantTerrains.length === 0) {
-      if (effect === "WET") { tile.terrain = moistures[index] > 0.7 ? 2 : 3; if (moistures[index] > 0.72 && index % 3 === 0) tile.feature = 2; }
-      if (effect === "DRY" || effect === "BARREN") { tile.terrain = moistures[index] < 0.28 ? 4 : 3; if (tile.feature === 0 || tile.feature === 1 || tile.feature === 2) tile.feature = 255; }
-      if (effect === "COLD") { tile.terrain = (temperatures?.[index] ?? 0.3) < 0.18 ? 6 : 5; }
-      if (effect === "HOT" || effect === "VOLCANIC") tile.terrain = moistures[index] < 0.42 ? 4 : 3;
-      if (effect === "VALUE" && tile.terrain === 4) tile.terrain = 3;
-    }
-    return tile;
-  });
-
-  const structureObjects = [...rebuildTopologyObjects(geography.structure, landMask, width, height, wraps, skeleton), ...narrativeObjects(skeleton, landMask, width, height, wraps)];
-  const structure = { ...geography.structure, objects: structureObjects, narrativeSkeleton: skeleton, diagnostics: { ...geography.structure.diagnostics, narrativeRegions: skeleton.regions.length, narrativeRelationships: skeleton.relationships.length, narrativeConflicts: skeleton.conflicts.length, narrativeRelaxations: skeleton.relaxations.length, ...(skeleton.profileId === "SHATTERED_BASINS" ? { narrativeGreatSeas: structureObjects.filter((object) => object.kind === "INLAND_SEA" && object.tileIndices.length >= area * 0.08).length, narrativeStraits: structureObjects.filter((object) => object.kind === "STRAIT").length, narrativeCanalSites: structureObjects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS").length, narrativeLandComponents: structureObjects.filter((object) => object.kind === "CONTINENT").length } : {}) } };
-  return { ...geography, landMask, reliefValues, temperatures, moistures, elevations, riverGuidance, tiles, structure, startLocations };
+  const retainedObjects = geography.structure.objects;
+  const retainedIds = new Set(retainedObjects.map((object) => object.id));
+  const structureObjects = [
+    ...retainedObjects,
+    ...narrativeObjects(skeleton, geography.landMask, width, height, wraps).filter((object) => !retainedIds.has(object.id)),
+  ];
+  return {
+    ...geography,
+    structure: {
+      ...geography.structure,
+      objects: structureObjects,
+      narrativeSkeleton: skeleton,
+      diagnostics: {
+        ...geography.structure.diagnostics,
+        narrativeRegions: skeleton.regions.length,
+        narrativeRelationships: skeleton.relationships.length,
+        narrativeConflicts: skeleton.conflicts.length,
+        narrativeRelaxations: skeleton.relaxations.length,
+        ...(skeleton.profileId === "SHATTERED_BASINS" ? {
+          narrativeGreatSeas: structureObjects.filter((object) => object.kind === "INLAND_SEA" && object.tileIndices.length >= area * 0.08).length,
+          narrativeStraits: structureObjects.filter((object) => object.kind === "STRAIT").length,
+          narrativeCanalSites: structureObjects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS").length,
+          narrativeLandComponents: structureObjects.filter((object) => object.kind === "CONTINENT").length,
+        } : {}),
+      },
+    },
+  };
 }
 
 function connectedNeighbors(index: number, width: number, height: number, wraps: boolean) {
@@ -731,52 +691,611 @@ function connectedNeighbors(index: number, width: number, height: number, wraps:
   return offsets.flatMap(([dx, dy]) => { let nx = x + dx; const ny = y + dy; if (wraps) nx = (nx + width) % width; return nx >= 0 && nx < width && ny >= 0 && ny < height ? [ny * width + nx] : []; });
 }
 
-export function applyNarrativeContent(tiles: Civ5Tile[], mapResources: string[], skeleton: NarrativeSkeleton, width: number, height: number) {
+const GENERATED_TERRAINS = [
+  "TERRAIN_OCEAN",
+  "TERRAIN_COAST",
+  "TERRAIN_GRASS",
+  "TERRAIN_PLAINS",
+  "TERRAIN_DESERT",
+  "TERRAIN_TUNDRA",
+  "TERRAIN_SNOW",
+];
+
+function expandedTileIndices(origins: Iterable<number>, radius: number, width: number, height: number, wraps: boolean) {
+  const reached = new Set(origins);
+  let frontier = [...reached];
+  for (let distance = 0; distance < radius; distance += 1) {
+    const next: number[] = [];
+    for (const index of frontier) for (const neighbor of connectedNeighbors(index, width, height, wraps)) {
+      if (reached.has(neighbor)) continue;
+      reached.add(neighbor);
+      next.push(neighbor);
+    }
+    frontier = next;
+  }
+  return reached;
+}
+
+function retainedInlandWaterTiles(
+  tiles: Civ5Tile[],
+  structure: GenerationStructure | undefined,
+  width: number,
+  height: number,
+  wraps: boolean,
+) {
+  const retainedSeeds = new Set(structure?.objects.filter((object) => object.kind === "INLAND_SEA" || object.kind === "LAKE"
+    || /(?:INLAND|INTERIOR|TERMINAL).*(?:SEA|LAKE|BASIN)|GREAT_INLAND_SEA/.test(String(object.attributes?.role ?? "")))
+    .flatMap((object) => object.tileIndices.filter((index) => tiles[index]?.terrain < 2)) ?? []);
+  const assignments = new Int32Array(tiles.length).fill(-1);
+  const components: number[][] = [];
+  for (let origin = 0; origin < tiles.length; origin += 1) {
+    if (assignments[origin] >= 0 || tiles[origin].terrain >= 2) continue;
+    const component = components.length;
+    const queue = [origin];
+    assignments[origin] = component;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) for (const neighbor of connectedNeighbors(queue[cursor], width, height, wraps)) {
+      if (assignments[neighbor] >= 0 || tiles[neighbor].terrain >= 2) continue;
+      assignments[neighbor] = component;
+      queue.push(neighbor);
+    }
+    components.push(queue);
+  }
+  const retainedComponents = new Set([...retainedSeeds].map((index) => assignments[index]).filter((component) => component >= 0));
+  const inland = new Set<number>();
+  for (const [component, members] of components.entries()) {
+    const touchesExterior = members.some((index) => {
+      const x = index % width;
+      const y = Math.floor(index / width);
+      return y === 0 || y === height - 1 || !wraps && (x === 0 || x === width - 1);
+    });
+    if (!touchesExterior && (!retainedComponents.size || retainedComponents.has(component))) for (const index of members) inland.add(index);
+  }
+  return inland;
+}
+
+function relocateResourcesInto(
+  tiles: Civ5Tile[],
+  mapResources: string[],
+  eligible: ReadonlySet<number>,
+  desiredInside: number,
+  sourcePriority?: (index: number) => number,
+  sourceAllowed?: (index: number) => boolean,
+  targetAllowed?: (index: number) => boolean,
+) {
+  if (!eligible.size || desiredInside <= 0) return 0;
+  const placementMap = { terrains: GENERATED_TERRAINS, resources: mapResources };
+  let retained = [...eligible].filter((index) => tiles[index].resource !== 255 && resourcePlacementVerdict(placementMap, tiles[index]).valid).length;
+  if (retained >= desiredInside) return 0;
+  const targets = [...eligible].filter((index) => {
+    const tile = tiles[index];
+    return (targetAllowed?.(index) ?? (tile.terrain >= 2 && tile.elevation < 2))
+      && tile.resource === 255 && tile.wonder === 255 && !tile.improvement;
+  }).sort((one, two) => one - two);
+  const sources = tiles.flatMap((tile, index) => !eligible.has(index)
+    && (sourceAllowed?.(index) ?? true)
+    && tile.resource !== 255
+    && tile.wonder === 255
+    && !tile.improvement
+    && resourcePlacementVerdict(placementMap, tile).valid ? [index] : [])
+    .sort((one, two) => (sourcePriority?.(one) ?? 0) - (sourcePriority?.(two) ?? 0) || one - two);
+  let moved = 0;
+  for (const sourceIndex of sources) {
+    if (retained >= desiredInside) break;
+    const source = tiles[sourceIndex];
+    const targetPosition = targets.findIndex((index) => resourcePlacementVerdict(placementMap, { ...tiles[index], resource: source.resource }).valid);
+    if (targetPosition < 0) continue;
+    const destination = targets.splice(targetPosition, 1)[0];
+    tiles[destination].resource = source.resource;
+    tiles[destination].resourceAmount = source.resourceAmount;
+    source.resource = 255;
+    source.resourceAmount = 0;
+    retained += 1;
+    moved += 1;
+  }
+  return moved;
+}
+
+export function applyNarrativeContent(tiles: Civ5Tile[], mapResources: string[], skeleton: NarrativeSkeleton, width: number, height: number, wraps = false, contract?: NarrativeGenerativeContract, structure?: GenerationStructure) {
+  const regionContains = (index: number, region: NarrativeSkeletonRegion, multiplier = 1) => {
+    const x = (index % width + 0.5) / width; const y = (Math.floor(index / width) + 0.5) / height;
+    let dx = Math.abs(x - region.x); if (wraps) dx = Math.min(dx, 1 - dx);
+    return Math.hypot(dx * width / Math.max(width, height), (y - region.y) * height / Math.max(width, height) * 0.866) <= region.radius * multiplier;
+  };
+  const concentrateExistingValue = (regions: NarrativeSkeletonRegion[], share: number) => {
+    if (!regions.length || share <= 0) return;
+    const inside = (index: number) => regions.some((region) => regionContains(index, region, 1.35));
+    const targets = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255 && inside(index) ? [index] : []);
+    const sources = tiles.flatMap((tile, index) => tile.resource !== 255 && !inside(index) ? [index] : []);
+    const limit = Math.min(targets.length, Math.round(sources.length * share));
+    for (let moved = 0; moved < limit; moved += 1) {
+      const sourceIndex = sources[moved]; const source = tiles[sourceIndex];
+      const targetPosition = targets.findIndex((index) => tiles[index].terrain === source.terrain && tiles[index].elevation === source.elevation && tiles[index].feature === source.feature);
+      if (targetPosition < 0) continue;
+      const destination = targets.splice(targetPosition, 1)[0];
+      tiles[destination].resource = source.resource; tiles[destination].resourceAmount = source.resourceAmount;
+      source.resource = 255; source.resourceAmount = 0;
+    }
+  };
+  const pattern = contract?.content.pattern;
   if (skeleton.profileId === "LONELY_OCEANS") {
     for (let index = 0; index < tiles.length; index += 1) {
       const tile = tiles[index];
       if (tile.terrain >= 2 || tile.resource === 255) continue;
-      const nearLand = connectedNeighbors(index, width, height, false).some((neighbor) => tiles[neighbor].terrain >= 2)
-        || connectedNeighbors(index, width, height, false).some((neighbor) => connectedNeighbors(neighbor, width, height, false).some((second) => tiles[second].terrain >= 2));
+      const nearLand = connectedNeighbors(index, width, height, wraps).some((neighbor) => tiles[neighbor].terrain >= 2)
+        || connectedNeighbors(index, width, height, wraps).some((neighbor) => connectedNeighbors(neighbor, width, height, wraps).some((second) => tiles[second].terrain >= 2));
       if (!nearLand || index % 3 !== 0) { tile.resource = 255; tile.resourceAmount = 0; }
     }
   }
   if (skeleton.profileId === "MYTHIC_REGIONS") {
+    const structuralHearts = new Set(structure?.objects
+      .filter((object) => String(object.attributes?.role ?? "").includes("HEART") || object.attributes?.effect === "VALUE")
+      .flatMap((object) => object.tileIndices) ?? []);
+    const structuralMarches = new Set(structure?.objects
+      .filter((object) => String(object.attributes?.role ?? "").includes("MARCH") || object.attributes?.effect === "BARREN")
+      .flatMap((object) => object.tileIndices) ?? []);
     const hearts = skeleton.regions.filter((region) => region.effect === "VALUE");
-    const inHeart = (index: number) => hearts.some((heart) => {
+    const inSkeletonHeart = (index: number) => hearts.some((heart) => {
       const x = (index % width + 0.5) / width; const y = (Math.floor(index / width) + 0.5) / height;
       return Math.hypot(x - heart.x, (y - heart.y) * 0.866) <= heart.radius * 1.25;
     });
-    const emptyTargets = tiles.flatMap((tile, index) => tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255 && inHeart(index) ? [index] : []);
-    for (const sourceIndex of tiles.flatMap((tile, index) => tile.resource !== 255 && !inHeart(index) ? [index] : [])) {
+    const heartTiles = structuralHearts.size
+      ? structuralHearts
+      : new Set(tiles.flatMap((_tile, index) => inSkeletonHeart(index) ? [index] : []));
+    const emptyTargets = [...heartTiles].filter((index) => {
+      const tile = tiles[index];
+      return tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255 && !tile.improvement;
+    });
+    const totalWonders = tiles.filter((tile) => tile.wonder !== 255).length;
+    const desiredWonders = Math.ceil(totalWonders * (contract?.content.wonderBias ?? 0));
+    let retainedWonders = [...heartTiles].filter((index) => tiles[index].wonder !== 255).length;
+    for (const sourceIndex of tiles.flatMap((tile, index) => tile.wonder !== 255 && !heartTiles.has(index) ? [index] : [])) {
+      if (retainedWonders >= desiredWonders) break;
       const source = tiles[sourceIndex];
-      const targetIndex = emptyTargets.findIndex((index) => tiles[index].terrain === source.terrain && tiles[index].elevation === source.elevation && tiles[index].feature === source.feature);
-      if (targetIndex < 0) continue;
-      const destination = emptyTargets.splice(targetIndex, 1)[0];
-      tiles[destination].resource = source.resource; tiles[destination].resourceAmount = source.resourceAmount;
-      source.resource = 255; source.resourceAmount = 0;
-    }
-    for (const sourceIndex of tiles.flatMap((tile, index) => tile.wonder !== 255 && !inHeart(index) ? [index] : [])) {
-      const source = tiles[sourceIndex];
-      const targetIndex = emptyTargets.findIndex((index) => tiles[index].terrain === source.terrain && tiles[index].elevation === source.elevation && tiles[index].feature === source.feature);
+      // Generated natural-wonder legality distinguishes land from water and
+      // rejects ordinary land wonders on mountains. A passable destination of
+      // the same medium is therefore a valid relocation without requiring an
+      // accidental exact terrain/feature twin inside every small heart.
+      const targetIndex = emptyTargets.findIndex((index) => (tiles[index].terrain < 2) === (source.terrain < 2));
       if (targetIndex < 0) continue;
       const destination = emptyTargets.splice(targetIndex, 1)[0];
       tiles[destination].wonder = source.wonder; source.wonder = 255;
+      retainedWonders += 1;
+    }
+    const totalResources = tiles.filter((tile) => tile.resource !== 255).length;
+    const desiredResourceShare = Math.min(0.76, 0.25 + (contract?.content.valueContrast ?? 0.5) * 0.46);
+    relocateResourcesInto(
+      tiles,
+      mapResources,
+      heartTiles,
+      Math.ceil(totalResources * desiredResourceShare),
+      (index) => structuralMarches.has(index) ? -1 : 0,
+    );
+  }
+  if (pattern === "RIVER_VALLEYS") {
+    const riverPoints = skeleton.relationships.filter((relationship) => relationship.effect === "RIVER_PATH").flatMap((relationship) => relationship.points);
+    for (const point of riverPoints) {
+      const origin = Math.max(0, Math.min(tiles.length - 1, Math.floor(point.y * height) * width + Math.min(width - 1, Math.floor(point.x * width))));
+      for (const index of [origin, ...connectedNeighbors(origin, width, height, wraps)]) {
+        const tile = tiles[index];
+        if (tile.terrain < 2 || tile.elevation > 0) continue;
+        if (tile.terrain === 4 || tile.terrain === 5) tile.terrain = 3;
+        else if (tile.terrain !== 6) tile.terrain = 2;
+        if (tile.feature === 255 && index % 5 === 0 && tile.terrain === 2) tile.feature = 2;
+      }
     }
   }
-  if (skeleton.profileId !== "ICEHOUSE_EARTH") return;
-  const resourceIndex = (token: string) => mapResources.findIndex((name) => name.includes(token));
-  const deer = resourceIndex("DEER"); const furs = resourceIndex("FURS"); const fish = resourceIndex("FISH"); const whale = resourceIndex("WHALE"); const pearls = resourceIndex("PEARLS");
-  const oil = resourceIndex("OIL"); const aluminum = resourceIndex("ALUMINUM"); const uranium = resourceIndex("URANIUM");
-  for (let index = 0; index < tiles.length; index += 1) {
-    const tile = tiles[index];
-    if (tile.elevation === 2) continue;
-    const coldLand = tile.terrain === 5 || tile.terrain === 6;
-    const coldWater = tile.terrain < 2 && tile.feature === 3;
-    if (coldLand && index % 19 === 0) { const values = [deer, furs, oil, aluminum, uranium].filter((value) => value >= 0); if (values.length) { tile.resource = values[index % values.length]; tile.resourceAmount = tile.resource >= 5 && tile.resource <= 10 ? 2 : 1; } }
-    if (coldWater && index % 23 === 0) { const values = [fish, whale, pearls].filter((value) => value >= 0); if (values.length) { tile.resource = values[index % values.length]; tile.resourceAmount = 1; } }
-    if ((tile.terrain === 2 || tile.terrain === 3) && tile.resource >= 11 && index % 2 === 0) { tile.resource = 255; tile.resourceAmount = 0; }
+  if (pattern === "SHELF_ANCHORS" || pattern === "INLAND_WATER_ECONOMY" || pattern === "MARITIME_REALMS" || pattern === "NAVAL_NETWORK") {
+    const retainedInlandWater = pattern === "INLAND_WATER_ECONOMY"
+      ? retainedInlandWaterTiles(tiles, structure, width, height, wraps)
+      : new Set<number>();
+    const eligible = new Set(tiles.flatMap((tile, index) => tile.terrain < 2
+      && tile.feature !== 3
+      && tile.wonder === 255
+      && !tile.improvement
+      && connectedNeighbors(index, width, height, wraps).some((neighbor) => tiles[neighbor].terrain >= 2 && tiles[neighbor].elevation < 2)
+      && (pattern !== "INLAND_WATER_ECONOMY" || !retainedInlandWater.size || retainedInlandWater.has(index)) ? [index] : []));
+    const totalWaterResources = tiles.filter((tile) => tile.terrain < 2 && tile.resource !== 255).length;
+    const desiredShare = 0.35 + (contract?.content.coastalValue ?? 0.5) * 0.4;
+    relocateResourcesInto(
+      tiles,
+      mapResources,
+      eligible,
+      Math.max(1, Math.ceil(totalWaterResources * desiredShare)),
+      undefined,
+      undefined,
+      (index) => tiles[index].terrain < 2 && tiles[index].feature !== 3,
+    );
+    if (pattern === "NAVAL_NETWORK") {
+      const diplomaticPorts = structure?.objects
+        .filter((object) => object.attributes?.nativeNarrative === true
+          && object.attributes?.role === "DIPLOMATIC_PORT")
+        .sort((one, two) => one.id.localeCompare(two.id)) ?? [];
+      const diplomaticPortTiles = new Set(diplomaticPorts.flatMap((object) => object.tileIndices));
+      // Each authored port is an individual land objective, not merely part of
+      // the aggregate coastal economy. Reserve one existing legal value item
+      // in every exact district without changing resource counts or taking the
+      // only value already assigned to another port.
+      for (const port of diplomaticPorts) {
+        if (port.tileIndices.some((index) => tiles[index].resource !== 255 || tiles[index].wonder !== 255)) continue;
+        relocateResourcesInto(
+          tiles,
+          mapResources,
+          new Set(port.tileIndices),
+          1,
+          undefined,
+          (index) => !diplomaticPortTiles.has(index),
+        );
+      }
+    }
+    if (pattern === "SHELF_ANCHORS" || pattern === "MARITIME_REALMS") {
+      const rolePattern = pattern === "SHELF_ANCHORS" ? /(?:^|_)(?:ANCHOR|DROWNED_SHELF)$/ : /ISLAND_CONTINENT|MARITIME_REALM/;
+      const anchors = structure?.objects.filter((object) => object.kind !== "NARRATIVE_PATH" && rolePattern.test(String(object.attributes?.role ?? ""))) ?? [];
+      const reservedValue = new Set<number>();
+      const placementMap = { terrains: GENERATED_TERRAINS, resources: mapResources };
+      for (const anchor of anchors) {
+        const local = new Set([...expandedTileIndices(anchor.tileIndices, 2, width, height, wraps)]
+          .filter((index) => eligible.has(index)));
+        const supplied = [...local].find((index) => tiles[index].resource !== 255 && resourcePlacementVerdict(placementMap, tiles[index]).valid);
+        if (supplied !== undefined) {
+          reservedValue.add(supplied);
+          continue;
+        }
+        relocateResourcesInto(
+          tiles,
+          mapResources,
+          local,
+          1,
+          undefined,
+          (index) => !reservedValue.has(index),
+          (index) => tiles[index].terrain < 2 && tiles[index].feature !== 3,
+        );
+        const relocated = [...local].find((index) => tiles[index].resource !== 255 && resourcePlacementVerdict(placementMap, tiles[index]).valid);
+        if (relocated !== undefined) reservedValue.add(relocated);
+      }
+    }
   }
+  if (pattern === "CONTESTED_CENTRE") {
+    const contestedTiles = new Set(structure?.objects
+      .filter((object) => object.kind === "STRATEGIC_REGION" && ["CONTESTED", "OBJECTIVE"].includes(String(object.attributes?.role)))
+      .flatMap((object) => object.tileIndices) ?? []);
+    if (contestedTiles.size) {
+      const contrast = contract?.content.valueContrast ?? 0.45;
+      const scale = Math.max(0.65, Math.min(2.2, Math.sqrt(tiles.length / 960)));
+      const meaningfulCount = Math.max(1, Math.round((3 + contrast * 5) * scale));
+      const passableCapacity = [...contestedTiles].filter((index) => tiles[index].terrain >= 2 && tiles[index].elevation < 2).length;
+      const outsidePassableCapacity = tiles.reduce((count, tile, index) => count
+        + Number(!contestedTiles.has(index) && tile.terrain >= 2 && tile.elevation < 2), 0);
+      const densityCount = Math.ceil(passableCapacity * (0.14 + contrast * 0.22));
+      const placementMap = { terrains: GENERATED_TERRAINS, resources: mapResources };
+      const legalValue = tiles.flatMap((tile, index) => (tile.resource !== 255
+        && tile.wonder === 255
+        && tile.resourceAmount > 0
+        && resourcePlacementVerdict(placementMap, tile).valid) || (tile.wonder !== 255 && tile.resource === 255) ? [index] : []);
+      const insideWonders = [...contestedTiles].filter((index) => tiles[index].wonder !== 255 && tiles[index].resource === 255).length;
+      // The evidence contract compares density inside the retained objective
+      // footprint with density across the rest of the passable world. Solve
+      // that same inequality for the number of inside placements, then move
+      // only existing legal resources. This preserves counts and classes while
+      // making the authored value contrast causal rather than incidental.
+      const gradientTarget = 0.06 + contrast * 0.2;
+      const gradientCount = Math.ceil(passableCapacity
+        * (legalValue.length + gradientTarget * Math.max(1, outsidePassableCapacity))
+        / Math.max(1, passableCapacity + outsidePassableCapacity));
+      const desiredResources = Math.max(0, Math.max(meaningfulCount, densityCount, gradientCount) - insideWonders);
+      const totalResources = legalValue.filter((index) => tiles[index].resource !== 255).length;
+      relocateResourcesInto(tiles, mapResources, contestedTiles, Math.min(totalResources, desiredResources));
+    }
+    else concentrateExistingValue(skeleton.regions.filter((region) => region.effect === "VALUE"), contract?.content.valueContrast ?? 0.45);
+  }
+  if (pattern === "ROLE_ASYMMETRY") {
+    const tall = skeleton.regions.filter((region) => region.role === "TALL");
+    const war = skeleton.regions.filter((region) => region.role === "WAR");
+    const tallTiles = new Set(structure?.objects.filter((object) => object.kind === "STRATEGIC_REGION" && object.attributes?.contractRole === "TALL")
+      .flatMap((object) => object.tileIndices) ?? []);
+    if (!tallTiles.size) for (let index = 0; index < tiles.length; index += 1) if (tall.some((region) => regionContains(index, region, 1.2))) tallTiles.add(index);
+    const warTiles = new Set(structure?.objects.filter((object) => object.kind === "STRATEGIC_REGION" && object.attributes?.contractRole === "WAR")
+      .flatMap((object) => object.tileIndices) ?? []);
+    if (!warTiles.size) for (let index = 0; index < tiles.length; index += 1) if (war.some((region) => regionContains(index, region, 1.2))) warTiles.add(index);
+    const totalResources = tiles.filter((tile) => tile.resource !== 255).length;
+    const contrast = contract?.content.valueContrast ?? 0.5;
+    relocateResourcesInto(
+      tiles,
+      mapResources,
+      tallTiles,
+      Math.min(Math.ceil(totalResources * (0.18 + contrast * 0.25)), Math.ceil(tallTiles.size * (0.3 + contrast * 0.2))),
+    );
+    for (const index of warTiles) if (tiles[index].terrain === 2 && index % 4 === 0) tiles[index].terrain = 3;
+  }
+  if (skeleton.profileId !== "ICEHOUSE_EARTH") return;
+  const coldEligible = new Set(tiles.flatMap((tile, index) => tile.elevation < 2
+    && (tile.terrain === 5 || tile.terrain === 6 || tile.terrain < 2 && tile.feature === 3)
+    && tile.wonder === 255
+    && !tile.improvement ? [index] : []));
+  const totalResources = tiles.filter((tile) => tile.resource !== 255).length;
+  const desiredColdShare = Math.min(0.75, 0.12
+    + (contract?.content.hostileFrontierValue ?? 0.5) * 0.3
+    + (contract?.content.valueContrast ?? 0.5) * 0.22);
+  relocateResourcesInto(
+    tiles,
+    mapResources,
+    coldEligible,
+    Math.ceil(totalResources * desiredColdShare),
+    undefined,
+    undefined,
+    (index) => coldEligible.has(index),
+  );
+}
+
+/** Final rivers are known only after the hydrology pass. This content pass is
+ * deliberately relocation-only: it changes neither the user's resource count
+ * nor resource classes, and it never removes value from a major start's first
+ * three rings. */
+export function applyNarrativeRiverValleyContent(
+  tiles: Civ5Tile[],
+  mapResources: string[],
+  starts: Civ5StartLocation[],
+  width: number,
+  height: number,
+  wraps = false,
+  contract?: NarrativeGenerativeContract,
+) {
+  if (contract?.content.pattern !== "RIVER_VALLEYS") return;
+  const riverTiles = tiles.flatMap((tile, index) => tile.river > 0 ? [index] : []);
+  const valleyNeighborhood = new Set(riverTiles);
+  let valleyFrontier = [...riverTiles];
+  for (let radius = 0; radius < 2; radius += 1) {
+    const next: number[] = [];
+    for (const index of valleyFrontier) for (const neighbor of connectedNeighbors(index, width, height, wraps)) {
+      if (valleyNeighborhood.has(neighbor)) continue;
+      valleyNeighborhood.add(neighbor);
+      next.push(neighbor);
+    }
+    valleyFrontier = next;
+  }
+  const valleyTiles = new Set([...valleyNeighborhood].filter((index) => tiles[index].terrain >= 2 && tiles[index].elevation < 2));
+  if (!valleyTiles.size) return;
+  const protectedStarts = new Set<number>();
+  let frontier = starts.filter((start) => !start.cityState).map((start) => start.y * width + start.x);
+  for (const index of frontier) protectedStarts.add(index);
+  for (let radius = 0; radius < 3; radius += 1) {
+    const next: number[] = [];
+    for (const index of frontier) for (const neighbor of connectedNeighbors(index, width, height, wraps)) {
+      if (protectedStarts.has(neighbor)) continue;
+      protectedStarts.add(neighbor);
+      next.push(neighbor);
+    }
+    frontier = next;
+  }
+  const totalResources = tiles.filter((tile) => tile.resource !== 255).length;
+  const desiredShare = Math.min(0.52, 0.2 + contract.content.valueContrast * 0.42);
+  const desiredValleyDensity = 0.16 + contract.content.valueContrast * 0.32;
+  relocateResourcesInto(
+    tiles,
+    mapResources,
+    valleyTiles,
+    Math.max(2, Math.min(Math.ceil(totalResources * desiredShare), Math.ceil(valleyTiles.size * desiredValleyDensity))),
+    undefined,
+    (index) => !protectedStarts.has(index),
+  );
+}
+
+/** Moves, but never creates or removes, city-state starts into the contested
+ * theatres promised by Polis content contracts. The operation is deliberately
+ * deterministic and rechecks the same global spacing and workable-land
+ * conditions used by ordinary generation before accepting a destination. */
+export function applyNarrativeCityStateContestability(
+  starts: Civ5StartLocation[],
+  tiles: Civ5Tile[],
+  width: number,
+  height: number,
+  wraps: boolean,
+  contract: NarrativeGenerativeContract | undefined,
+  structure: GenerationStructure | undefined,
+  minimumSpacing = 5,
+) {
+  if (contract?.content.pattern !== "CONTESTED_CENTRE" || !structure) return 0;
+  const contested = new Set(structure.objects
+    .filter((object) => object.kind === "STRATEGIC_REGION" && ["CONTESTED", "OBJECTIVE"].includes(String(object.attributes?.role)))
+    .flatMap((object) => object.tileIndices));
+  if (!contested.size) return 0;
+  const contestedNeighborhood = expandedTileIndices(contested, 1, width, height, wraps);
+  const cityStates = starts.filter((start) => start.cityState);
+  if (!cityStates.length) return 0;
+  const required = Math.ceil(cityStates.length * contract.content.cityStateContestability);
+  const distance = (one: [number, number], two: [number, number]) => {
+    const cubeDistance = (a: [number, number], b: [number, number]) => {
+      const aq = a[0] - (a[1] - (a[1] & 1)) / 2;
+      const bq = b[0] - (b[1] - (b[1] & 1)) / 2;
+      return (Math.abs(aq - bq) + Math.abs(aq + a[1] - bq - b[1]) + Math.abs(a[1] - b[1])) / 2;
+    };
+    if (!wraps) return cubeDistance(one, two);
+    return Math.min(cubeDistance(one, two), cubeDistance([one[0] - width, one[1]], two), cubeDistance([one[0] + width, one[1]], two));
+  };
+  const qualifies = (start: Civ5StartLocation) => contestedNeighborhood.has(start.y * width + start.x);
+  let supplied = cityStates.filter(qualifies).length;
+  if (supplied >= required) return 0;
+  const spacing = Math.max(5, Math.round(minimumSpacing), contract.gameplay.minimumStartDistance);
+  const candidates = [...contestedNeighborhood].filter((index) => {
+    const tile = tiles[index];
+    if (!tile || tile.terrain < 2 || tile.elevation >= 2 || tile.wonder !== 255 || tile.improvement) return false;
+    return connectedNeighbors(index, width, height, wraps).filter((neighbor) => tiles[neighbor].terrain >= 2 && tiles[neighbor].elevation < 2).length >= 3;
+  });
+  const majors = starts.filter((start) => !start.cityState);
+  let moved = 0;
+  for (const cityState of cityStates.filter((start) => !qualifies(start))) {
+    if (supplied >= required) break;
+    const destinations = candidates.filter((index) => {
+      const x = index % width;
+      const y = Math.floor(index / width);
+      return starts.every((other) => other === cityState || distance([x, y], [other.x, other.y]) >= spacing);
+    }).sort((one, two) => {
+      const score = (index: number) => {
+        const x = index % width;
+        const y = Math.floor(index / width);
+        const majorDistances = majors.map((major) => distance([x, y], [major.x, major.y])).sort((a, b) => a - b);
+        const sharedAccess = majorDistances.length > 1 ? 12 - Math.abs(majorDistances[1] - majorDistances[0]) : 0;
+        const objectiveContact = connectedNeighbors(index, width, height, wraps).filter((neighbor) => contested.has(neighbor)).length;
+        const workable = connectedNeighbors(index, width, height, wraps).filter((neighbor) => tiles[neighbor].terrain >= 2 && tiles[neighbor].elevation < 2).length;
+        return sharedAccess * 3 + objectiveContact * 2 + workable;
+      };
+      return score(two) - score(one) || one - two;
+    });
+    const destination = destinations[0];
+    if (destination === undefined) continue;
+    cityState.x = destination % width;
+    cityState.y = Math.floor(destination / width);
+    const node = structure.strategicGraph?.nodes.find((candidate) => candidate.kind === "CITY_STATE" && candidate.owner === cityState.player);
+    if (node) { node.x = cityState.x; node.y = cityState.y; }
+    supplied += 1;
+    moved += 1;
+  }
+  const graph = structure.strategicGraph;
+  if (graph) {
+    const contestability = cityStates.length && majors.length > 1
+      ? cityStates.reduce((sum, cityState) => {
+        const distances = majors.map((major) => distance([cityState.x, cityState.y], [major.x, major.y])).sort((one, two) => one - two);
+        return sum + Math.max(0, Math.min(1, 1 - Math.abs(distances[1] - distances[0]) / Math.max(4, distances[1])));
+      }, 0) / cityStates.length
+      : 0;
+    graph.metrics.cityStateContestability = contestability;
+    graph.metrics.narrativeContestedCityStates = cityStates.filter(qualifies).length;
+    graph.metrics.narrativeContestedCityStateTarget = required;
+  }
+  return moved;
+}
+
+/** Applies the single authored site exception in the current catalogue:
+ * Brutal Opposing Fronts moves existing camps and ruins into the retained DMZ
+ * without changing their counts, then lays a sparse legal fallout trace. */
+export function applyNarrativeBrutalFrontierContent(
+  tiles: Civ5Tile[],
+  mapFeatures: string[],
+  starts: Civ5StartLocation[],
+  width: number,
+  height: number,
+  wraps: boolean,
+  contract: NarrativeGenerativeContract | undefined,
+  structure: GenerationStructure | undefined,
+  options: Pick<MapGenerationOptions, "style" | "barbarianAbundance" | "barbarianStartDistance" | "ruinAbundance" | "ruinStartDistance">,
+) {
+  const result = { movedBarbarians: 0, movedRuins: 0, addedFallout: 0 };
+  const policy = contract?.content.sitePolicy;
+  if (contract?.profileId !== "OPPOSING_FRONTS" || !policy || options.style !== policy.activationCharacter || !structure) return result;
+  const theatreObjects = structure.objects
+    .filter((object) => object.kind === "STRATEGIC_REGION" && ["CONTESTED", "OBJECTIVE", "BRUTAL_DMZ"].includes(String(object.attributes?.role)));
+  const theatre = new Set(theatreObjects.flatMap((object) => object.tileIndices));
+  if (!theatre.size) return result;
+  const distance = (one: [number, number], two: [number, number]) => {
+    const cubeDistance = (a: [number, number], b: [number, number]) => {
+      const aq = a[0] - (a[1] - (a[1] & 1)) / 2;
+      const bq = b[0] - (b[1] - (b[1] & 1)) / 2;
+      return (Math.abs(aq - bq) + Math.abs(aq + a[1] - bq - b[1]) + Math.abs(a[1] - b[1])) / 2;
+    };
+    if (!wraps) return cubeDistance(one, two);
+    return Math.min(cubeDistance(one, two), cubeDistance([one[0] - width, one[1]], two), cubeDistance([one[0] + width, one[1]], two));
+  };
+  const point = (index: number): [number, number] => [index % width, Math.floor(index / width)];
+  const farFromStarts = (index: number, buffer: number) => starts.every((start) => distance(point(index), [start.x, start.y]) >= Math.max(0, Math.round(buffer)));
+  const fallout = mapFeatures.indexOf("FEATURE_FALLOUT");
+  const expandTheatre = () => {
+    const additions = new Set<number>();
+    for (const index of theatre) for (const neighbor of connectedNeighbors(index, width, height, wraps)) {
+      if (theatre.has(neighbor) || tiles[neighbor].terrain < 2 || tiles[neighbor].elevation >= 2) continue;
+      additions.add(neighbor);
+    }
+    additions.forEach((index) => theatre.add(index));
+  };
+  let dmz = theatreObjects.find((object) => object.attributes?.role === "BRUTAL_DMZ");
+  if (!dmz?.attributes?.brutalFrontierNormalized) {
+    expandTheatre();
+    expandTheatre();
+    dmz = {
+      id: "brutal-frontier-dmz",
+      name: "Brutal Frontier DMZ",
+      kind: "STRATEGIC_REGION",
+      tileIndices: [...theatre].sort((one, two) => one - two),
+      attributes: { role: "BRUTAL_DMZ", brutalFrontierNormalized: true },
+    };
+    structure.objects.push(dmz);
+    theatreObjects.push(dmz);
+  }
+  const isOpenFalloutSite = (index: number) => {
+    const tile = tiles[index];
+    return tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255 && !tile.improvement
+      && farFromStarts(index, policy.falloutStartBuffer);
+  };
+  // The authored DMZ is a broad theatre, not merely its centreline. If later
+  // resource/site placement consumes every legal centreline tile, grow the
+  // retained strategic region over adjacent lowland before applying its site
+  // policy. This preserves ordinary counts and keeps fallout causally inside
+  // the frontier instead of clearing unrelated value or inventing a site.
+  if (fallout >= 0 && ![...theatre].some(isOpenFalloutSite)) {
+    for (let radius = 0; radius < 3 && ![...theatre].some(isOpenFalloutSite); radius += 1) {
+      expandTheatre();
+    }
+  }
+  if (dmz) dmz.tileIndices = [...theatre].sort((one, two) => one - two);
+  const reservedFalloutSites = new Set(
+    fallout >= 0
+      ? [...theatre].filter(isOpenFalloutSite).sort((one, two) => one - two).slice(0, 1)
+      : [],
+  );
+  const relocateSites = (kind: NonNullable<Civ5Tile["improvement"]>, share: number, startDistance: number) => {
+    const sites = tiles.flatMap((tile, index) => tile.improvement === kind ? [index] : []);
+    const desired = Math.ceil(sites.length * share);
+    const isCleanTheatreSite = (index: number) => {
+      const tile = tiles[index];
+      return theatre.has(index) && tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255
+        && tile.feature !== mapFeatures.indexOf("FEATURE_FALLOUT") && farFromStarts(index, startDistance)
+        && sites.every((other) => other === index || distance(point(index), point(other)) >= policy.siteSpacing);
+    };
+    let retained = sites.filter(isCleanTheatreSite).length;
+    if (!sites.length || retained >= desired) return 0;
+    const sources = sites.filter((index) => !isCleanTheatreSite(index)).sort((one, two) => one - two);
+    const targets = [...theatre].filter((index) => {
+      const tile = tiles[index];
+      return !reservedFalloutSites.has(index) && tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255 && !tile.improvement
+        && tile.feature !== mapFeatures.indexOf("FEATURE_FALLOUT") && farFromStarts(index, startDistance);
+    }).sort((one, two) => one - two);
+    let moved = 0;
+    for (const source of sources) {
+      if (retained >= desired) break;
+      const targetPosition = targets.findIndex((candidate) => sites.every((other) => other === source || distance(point(candidate), point(other)) >= policy.siteSpacing));
+      if (targetPosition < 0) continue;
+      const destination = targets.splice(targetPosition, 1)[0];
+      tiles[destination].improvement = kind;
+      delete tiles[source].improvement;
+      const sitePosition = sites.indexOf(source);
+      if (sitePosition >= 0) sites[sitePosition] = destination;
+      retained += 1;
+      moved += 1;
+    }
+    return moved;
+  };
+  if (options.barbarianAbundance !== "NONE") result.movedBarbarians = relocateSites("IMPROVEMENT_BARBARIAN_CAMP", policy.barbarianShare, options.barbarianStartDistance);
+  if (options.ruinAbundance !== "NONE") result.movedRuins = relocateSites("IMPROVEMENT_GOODY_HUT", policy.ruinShare, options.ruinStartDistance);
+
+  if (fallout < 0) return result;
+  const eligibleTheatre = [...theatre].filter((index) => {
+    const tile = tiles[index];
+    return tile.terrain >= 2 && tile.elevation < 2 && tile.resource === 255 && tile.wonder === 255 && !tile.improvement
+      && farFromStarts(index, policy.falloutStartBuffer);
+  });
+  const desiredFallout = Math.min(policy.falloutMaximum, Math.max(1, Math.round(eligibleTheatre.length * policy.falloutDensity)));
+  const falloutSites = tiles.flatMap((tile, index) => tile.feature === fallout ? [index] : []);
+  let retainedFallout = falloutSites.filter((index) => theatre.has(index)
+    && tiles[index].resource === 255 && tiles[index].wonder === 255 && !tiles[index].improvement
+    && farFromStarts(index, policy.falloutStartBuffer)).length;
+  for (const destination of eligibleTheatre.sort((one, two) => one - two)) {
+    if (retainedFallout >= desiredFallout) break;
+    if (tiles[destination].feature === fallout) continue;
+    if (falloutSites.some((existing) => distance(point(destination), point(existing)) < policy.siteSpacing)) continue;
+    tiles[destination].feature = fallout;
+    falloutSites.push(destination);
+    retainedFallout += 1;
+    result.addedFallout += 1;
+  }
+  return result;
 }
 
 function componentAssignments(map: Civ5Map) {
@@ -895,9 +1414,12 @@ function catalogNarrativeFindings(map: Civ5Map, skeleton: NarrativeSkeleton, pro
       break;
     case "SHATTERED_BASINS":
       {
-        const greatSeas = map.structure?.objects.filter((object) => object.kind === "INLAND_SEA" && object.tileIndices.length >= map.tiles.length * 0.08).length ?? 0;
-        const straits = map.structure?.objects.filter((object) => object.kind === "STRAIT").length ?? 0;
-        const canalSites = map.structure?.objects.filter((object) => object.attributes?.role === "CANAL_ISTHMUS").length ?? 0;
+        const greatSeas = map.structure?.objects.filter((object) => object.attributes?.nativeNarrative === true
+          && object.attributes?.role === "GREAT_INLAND_SEA" && object.tileIndices.length >= Math.max(3, waterTiles * 0.025)).length ?? 0;
+        const straits = map.structure?.objects.filter((object) => object.attributes?.nativeNarrative === true
+          && object.attributes?.role === "NARROW_STRAIT").length ?? 0;
+        const canalSites = map.structure?.objects.filter((object) => object.attributes?.nativeNarrative === true
+          && object.attributes?.role === "CANAL_ISTHMUS").length ?? 0;
         const incidentalIslands = landSizes.slice(1).filter((size) => size < map.tiles.length * 0.02).length;
         const waterShare = waterTiles / Math.max(1, map.tiles.length);
         topologyScore = clamp((clamp(greatSeas / 2) + clamp(straits) + clamp(canalSites) + clamp(1 - incidentalIslands / 3) + clamp((waterShare - 0.55) / 0.13)) / 5);
@@ -975,13 +1497,17 @@ export function assessNarrative(map: Civ5Map, recipe: GenerationRecipe): Narrati
     motifs.push(finding("viable-scarcity", "Viable but scarce island capacity", landSizes.length >= majorStarts.length ? 0.9 : landSizes.length / Math.max(1, majorStarts.length), `${landSizes.length} viable realms against ${majorStarts.length} starts.`, landSizes.length, `≥ ${majorStarts.length}`));
     antiMotifs.push(finding("ordinary-archipelago", "Avoid ordinary even archipelago", 1 - clamp((components.count - majorStarts.length * 2) / Math.max(1, majorStarts.length * 3)), `${components.count} total land components; ${smallComponents} are minor fragments.`));
   } else if (recipe.mapType === "SHATTERED_ARCHIPELAGO") {
-    const chainCount = skeleton.targets.parentSystems ?? 0;
+    const chainObjects = map.structure?.objects.filter((object) => object.attributes?.nativeNarrative === true && object.attributes?.role === "CHAIN") ?? [];
+    const arcObjects = map.structure?.objects.filter((object) => object.attributes?.nativeNarrative === true && object.attributes?.role === "FOLLOWS_ARC") ?? [];
+    const chainCount = chainObjects.length;
     const anchors = skeleton.regions.filter((region) => region.role === "ANCHOR");
     const narrativeLand = map.structure?.objects.filter((object) => object.kind === "NARRATIVE_REGION" && object.attributes?.role === "ANCHOR").reduce((sum, object) => sum + object.tileIndices.length, 0) ?? 0;
-    motifs.push(finding("parent-arcs", "Directional parent arcs", chainCount / 5, `${chainCount} retained parent systems with ${skeleton.relationships.filter((item) => item.kind === "FOLLOWS_ARC").length} explicit arcs.`, chainCount, "4–7"));
+    const organizedComponents = new Set(chainObjects.flatMap((object) => object.tileIndices.map((index) => components.assignment[index]).filter((component) => component >= 0)));
+    const structuredFamilies = Math.min(1, organizedComponents.size / Math.max(1, chainCount * 2));
+    motifs.push(finding("parent-arcs", "Directional parent arcs", chainCount / 5, `${chainCount} retained parent systems with ${arcObjects.length} exact latent arcs.`, chainCount, "4–7"));
     motifs.push(finding("anchor-rhythm", "Anchor–satellite–gap rhythm", narrativeLand > anchors.length * 4 ? 0.9 : narrativeLand / Math.max(1, anchors.length * 4), `${anchors.length} anchors retain ${narrativeLand} land tiles.`, anchors.length, "1–3 per system"));
     motifs.push(finding("deep-chain-gaps", "Deep gaps between systems", map.tiles.filter((tile) => tile.terrain === 0).length / Math.max(1, map.tiles.filter((tile) => tile.terrain < 2).length), "Deep ocean remains the dominant water terrain between parent systems."));
-    antiMotifs.push(finding("random-island-scatter", "Avoid independent random island scatter", chainCount / Math.max(1, components.count), `${components.count} land components are organized by ${chainCount} retained parent systems.`));
+    antiMotifs.push(finding("random-island-scatter", "Avoid independent random island scatter", structuredFamilies, `${organizedComponents.size} distinct island components participate in ${chainCount} exact parent families; ${components.count} total components include minor geographic punctuation.`));
   } else if (recipe.mapType === "GREAT_WATERSHEDS") {
     const rivers = map.structure?.riverSystems ?? [];
     const validOutlets = rivers.filter((river) => river.outlet !== undefined).length;

@@ -2,7 +2,7 @@
 
 ## Contract
 
-- Status: Implemented — all thirty-three runtime identities have deterministic retained programs and scored assessment; automated Phase 6 verification is complete. Continuous Identity Lab evidence remains necessary before human blind recognition can be called verified.
+- Status: Implemented. All thirty-three identities retain deterministic native programmes and owner-engine grammars. Inland Supercontinent implements its accepted dominant enclosed interior sea, inward drainage and broken peripheral highlands. The final automated matrix satisfies the structural, causal, content and legality floors or discloses an ordered weakening. Human blind recognition is not verified and still requires representative Identity Lab evidence.
 - User outcome: A generated map should communicate its selected Map Type through composition and relationships between features. If the Map Type label is hidden, a knowledgeable user should usually be able to recognize the premise from the map.
 - Scope: Narrative definitions for every Map Type currently exposed by Excogitare, including primary motifs, character interpretations and failure conditions. The definitions guide later generation, interface, diagnostics and testing work.
 - Current limitation: Every identity has an authoritative runtime profile, retained program and scored component assessment. Recognition remains a deterministic heuristic; Identity Lab evidence is still required to prove human blind recognition.
@@ -81,7 +81,7 @@ This register distinguishes the original concise specification from the detailed
 | Colliding Plates | Accepted | Compression dominates through sutures, paired ranges, plateaus, forelands, rain shadows and deliberate traversable passes rather than indiscriminate mountains. |
 | Ancient Continental Shields | Accepted | Deep time has worn ancient shields, ghost ranges and escarpments into broad river-shaped continents with fertile basins and mineral-rich exposed cores. |
 | Volcanic Island Arcs | Accepted | Several distinct rugged strings of volcanic pearls curve around sheltered atoll-like seas, aging from high active islands into eroded anchors and drowned rings. |
-| Inland Supercontinent | Accepted | The map is an entirely landbound world enclosed by peripheral highlands, with all water and drainage terminating in its remote continental heart. |
+| Inland Supercontinent | Accepted | One continental world surrounds a dominant enclosed interior sea; inward drainage, deserts and broken peripheral highlands make the sea the economic focus while rewarding risky frontier settlement. |
 | Monsoon Continents | Accepted | Directional seasonal moisture links warm seas and funnelling coasts to wet mountain fronts, great river basins, valid deltas and dry leeward interiors. |
 | Glacial World | Accepted | Ice devours the world while productive but resource-poor temperate capitals must support distant, valuable settlements across the frozen frontier. |
 | Imperial Ring | Accepted | Isolated outer founding enclaves expand through disguised geographic spokes into a broad shared axle where the principal competition begins. |
@@ -662,27 +662,29 @@ This register distinguishes the original concise specification from the detailed
 
 **Design state:** Accepted.
 
-**Narrative premise:** One dominant continental mass creates profound continentality, long drainage paths and an interior climatically distant from the sea.
+**Runtime state:** Implemented in the native Physical grammar; strict fixtures and the final automated reconstruction matrix pass.
 
-**Recognizable geography:** A dominant connected landmass; relatively small external seas; very long coast-to-interior distances; dry or seasonally extreme core; peripheral wet margins; long trunk rivers; interior basins and old uplands.
+**Narrative verb:** Encloses.
 
-**Character interpretations:** Realistic produces physically graded continentality. Fantastical creates an enormous hostile heartland and improbable peripheral climates. Mundane resembles a land-heavy pangaea. Brutal makes the interior sparse, dry and difficult while coastal refuges become fiercely valuable.
+**Narrative premise:** One continental world surrounds a dominant enclosed interior sea. Inward-flowing rivers, dry continental distances and broken peripheral highlands make that sea the economic and hydrologic heart of the map.
 
-**Failure conditions:** Several equal continents; every land tile close to water; uniformly moist interior; short rivers only; an archipelagic coastline; no dominant climatic contrast between core and margin.
+**Recognizable geography:** One connected continental framework; no external world ocean; one great central sea or tightly related interior basin system; long inward drainage; broad desert and steppe country; a broken, variable-thickness peripheral highland system; plural saddles and passes; valuable inland shores and risky remote uplands.
 
-**Landbound-world contract:** There is no external ocean: the map itself is the continent, and land continues across every applicable edge and wrapped seam. The emotional reference is an impossibly enlarged Australian interior, not an island-continent silhouette. A broken peripheral system of old highlands, plateaus and overlapping arcs encloses a deeper continental heart without becoming a geometric or inaccessible wall.
+**Failure conditions:** Zero water as the ordinary default; a tiny decorative central lake; several unrelated seas; an edge-connected ocean; a mechanically perfect one-tile mountain ring; an inaccessible heartland; uniformly worthless deserts; rivers that imply an external outlet; a generic land-heavy Pangaea.
 
-**Endorheic hydrology:** Every permanent watershed remains inside the continental world. Inward rivers terminate continuously and legally in lakes, wetlands, salt basins or significant enclosed seas; no river implies or reaches a nonexistent external ocean. Generate dry salt pans and former valleys at the lowest water settings, scattered terminal lakes and isolated living corridors at low settings, several lake and marsh systems at moderate settings, and occasional major inland seas at high settings. Water bodies must emerge from catchments and basin floors rather than decorative placement.
+**Continental enclosure:** The map itself remains one continental world, and water never connects to an external edge-ocean under the selected wrap model. The principal sea occupies a real continental depression and is large enough to govern navigation, rainfall, settlement and trade. Secondary terminal lakes may accompany it, but they remain part of the same inward-draining system rather than becoming unrelated decoration.
 
-**Water-control semantics:** For this identity, Water Percent means inland-water coverage and ocean coverage is always zero. The preferred inland-water envelope is approximately 0–22%, defaulting around 7–10%. At exactly zero, permanent rivers and lakes disappear together while dry valleys, salt flats and basin structure remain. Mountains should ordinarily be approximately 9–25%, defaulting around 15%. Low and high settings alter basin inundation without opening the world to an external sea.
+**Broken peripheral highlands:** Old ranges, plateaus and overlapping arcs cover roughly 55–75% of the outer continental frame. Their thickness varies across several tiles, their axes wander, and several broad saddles, river corridors and passes interrupt them. They may constrain access to the interior but may never form a geometric wall or seal any inhabited region.
 
-**Climate and access:** Peripheral highlands intercept moisture and organize a gradual transition into steppe, dry plains and arid heartland; rainfall, elevation and basin geometry complicate the pattern without producing a hard green ring around a uniform desert. Multiple broad saddles, passes and river corridors must connect the inner and outer regions. The peripheral system can constrain travel but may never seal the heartland or any inhabited basin.
+**Endorheic hydrology:** Watersheds begin in peripheral or intermediate highlands and flow continuously toward the interior sea, a connected terminal lake or a retained salt basin. Large rivers create fertile shore country, deltas and marshes. At very low water, the central sea contracts into lakes and salt flats while its drainage structure remains; at exactly zero, the identity is explicitly weakened into a dry-basin interpretation rather than treated as the preferred result.
 
-**Gameplay and population:** Peripheral highland civilizations control passes, headwaters and mineral country; heartland civilizations depend upon terminal rivers, lakes and rare fertile basins; vast dry regions separate the most valuable corridors. Inland seas become the world’s only major naval theatres. Starts must include viable interior systems rather than merely following globally attractive terrain, and balance must compare freshwater, land capacity and strategic access across highlands and basins.
+**Water and mountain semantics:** Water Percent represents enclosed continental water, never an external ocean. The preferred envelope should move upward during the Physical pilot so a dominant interior sea is the normal form. Mountains should remain broad enough to establish the peripheral system without turning most land into impassable relief. Explicit zero water remains legal and produces exposed basin floors, but Review must report the missing sea.
 
-**Character interpretation:** Realistic produces gradual continental drying, coherent rain shadows and credible terminal drainage. Fantastical creates immense hostile basins, lost plateaus and extraordinary enclosed seas. Mundane uses gentler relief, broader habitable corridors and more forgiving lake country. Brutal intensifies aridity, distance and scarcity around a few disputed rivers, passes and basin margins.
+**Climate, value and gameplay:** The sea moderates nearby shores and supports the densest ordinary settlement. Continental distance and rain shadows produce dry plains and desert beyond it. Remote deserts and highlands must reward risk through strategic minerals, luxuries, defensible passes, oases or river corridors rather than existing as empty padding. Inland naval control, pass control and food movement between fertile shores and resource frontiers should create different viable strategic obligations.
 
-**Evidence and diagnostics:** Retain external-ocean tile count, cross-edge land continuity, peripheral-highland coverage and gaps, interior depth, basin hierarchy, internal-water share, river continuity and legal termination, endorheic catchments, gradient smoothness, heartland aridity and viable area, pass redundancy, inland-sea navigation, start distribution and resource sufficiency. Reject any external ocean, unexplained decorative lakes, rivers without outlets, an impassable rim or a generic low-water Pangaea. Blind recognition should describe an entire landbound world enclosed by ancient highlands and draining into its own remote heart.
+**Character interpretation:** Realistic derives the basin, uplift, rain shadows and inward drainage from retained Physical causes. Fantastical enlarges the sea, salt wastes and broken ranges into a spectacular enclosed world. Mundane uses gentler arcs, broader passes and forgiving inland shores. Brutal makes productive land scarce, emphasizes frontier resources and turns passes and basin approaches into contested necessities.
+
+**Evidence and diagnostics:** Retain external-ocean tile count, enclosed-sea area and dominance, basin hierarchy, inward-flowing watershed share, valid terminal outlets, peripheral-highland coverage, thickness variation and gaps, pass redundancy, dry-country extent, shore productivity, frontier resource value, start obligations and inland naval capacity. Blind recognition should describe a continental world whose great interior sea gives life and strategic purpose to an otherwise dry, mountain-framed interior.
 
 ## Monsoon Continents
 
@@ -862,11 +864,11 @@ This register distinguishes the original concise specification from the detailed
 
 **Narrative premise:** Three explicit teams share a world in which every realm has a meaningful geographic frontier with both rivals. Every war between two creates an opportunity for the third, while natural-looking terrain conceals a deliberately tripolar political graph.
 
-**Team contract:** Ordinary generation divides 3, 6, 9 or 12 major players equally among three teams. Each realm receives a coherent internal core, connected teammate starts, two separate frontier systems and geographic depth around its original capitals. Randomise must select compatible counts. An incompatible count triggers a disclosed choice to change the count or accept asymmetric teams; it can never silently claim equal balance.
+**Team contract:** For compatible totals, ordinary generation distributes 3, 6, 9 or 12 major players evenly among three teams. That numerical allocation is not a claim that the realms are mathematically equal in area, yield or travel cost. Each realm receives a coherent internal core, connected teammate starts, two separate frontier systems and geographic depth around its original capitals. Randomise must select compatible counts. An incompatible count triggers a disclosed choice to change the count or accept asymmetric teams; it can never silently claim equal balance.
 
-**Pairwise topology:** Realm A borders B and C, B borders A and C, and C borders A and B without using another realm as transit. Each frontier supports more than one crossing, each realm can reinforce both fronts through internal routes, and the cost of redeployment is meaningful but competitively comparable. There is no required central heartland, radial convergence or single three-way gate.
+**Pairwise topology:** Realm A borders B and C, B borders A and C, and C borders A and B without using another realm as transit. Each frontier supports more than one crossing, each realm can reinforce both fronts through internal routes, and the cost of redeployment remains viable without needing to be identical. There is no required central heartland, radial convergence or single three-way gate.
 
-**Geographic disguise:** Give the three pairwise frontiers different natural expressions—mountain passes, short inland seas, river lowlands, forests, plateaus or broken coasts—while balancing their aggregate strategic cost. Realms may hook, offset and interlock around plausible ranges, basins and watersheds. Avoid equal angles, straight borders, repeated terrain and three visible wedges meeting at a centre.
+**Geographic disguise:** Give the three pairwise frontiers different natural expressions—mountain passes, short inland seas, river lowlands, forests, plateaus or broken coasts—while keeping every realm strategically viable. Realms may hook, offset and interlock around plausible ranges, basins and watersheds. Avoid equal angles, straight borders, repeated terrain and three visible wedges meeting at a centre.
 
 **Gameplay and anti-runaway structure:** Teams establish internal economies, scout both rivals, concentrate on one front, tolerate or negotiate with the other, intervene in foreign wars and redeploy as the balance changes. Conquest should lengthen supply and expose captured territory to the third realm. No realm may receive two exceptionally defensible fronts; a fallen capital cannot open every remaining capital; and both opponents must retain independent access to a weakened realm.
 
@@ -876,7 +878,7 @@ This register distinguishes the original concise specification from the detailed
 
 **Victory geography:** Domination requires at least two eventual invasion structures toward every original capital, while conquest exposes the attacker to the third team. Science requires comparable high-production capacity, connectivity and late strategic access. Culture requires direct contact and trade between every pair of realms. Diplomacy requires geographically contestable city states across all three relationships. Time requires comparable population, settlement and wonder opportunity. Civ V team-rule behavior must be validated separately from three-player free-for-all use.
 
-**Character interpretation:** Realistic creates three geological and watershed provinces joined by credible frontiers. Fantastical makes extraordinary realms collide across monumental seams. Mundane uses restrained familiar terrain without visible symmetry. Brutal increases front difficulty and redeployment cost while preserving pairwise access, team parity and the capacity to respond on both sides.
+**Character interpretation:** Realistic creates three geological and watershed provinces joined by credible frontiers. Fantastical makes extraordinary realms collide across monumental seams. Mundane uses restrained familiar terrain without visible symmetry. Brutal increases front difficulty and redeployment cost while preserving pairwise access, basic viability and the capacity to respond on both sides.
 
 **Evidence and diagnostics:** Retain team count and allocation, per-realm capacity and resource value, teammate connectivity, pairwise frontier existence, crossing count and independence, capital depth and reachability, two-front reinforcement and redeployment cost, third-party intervention paths, conquest supply extension, runaway exposure, city-state contestability, trade and cultural contact, production, late strategic access, seam contacts and visual triangularity. Blind recognition should describe three great powers that each border both rivals, where every war between two creates an opportunity for the third—not three artificial wedges on a game board.
 
@@ -928,6 +930,14 @@ This register distinguishes the original concise specification from the detailed
 
 ---
 
+## Current automated implementation evidence — 2026-08-16
+
+After retirement of the Lua-only tests and addition of legacy-workspace migration coverage, the complete TypeScript corpus passed **278/278**; the repeated owner-engine audit remains **33/33** with digest beginning `47a2fc…`. The strict proofs cover all thirty-three native identities, their retained causes and final relationships, lawful content, explicit-control handling, deterministic weakening and geography-only export boundary. TypeScript, ESLint and diff checks pass; the fresh rendered shell passed **24/24**; Vinext production, the Lua-free Pages export with **3 public files** and **23 JavaScript bundles**, and Node 24 Alpine build/start/HTTP checks pass. The reviewed contact-sheet hash begins `7ec925…`, and the final baseline digest begins `e6dae37…`.
+
+This evidence establishes implementation and automated structural conformance, not blind recognition. No current Human Identity Lab result demonstrates that people can distinguish every hidden identity from its nearest confusions, and representative real Civ V runtime loading remains separate empirical work. Dated phase checkpoints below are intentionally retained as history and do not replace this current boundary.
+
+---
+
 # Implementation guidance
 
 ## Rewrite ownership
@@ -938,7 +948,7 @@ Implementation proceeds through the four recognition benchmarks and then the Exc
 
 ## Narrative profile model
 
-A later implementation should give each Map Type an authoritative profile containing at least:
+The runtime gives each Map Type an authoritative profile containing at least:
 
 - `premise`: concise user-facing narrative.
 - `primaryMotifs`: relationships that define the type.
@@ -972,15 +982,17 @@ Scores should be explanatory rather than a single opaque percentage. A result ma
 Explicit controls remain authoritative, but the interface should disclose consequential conflicts. Examples:
 
 - Low water weakens Lonely Oceans, Drowned Shelves and Volcanic Island Arcs.
-- Very high water weakens Broken Pangaea, Lake Kingdoms and Inland Supercontinent.
+- Very high water weakens Broken Pangaea and Lake Kingdoms; Inland Supercontinent instead interprets Water Percent as enclosed continental water and weakens when its central sea overwhelms the surrounding land.
 - Zero mountains weakens Colliding Plates and Plate-Built Continents.
 - Sparse rivers weakens Great Watersheds.
-- Strong ocean influence weakens the continental core of Inland Supercontinent.
+- Strong external-ocean influence is incompatible with Inland Supercontinent; interior-sea moderation remains part of its revised contract.
 - Extreme geometry may make ring, front or basin relationships infeasible.
 
 The generator should attempt a lawful interpretation, report the weakened motifs and never silently change a deliberate user setting merely to improve its score.
 
-## Proposed implementation order
+## Historical implementation order
+
+The sequence below records how the earlier narrative phases were organized. It is not the current completion ledger; the [Narrative-native generation reconstruction](narrative-native-reconstruction.md) supersedes its runtime and verification boundary.
 
 1. Prototype Lonely Oceans, Broken Island Chains, Great Watersheds and Glacial World because their present output exposes four different identity failures: isolation, correlation, hydrological hierarchy and planetary climate.
 2. Add retained identity diagnostics and deterministic regression fixtures for those four types.
@@ -1000,7 +1012,9 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 6. Present the selected profile in Design and component assessment in Review. Stale structure evidence remains visibly stale; imported or Profile-only maps receive an honest unavailable/profile-only state rather than invented scores.
 7. Add deterministic benchmark fixtures across representative Scales, Characters and explicit conflicts; verify Randomise, worker/history/project/Civ5Map consequences, Repair cleanliness, complete regressions, README, production/Pages builds and Alpine runtime.
 
-## Completion gates
+## Historical Phase 4 completion gates
+
+These checkmarks record the Phase 4 checkpoint against the architecture that existed then. They are not proof that the later native reconstruction's whole-suite, baseline, rendered-interface, production, Pages or Alpine gates currently pass.
 
 - [x] All thirty current Map Types and three approved Polis additions are catalogued.
 - [x] Narrative premises, recognizable geography, character interpretations and failure conditions are specified.
@@ -1014,7 +1028,9 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 - [x] Deterministic identity tests and complete regressions pass.
 - [x] README, Pages and Alpine runtime reconciled.
 
-## Phase 4 implementation evidence
+## Historical Phase 4 implementation evidence
+
+The exact scores and test counts below are retained as a dated checkpoint. Native owner-engine generation changes the tiles, evidence and deterministic payloads, so these numbers cannot be cited as current reconstruction results.
 
 - `lib/narrative-map-types.ts` is the exhaustive, type-checked registry and deterministic skeleton compiler for all thirty selectable Map Types plus Three Realms, Thalassic League and Unequal Realms. All thirty-three verbs are unique; every profile has required motifs, anti-motifs, nearest confusions and a blind-recognition statement.
 - Lonely Oceans compiles one principal realm per supported major civilization, enforces exact requested water, withholds city states rather than sacrificing isolation, suppresses implausible deep-ocean fisheries and scores realm isolation, negative space and viable scarcity.
@@ -1025,32 +1041,36 @@ The generator should attempt a lawful interpretation, report the weakened motifs
 - Design explains whether the selected identity has an active recognition benchmark or only a retained profile. Review shows component evidence, weakened conditions and nearest-confusion risk. Profile-only maps receive `UNASSESSED`, not an invented grade.
 - Narrative skeletons and assessments survive worker structured cloning, generation history and checksummed `.excogitare` download/reimport. `.Civ5Map` export intentionally omits Excogitare-only evidence because Civ V has no supported section for it.
 - The deliberately reviewed Standard baseline scores are Lonely Oceans 98, Broken Island Chains 88, Great Watersheds 100 and Glacial World 96, all with zero validation errors. The complete automated evidence is recorded after the final Phase 4 build and runtime pass below.
-- Final verification passes 110 domain tests and 20 rendered-shell tests. TypeScript `--noEmit`, ESLint, `git diff --check`, the vinext production build, the Next.js GitHub Pages build and static-export verifier all pass. The final `node:24-alpine` image is running as `excogitare:1.3.0` at `http://localhost:3001` and returns HTTP 200.
+- At the historical Phase 4 checkpoint, 110 domain tests and 20 rendered-shell tests passed, together with TypeScript `--noEmit`, ESLint, `git diff --check`, the then-current Vinext and Pages builds, static-export verification and a responding `node:24-alpine` image. Those results predate the native reconstruction and are not its current verification evidence.
 - No new manual Civ V load was performed in Phase 4. The Civ5Map writer was not extended to carry private narrative data; generated benchmark files pass the existing parse/serialize, validation and Repair suites, while Civ V remains the final runtime authority.
 
-## Phase 5 implementation plan
+## Historical Phase 5 implementation plan
 
 1. Replace the Profile-only fallback for all eight Excogitare identities with distinct retained programs: crooked continental intrusions, a fractured dominant pangaea, drowned shelf clusters, enclosing lake kingdoms, island-continent realms, technology-gated deep-ocean divides, a true land-and-water maze, and composed patchwork provinces.
 2. Complete the eight remaining Eccentric identities as graph-scale compositions: an ecological transect, continents with different geological histories, inland-sea crossroads, resource-poor marches around mythic hearts, a continuous encircling land circuit, alien scars across one pangaea, a branching rift lattice, and complete peninsular provinces attached to a common backbone.
-3. Complete the six remaining Physical identities as retained process narratives: mixed-age dynamic geology, convergent collision belts, ancient cratonic shields, volcanic island arcs, an oceanless inward-draining supercontinent, and directional monsoon systems.
+3. Complete the six remaining Physical identities as retained process narratives: mixed-age dynamic geology, convergent collision belts, ancient cratonic shields, volcanic island arcs, the then-approved oceanless inward-draining supercontinent, and directional monsoon systems. The later engine–narrative rewrite supersedes that historical Inland Supercontinent contract with a dominant enclosed interior sea.
 4. Use one shared engine-realization interface but no generic identity fallback. Each Map Type must emit its own regions, paths, relationships, surface/process effects and diagnostic targets. Exact water, accessibility, legal rivers, starts and content remain downstream hard constraints.
 5. Extend Narrative Assessment to every compiled type using final-map component evidence: land/water component hierarchy, retained path expression, relief/climate/resource response, settlement capacity and anti-motif checks. A skeleton existing in metadata is not sufficient evidence.
 6. Exercise all twenty-two identities through deterministic seeds, representative Scale and World Character pairs, one compatible Archetype, explicit parameter conflicts, Repair, history/project cloning and nearest-confusion comparisons. Deliberately update the baseline only after structural review.
 7. Reconcile Design/Review wording, README, feature register, production and Pages builds, and the Node 24 Alpine runtime. Do not advance the Polis types or claim the full thirty-three-type catalogue complete in Phase 5.
 
-## Phase 5 implementation evidence
+## Historical Phase 5 implementation evidence
 
-- All eight Excogitare, eleven Eccentric and seven Physical Map Types now compile retained narrative geography. The twenty-two additions use distinct programs rather than a generic runtime fallback: crooked continental lobes and intrusions, fractured pangaeas, shelf clusters, enclosing land circuits, inland seas, rift cells and lattices, a true land-water maze, composed provinces, causal ecological and monsoon transects, plate histories, inland-sea chokepoints, mythic hearts and barren marches, complete peninsulas, collision belts, cratons, volcanic arcs, and an oceanless inward-draining supercontinent.
+This section records the superseded shared-realizer checkpoint. Where a bullet uses present tense to describe a still-retained behavior, its old scores, fixture hashes and packaging results nevertheless remain historical until the reconstruction matrix is complete.
+
+- Historical Phase 5 evidence: all eight Excogitare, eleven Eccentric and seven Physical Map Types compiled retained narrative geography under the contracts accepted at that time. Inland Supercontinent’s then-current implementation was the now-superseded oceanless form; the later Physical pilot now implements the revised interior-sea contract.
 - The original Excogitare path now consumes the same authoritative skeleton interface as Eccentric and Physical before starts and content. The shared interface preserves each engine's retained geographic objects, climate extremes, explicit dominant terrain, exact water request and accessible mountain target instead of flattening them into one generator.
 - Review assesses final tiles rather than accepting skeleton metadata as proof. It samples region and relationship expression, component hierarchy, boundary enclosure, dominant-land share, rivers, relief, wetland response, value contrast and anti-motif risk. Every Phase 5 default fixture receives a retained A or B recognition grade, zero parameter deviations and zero Repair issues.
-- Wonder Heartlands conservatively relocates already-legal resources and wonders into compatible heart tiles, preserving terrain, elevation and feature legality while creating the approved heart-to-march value contrast. Inland Supercontinent defaults to zero water; at that setting it produces neither ocean nor permanent rivers, matching its dry-valley and salt-basin contract.
+- Historical Phase 5 evidence: Wonder Heartlands conservatively relocated already-legal resources and wonders into compatible heart tiles. Inland Supercontinent then defaulted to zero water and produced neither ocean nor permanent rivers. That behavior was subsequently removed by the Physical pilot because it no longer satisfied the revised identity.
 - Start placement will not fall back into a passable pocket smaller than the validator's safe reachability threshold. When fragmented legal geography cannot fit the full request at five-hex separation, Create reduces the placed population rather than exporting a start that immediately requires Repair.
 - Deterministic coverage compiles all twenty-six non-Polis skeletons twice, generates and validates every twenty-two-type addition twice, and exercises representative Excogitare, Eccentric and Physical identities under Regional Scale, alternate World Character and a Temperate Archetype. Randomise remains bounded by every profile's approved water, mountain and river-density envelope.
 - The reviewed Phase 0 fixture changes deliberately because its formerly Profile-only Excogitare, Eccentric and Physical characterization cases and Pangaea Scenario case now have real narrative terrain, objects and scored evidence. The four Phase 4 benchmark fixtures preserve their approved identity behavior. Dimensions, requested water, start counts, export round trips and validation-error invariants remain intact.
 - Phase 5 does not advance Polis. Imperial Ring, Opposing Fronts, Contested Heartland and Rival Continents remain honestly Profile-only; Three Realms, Thalassic League and Unequal Realms remain approved future runtime profiles until Phase 6 integrates Match Intent.
-- Final verification passes 112 domain tests and 20 rendered-shell tests. TypeScript `--noEmit`, ESLint, `git diff --check`, the vinext production build, the Next.js GitHub Pages build and the static-export verifier all pass. The rebuilt `node:24-alpine` image `excogitare:1.3.0` is running at `http://localhost:3001` and returns HTTP 200. No new manual Civ V load was performed; generated fixtures pass the existing writer round-trip, validation and Repair suites, while Civ V remains the final runtime authority.
+- At the historical Phase 5 checkpoint, 112 domain tests and 20 rendered-shell tests passed, together with TypeScript `--noEmit`, ESLint, `git diff --check`, the then-current Vinext and Pages builds, static-export verification and a responding `node:24-alpine` image. No new manual Civ V load was performed at that checkpoint. These results predate the native reconstruction and are not a current packaging or game-compatibility claim.
 
-## Phase 6 implementation evidence
+## Historical Phase 6 implementation evidence
+
+The Polis behavior described below remains the migration substrate for the native strategic grammars. Its former A/B grades and reviewed payloads are historical structural evidence, not human recognition evidence or a substitute for the current final matrix.
 
 - Imperial Ring, Opposing Fronts, Contested Heartland and Rival Continents no longer share Profile-only fallback behavior. Their graph programs respectively enforce lateral ring travel and a shared centre, two coherent sides with plural breaches, many-to-many heartland approaches, and two blocs connected through plural expensive hinges.
 - Three Realms, Thalassic League and Unequal Realms are selectable runtime Map Types. Three Realms retains exactly three teams and all three mutual realm-contact pairs; Thalassic League places coastal starts in a redundant naval network; Unequal Realms retains explicit Tall, Wide, War and Turtle roles and is excluded from ordinary Randomise.

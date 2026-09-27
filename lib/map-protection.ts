@@ -9,7 +9,8 @@ import type {
   TileProtectionMask,
 } from "./authoring-schema.ts";
 import { adjacentCoordinates, featurePlacementVerdict, isPassableLand, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
-import { attachSemanticIdentities, markGenerationStructureStale, type GeographicObjectKind } from "./generation-structure.ts";
+import { attachSemanticIdentities, cloneGenerationStructure, generationPassChangesBetweenMaps, markGenerationStructureStale, type GeographicObjectKind } from "./generation-structure.ts";
+import { cloneGenerationRecipe } from "./generation-recipe.ts";
 import { balanceMapStarts, DEFAULT_GENERATION_OPTIONS } from "./map-generator.ts";
 import { RIVER_DATA_MASK, riverEdgeDefinitions } from "./rivers.ts";
 import type { GenerationConstraintPayload } from "./generation-constraints.ts";
@@ -228,7 +229,17 @@ export function protectSemanticObject(state: ProtectionState, map: Civ5Map, sema
   const inferredNetwork = watershed && retainedObject.objectKind !== "RIVER_SYSTEM"
     ? riverInference(map).map((network) => ({ network, overlap: overlapRatio(retainedObject.tileIndices, network.tileIndices) })).sort((one, two) => two.overlap - one.overlap)[0]
     : undefined;
-  const object = inferredNetwork?.overlap ? { ...retainedObject, tileIndices: inferredNetwork.network.tileIndices, source: inferredNetwork.network.source, outlet: inferredNetwork.network.outlet, inference: { ...retainedObject.inference, explanation: `${retainedObject.inference.explanation} Its protected drainage extent was reconstructed from ${inferredNetwork.network.inference.explanation.toLowerCase()}` } } : retainedObject;
+  let object = inferredNetwork?.overlap ? { ...retainedObject, tileIndices: inferredNetwork.network.tileIndices, source: inferredNetwork.network.source, outlet: inferredNetwork.network.outlet, inference: { ...retainedObject.inference, explanation: `${retainedObject.inference.explanation} Its protected drainage extent was reconstructed from ${inferredNetwork.network.inference.explanation.toLowerCase()}` } } : retainedObject;
+  if (watershed) {
+    object = {
+      ...object,
+      tileIndices: [...new Set([
+        ...object.tileIndices,
+        ...(object.source === undefined ? [] : [object.source]),
+        ...(object.outlet === undefined ? [] : [object.outlet]),
+      ])],
+    };
+  }
   const channels: ProtectionChannel[] = policy === "EXACT"
     ? ["TOPOLOGY", "ELEVATION", "CLIMATE", "FEATURES", "HYDROLOGY", "CONTENT"]
     : watershed ? ["TOPOLOGY", "ELEVATION", "HYDROLOGY"] : ["TOPOLOGY", "ELEVATION"];
@@ -523,18 +534,25 @@ export function applyProtectionState(source: Civ5Map, candidate: Civ5Map, state:
   });
   const protectStarts = channelSets.some((channels) => channels.has("STARTS"));
   const protectScenario = channelSets.some((channels) => channels.has("SCENARIO"));
-  const changedPasses = new Set<string>();
-  for (const channels of channelSets) {
-    if (channels.has("TOPOLOGY")) changedPasses.add("TOPOLOGY");
-    if (channels.has("ELEVATION")) changedPasses.add("RELIEF");
-    if (channels.has("CLIMATE") || channels.has("FEATURES")) changedPasses.add("CLIMATE");
-    if (channels.has("HYDROLOGY")) changedPasses.add("HYDROLOGY");
-    if (channels.has("CONTENT") || channels.has("SCENARIO")) changedPasses.add("CONTENT");
-    if (channels.has("STARTS")) changedPasses.add("STARTS");
+  const semanticStructure = candidate.structure ? {
+    ...attachSemanticIdentities(candidate.structure, candidate.width, candidate.height, source.structure),
+    // Lineage attachment must not promote a selective candidate whose pass
+    // evidence was already stale back to CURRENT.
+    evidenceState: candidate.structure.evidenceState,
+    staleReason: candidate.structure.staleReason,
+  } : candidate.structure;
+  let merged: Civ5Map = { ...candidate, tiles, startLocations: protectStarts ? source.startLocations.map((start) => ({ ...start })) : candidate.startLocations.map((start) => ({ ...start })), cities: protectScenario ? source.cities?.map((city) => ({ ...city })) : candidate.cities?.map((city) => ({ ...city })), structure: semanticStructure };
+  if (!protectStarts && !startsAreLegal(merged)) {
+    const balanced = balanceMapStarts(merged, { ...DEFAULT_GENERATION_OPTIONS, ...(candidate.generation ?? {}), players: candidate.startLocations.filter((start) => !start.cityState).length, cityStates: candidate.startLocations.filter((start) => start.cityState).length });
+    merged = { ...balanced, recipe: cloneGenerationRecipe(candidate.recipe ?? balanced.recipe) };
   }
-  const semanticStructure = candidate.structure ? attachSemanticIdentities(candidate.structure, candidate.width, candidate.height, source.structure) : candidate.structure;
-  let merged: Civ5Map = { ...candidate, tiles, startLocations: protectStarts ? source.startLocations.map((start) => ({ ...start })) : candidate.startLocations.map((start) => ({ ...start })), cities: protectScenario ? source.cities?.map((city) => ({ ...city })) : candidate.cities?.map((city) => ({ ...city })), structure: markGenerationStructureStale(semanticStructure, "Protected authoring constraints shaped and merged into a regenerated candidate.", changedPasses) };
-  if (!protectStarts && !startsAreLegal(merged)) merged = balanceMapStarts(merged, { ...DEFAULT_GENERATION_OPTIONS, ...(candidate.generation ?? {}), players: candidate.startLocations.filter((start) => !start.cityState).length, cityStates: candidate.startLocations.filter((start) => start.cityState).length });
+  const changedPasses = generationPassChangesBetweenMaps(candidate, merged);
+  merged = {
+    ...merged,
+    structure: changedPasses.size
+      ? markGenerationStructureStale(merged.structure, "Protected authoring constraints changed the selected native candidate during the lawful merge.", changedPasses)
+      : cloneGenerationStructure(merged.structure),
+  };
   const protectedIndices = new Set(channelSets.flatMap((channels, index) => channels.has("CONTENT") || channels.has("STARTS") || channels.has("SCENARIO") ? [index] : []));
   const placementConflict = protectedPlacementConflict(merged, protectedIndices, protectStarts);
   if (placementConflict) conflicts.push(placementConflict);

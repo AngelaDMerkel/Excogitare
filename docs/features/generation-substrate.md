@@ -2,7 +2,7 @@
 
 ## Contract
 
-- **Status:** Verified. The shared runtime substrate, dependency-aware evidence model, deterministic effort budgets, worker cancellation boundary and user-facing stale-state disclosure are implemented and verified.
+- **Status:** Verified. The original shared substrate reached its verified checkpoint. Reconstruction-specific native plans, content evidence, worker transport and stronger stale-state reconciliation pass the complete current matrix owned by the scoped reconstruction.
 - **User outcome:** Every authored map can be reproduced, migrated and inspected through one deterministic generation contract. Long work remains responsive and cancellable, and derived reports never masquerade as current evidence after their inputs change.
 - **Scope:** Frozen schemas, recipe normalization, migrations, deterministic pass graph, worker protocol, provenance, retained semantic identities, cloning and derived-evidence invalidation.
 - **Dependencies:** Existing Civ5Map parsing, the four generation engines and the ownership decisions in [`narrative-generation-rewrite.md`](narrative-generation-rewrite.md).
@@ -52,13 +52,11 @@ Colossal and Exhaustive combinations require memory estimates and warnings. Simp
 - [x] Stale derived evidence invalidates by dependency and Review names both the cause and affected passes.
 - [x] Randomise and imports produce honest normalized state.
 - [x] Existing generation, Repair, Civ5Map export and view persistence regressions pass.
-- [x] Type checking, lint, production build, Pages build and Alpine runtime pass.
-- [x] README/help, feature register, request, diff and current code are reconciled at the present partial boundary.
+- [x] Type checking, lint, production, Pages and Alpine passed at the original substrate checkpoint.
+- [x] Complete current type, lint, production, Pages and Alpine matrix rerun for the reconstruction extensions.
+- [x] README/help, feature register, final diff and current code reconciled after that matrix and baseline review.
 
 ## Current evidence
 
-- 116 automated tests pass: 99 TypeScript domain tests and 17 rendered-shell checks.
-- TypeScript checking and ESLint pass without warnings.
-- The production Vinext build and GitHub Pages static build pass, including the Pages artifact verifier.
-- The Node 24 Alpine image builds, starts and responds successfully over HTTP.
-- The rendered interface checks cover version 1.3.0, all five Create stages, memory disclosure and the stale-evidence Review state.
+- Historical substrate checkpoint: 116 automated tests passed—99 TypeScript domain tests and 17 rendered-shell checks—alongside TypeScript, ESLint, Vinext production, Pages/static-export and a responding Node 24 Alpine image. The rendered checks covered version 1.3.0, all five Create stages, memory disclosure and the stale-evidence Review state.
+- Current reconstruction coverage verifies deterministic native plans, complete requested recipe retention through STARTS transport, alias-safe history/checkpoints, semantic mismatch invalidation and suppressed stale Review scores. The complete corpus, lint, rendered-interface, production, Pages and Alpine results pass.

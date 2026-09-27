@@ -1,4 +1,5 @@
 import type { GenerationConstraintPayload } from "./generation-constraints.ts";
+import type { EngineNarrativeStageSnapshot } from "./engine-narrative-diagnostics.ts";
 
 export type GenerationPassDefinition = {
   id: string;
@@ -48,7 +49,14 @@ export type GenerationProgress = {
 };
 
 export type GenerationProgressListener = (stage: string, progress: GenerationProgress) => void;
-export type GenerationControl = { isCancelled?: () => boolean; constraints?: GenerationConstraintPayload };
+export type GenerationControl = {
+  isCancelled?: () => boolean;
+  constraints?: GenerationConstraintPayload;
+  /** Internal ordered grammar negotiation. Public recipes remain immutable; a
+   * candidate is regenerated against this exact authored relaxation prefix. */
+  narrativeRelaxationIds?: readonly string[];
+  onEngineNarrativeStage?: (snapshot: EngineNarrativeStageSnapshot) => void;
+};
 
 export class GenerationCancelledError extends Error {
   constructor() {

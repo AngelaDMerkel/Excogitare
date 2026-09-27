@@ -5,6 +5,7 @@ import { createExcogitareProject, parseExcogitareProject, serializeExcogitarePro
 import { generationRecipeFromOptions } from "../lib/generation-recipe.ts";
 import { DEFAULT_GENERATION_OPTIONS, generateMap, generateMapFromRecipe, MAP_PRESETS, randomGenerationOptions, resolveMapDimensions, type MapGenerationOptions, type MapPresetId } from "../lib/map-generator.ts";
 import { buildRepairIssues } from "../lib/map-repair.ts";
+import { NARRATIVE_AUTHORITY_ORDER, compileNarrativeConstraintProgram, type NarrativeProgramDefinition } from "../lib/narrative-constraints.ts";
 import { compileNarrativeSkeleton, NARRATIVE_PROFILES, narrativeProfile } from "../lib/narrative-map-types.ts";
 
 const BENCHMARKS = ["LONELY_OCEANS", "SHATTERED_ARCHIPELAGO", "GREAT_WATERSHEDS", "ICEHOUSE_EARTH"] as const;
@@ -90,6 +91,93 @@ test("compiled narrative skeletons are deterministic and disclose conflicting ex
   assert.match(conflicted.conflicts.join(" "), /outside the 84–94% narrative envelope/);
 });
 
+function contractTwoAFixture(): NarrativeProgramDefinition {
+  return {
+    schemaVersion: 1,
+    profileId: "LONELY_OCEANS",
+    engine: "ECCENTRIC",
+    essential: [
+      { id: "distant-realms", label: "Distant viable realms", semanticKey: "distant-realms", scope: "RELATIONSHIP", roles: ["major-realm"], weight: 1, tolerance: 0.08, scaleLaw: "PLAYER_COUNT", relaxable: false },
+      { id: "sparse-crossings", label: "Sparse early crossings", semanticKey: "sparse-crossings", scope: "MAP", roles: ["navigation-basin"], weight: 0.9, tolerance: 0.12, scaleLaw: "AREA", relaxable: true },
+    ],
+    preferred: [
+      { id: "negative-space", label: "Dramatic oceanic negative space", semanticKey: "negative-space", scope: "MAP", roles: ["open-ocean"], weight: 0.65, tolerance: 0.2, scaleLaw: "AREA", relaxable: true },
+    ],
+    prohibited: [
+      { id: "coastal-hopping", label: "Continuous coastal hopping", semanticKey: "coastal-hopping", scope: "RELATIONSHIP", roles: ["major-realm"], weight: 1, tolerance: 0.05, scaleLaw: "FIXED", relaxable: false },
+    ],
+    relaxationOrder: [
+      { id: "remove-ornament", label: "Reduce oceanic ornament", constraintIds: ["negative-space"], consequence: "The world remains isolated but loses some dramatic negative space." },
+      { id: "ease-crossings", label: "Ease the crossing threshold", constraintIds: ["sparse-crossings"], consequence: "Early contact becomes somewhat more likely while the major realms remain separate." },
+    ],
+    requiredEvidence: [
+      { id: "realm-separation-evidence", constraintId: "distant-realms", measureKey: "realm-separation", operator: "AT_LEAST", target: 0.7, minimumConfidence: 0.85 },
+      { id: "crossing-density-evidence", constraintId: "sparse-crossings", measureKey: "crossing-density", operator: "AT_MOST", target: 0.2, minimumConfidence: 0.8 },
+    ],
+  };
+}
+
+test("Contract 2A compiles an immutable, deterministic, seed-independent neutral program", () => {
+  const options = benchmarkOptions("LONELY_OCEANS", "contract-two-a-one");
+  const recipe = generationRecipeFromOptions(options);
+  recipe.scale = "REGIONAL";
+  const dimensions = resolveMapDimensions(options.size, options.geometry);
+  const definition = contractTwoAFixture();
+  const first = compileNarrativeConstraintProgram(definition, narrativeProfile("LONELY_OCEANS"), recipe, { ...dimensions, wraps: true });
+  const secondRecipe = generationRecipeFromOptions({ ...options, seed: "contract-two-a-two" });
+  secondRecipe.scale = "REGIONAL";
+  const second = compileNarrativeConstraintProgram(structuredClone(definition), narrativeProfile("LONELY_OCEANS"), secondRecipe, { ...dimensions, wraps: true });
+
+  assert.deepEqual(first, second);
+  assert.equal(first.inputHash, second.inputHash);
+  assert.equal(JSON.stringify(first).includes("contract-two-a"), false);
+  assert.deepEqual(first.authority.map((entry) => entry.authority), NARRATIVE_AUTHORITY_ORDER);
+  assert.deepEqual(first.constraints.essential.map((constraint) => constraint.id), ["distant-realms", "sparse-crossings"]);
+  assert.deepEqual(first.relaxationOrder.map((step) => step.order), [1, 2]);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.constraints.essential), true);
+  assert.throws(() => { (first.context as { width: number }).width = 1; }, TypeError);
+});
+
+test("Contract 2A retains conflicting explicit controls without changing the recipe", () => {
+  const options = benchmarkOptions("LONELY_OCEANS", "contract-two-a-conflict");
+  options.waterPercent = 30;
+  options.mountainPercent = 30;
+  const recipe = generationRecipeFromOptions(options);
+  const before = structuredClone(recipe);
+  const dimensions = resolveMapDimensions(options.size, options.geometry);
+  const program = compileNarrativeConstraintProgram(contractTwoAFixture(), narrativeProfile("LONELY_OCEANS"), recipe, { ...dimensions, wraps: true });
+
+  assert.deepEqual(recipe, before);
+  assert.equal(program.explicitInputs.waterPercent, 30);
+  assert.equal(program.explicitInputs.mountainPercent, 30);
+  assert.deepEqual(program.conflicts.map((conflict) => conflict.control), ["WATER_PERCENT", "MOUNTAIN_PERCENT"]);
+  assert.ok(program.conflicts.every((conflict) => conflict.effect === "WEAKENS_IDENTITY"));
+});
+
+test("Contract 2A rejects ambiguous, dangling, and tile-specific definitions", () => {
+  const options = benchmarkOptions("LONELY_OCEANS", "contract-two-a-invalid");
+  const recipe = generationRecipeFromOptions(options);
+  const dimensions = resolveMapDimensions(options.size, options.geometry);
+  const compile = (definition: NarrativeProgramDefinition) => compileNarrativeConstraintProgram(definition, narrativeProfile("LONELY_OCEANS"), recipe, { ...dimensions, wraps: true });
+
+  const duplicate = contractTwoAFixture();
+  duplicate.preferred[0].id = duplicate.essential[0].id;
+  assert.throws(() => compile(duplicate), /duplicate identifier/);
+
+  const dangling = contractTwoAFixture();
+  dangling.requiredEvidence[0].constraintId = "missing-constraint";
+  assert.throws(() => compile(dangling), /unknown constraint/);
+
+  const nonRelaxable = contractTwoAFixture();
+  nonRelaxable.relaxationOrder[0].constraintIds = ["distant-realms"];
+  assert.throws(() => compile(nonRelaxable), /non-relaxable constraint/);
+
+  const tileSpecific = contractTwoAFixture() as NarrativeProgramDefinition & { essential: Array<NarrativeProgramDefinition["essential"][number] & { tileIndices?: number[] }> };
+  tileSpecific.essential[0].tileIndices = [1, 2, 3];
+  assert.throws(() => compile(tileSpecific), /unsupported fields: tileIndices/);
+});
+
 test("Randomise respects each selected Map Type's ordinary narrative envelope", () => {
   let state = 1;
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 0x100000000; };
@@ -147,8 +235,9 @@ test("four benchmark identities survive generation, legality and retained assess
   const frozen = glacialLand.filter((tile) => tile.terrain === 5 || tile.terrain === 6);
   assert.ok(frozen.length / glacialLand.length >= 0.48);
   assert.ok(frozen.some((tile) => tile.resource !== 255));
-  assert.ok(glacial.structure!.objects.some((object) => object.kind === "ICE_SHEET"));
-  assert.ok(glacial.structure!.objects.some((object) => object.kind === "REFUGE"));
+  assert.ok(glacial.structure!.objects.some((object) => object.attributes?.nativeNarrative === true && object.attributes.role === "ICE_SHEET"));
+  assert.ok(glacial.structure!.objects.some((object) => object.attributes?.nativeNarrative === true && object.attributes.role === "REFUGE"));
+  assert.equal(glacial.structure!.narrativeNativeEvidence?.findings.find((finding) => finding.invariantId === "valuable-accessible-cold-frontier")?.status, "PROVEN");
 });
 
 test("the twenty-two Phase 5 identities compile into recognizable legal final maps", () => {

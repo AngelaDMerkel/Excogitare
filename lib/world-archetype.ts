@@ -81,6 +81,27 @@ function compatibleFeature(feature: SurfaceFeature, terrain: LandTerrain, elevat
   return feature;
 }
 
+/**
+ * Archetypes repaint a narrative world; they do not erase the native causal
+ * reservations that made it recognizable. Topology, relief, rivers and
+ * content are already left intact by this pass. These checks keep a proposed
+ * biome change only when it remains compatible with every exact native object
+ * bound to the tile.
+ */
+function matchesNativeNarrativeEffect(tile: Civ5Tile, effect: string) {
+  if (effect === "WATER" || effect === "WATER_PATH") return tile.terrain < 2;
+  if (effect === "LAND" || effect === "LAND_PATH" || effect === "TRANSITION") return tile.terrain >= 2;
+  if (effect === "RIDGE" || effect === "RIDGE_PATH" || effect === "VOLCANIC") return tile.terrain >= 2 && tile.elevation > 0;
+  if (effect === "LOWLAND") return tile.terrain >= 2 && tile.elevation < 2;
+  if (effect === "WET") return tile.terrain >= 2 && (tile.terrain === 2 || tile.feature === 0 || tile.feature === 1 || tile.feature === 2);
+  if (effect === "DRY" || effect === "HOT") return tile.terrain === 3 || tile.terrain === 4;
+  if (effect === "COLD") return tile.terrain === 5 || tile.terrain === 6;
+  if (effect === "VALUE") return tile.terrain >= 2 && (tile.resource !== 255 || tile.wonder !== 255 || tile.terrain === 2);
+  if (effect === "BARREN") return tile.terrain >= 2 && tile.feature === 255 && tile.resource === 255 && tile.wonder === 255;
+  if (effect === "RIVER_PATH") return tile.terrain >= 2 && tile.river > 0;
+  return true;
+}
+
 export function archetypeStrength(intensity: ArchetypeIntensity) {
   return intensity === "HINT" ? 0.32 : intensity === "TRANSFORMATIVE" ? 1 : 0.68;
 }
@@ -101,7 +122,22 @@ export function applyWorldArchetype(map: Civ5Map, archetype: WorldArchetype, int
   const salt = seedSalt(`${map.recipe?.settings.seed ?? map.generation?.seed ?? map.name}:${archetype}`);
   const strength = archetypeStrength(intensity);
   const regionScale = Math.max(3.5, Math.min(map.width, map.height) / 7);
+  const nativeEffectsByTile = new Map<number, Set<string>>();
+  const exactProtectedTiles = new Set<number>();
+  for (const object of map.structure?.objects ?? []) {
+    if (object.attributes?.nativeProtectedSemantic === true) for (const index of object.tileIndices) exactProtectedTiles.add(index);
+    if (object.attributes?.nativeNarrative !== true) continue;
+    const effect = String(object.attributes.effect ?? "");
+    if (!effect) continue;
+    for (const index of object.tileIndices) {
+      if (!Number.isInteger(index) || index < 0 || index >= map.tiles.length) continue;
+      const effects = nativeEffectsByTile.get(index) ?? new Set<string>();
+      effects.add(effect);
+      nativeEffectsByTile.set(index, effects);
+    }
+  }
   const tiles = map.tiles.map((source, index): Civ5Tile => {
+    if (exactProtectedTiles.has(index)) return { ...source };
     if (source.terrain < 2) return { ...source };
     const x = index % map.width;
     const y = Math.floor(index / map.width);
@@ -110,7 +146,11 @@ export function applyWorldArchetype(map: Civ5Map, archetype: WorldArchetype, int
     const terrain = weightedChoice(profile.terrainWeights, coherentUnit(x, y, regionScale, salt));
     const featureChoice = weightedChoice(profile.featureWeights, coherentUnit(x + 73, y + 41, regionScale * 0.58, salt ^ 0x9e3779b9));
     const feature = compatibleFeature(featureChoice, terrain, source.elevation);
-    return { ...source, terrain, feature };
+    const proposed = { ...source, terrain, feature };
+    const nativeEffects = nativeEffectsByTile.get(index);
+    return nativeEffects && [...nativeEffects].some((effect) => !matchesNativeNarrativeEffect(proposed, effect))
+      ? { ...source }
+      : proposed;
   });
   return { ...map, tiles };
 }
@@ -133,7 +173,10 @@ export function applyArchetypeContentEcology(map: Civ5Map, archetype: WorldArche
   if (archetype === "EXISTING" || archetype === "NARRATIVE_DEFAULT") return map;
   const profile = ARCHETYPE_PROFILES[archetype];
   const preferredResources = matchingIndices(map.resources, profile.resourceEcology, RESOURCE_ECOLOGY_TOKENS);
-  const preferredWonders = matchingIndices(map.wonders, profile.wonderTendencies, WONDER_TENDENCY_TOKENS);
+  const wonderGroups = profile.wonderTendencies
+    .map((tendency) => matchingIndices(map.wonders, [tendency], WONDER_TENDENCY_TOKENS))
+    .filter((indices) => indices.length > 0);
+  const preferredWonders = [...new Set(wonderGroups.flat())];
   if (!preferredResources.length && !preferredWonders.length) return map;
   const salt = seedSalt(`${map.recipe?.settings.seed ?? map.generation?.seed ?? map.name}:${archetype}:content`);
   const tiles = map.tiles.map((source, index) => {
@@ -148,6 +191,20 @@ export function applyArchetypeContentEcology(map: Civ5Map, archetype: WorldArche
     }
     return tile;
   });
+  // Each named tendency is an authored part of the coat, rather than an
+  // undifferentiated bag of possible substitutions. Give every tendency one
+  // legal representative when the regenerated map contains enough wonders;
+  // the remaining sites retain the deterministic weighted variety above.
+  const wonderTiles = tiles.flatMap((tile, index) => tile.wonder !== 255 ? [index] : []);
+  const reserved = new Set<number>();
+  for (const group of wonderGroups) {
+    const target = wonderTiles.find((index) => !reserved.has(index) && group.some((wonder) => wonderPlacementVerdict(map, { ...tiles[index], wonder }).valid));
+    if (target === undefined) continue;
+    const legal = group.filter((wonder) => wonderPlacementVerdict(map, { ...tiles[target], wonder }).valid);
+    if (!legal.length) continue;
+    tiles[target].wonder = legal[Math.min(legal.length - 1, Math.floor(hashUnit(target, salt ^ 0x1f83d9ab) * legal.length))];
+    reserved.add(target);
+  }
   return { ...map, tiles };
 }
 

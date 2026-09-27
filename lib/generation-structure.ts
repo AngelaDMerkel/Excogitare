@@ -1,6 +1,13 @@
 import type { Civ5Map } from "./civ5-map.ts";
+import { cloneEngineNarrativeEvidence, type EngineNarrativeEvidence } from "./engine-narrative-diagnostics.ts";
 import { GENERATION_PASS_DEFINITIONS, invalidatePassEvidence, type GenerationPassEvidence, type PassProvenance } from "./generation-pass-graph.ts";
 import type { NarrativeAssessment, NarrativeSkeleton } from "./narrative-types.ts";
+import type { NarrativeConstraintProgram } from "./narrative-constraints.ts";
+import type { NarrativeAdapterEvidence, NativeNarrativePlan } from "./narrative-engine-adapters.ts";
+import type { NarrativeProgramEvaluation, NarrativeSemanticModel } from "./narrative-semantics.ts";
+import type { NarrativeNativeEvidence } from "./narrative-native-evidence.ts";
+import type { NarrativeContentEvidence } from "./narrative-content-evidence.ts";
+import type { NarrativeNaturalismEvidence } from "./narrative-naturalism.ts";
 
 export type GeographicObjectKind = "SUBREGION" | "POLYGON" | "SUPERPOLYGON" | "CONTINENT" | "OCEAN_BASIN" | "INLAND_SEA" | "LAKE" | "RIFT" | "CLIMATE_REGION" | "BIOME_COLLECTION" | "TECTONIC_PLATE" | "ATMOSPHERIC_CELL" | "RAIN_SHADOW" | "GLACIAL_REGION" | "WATERSHED" | "STRATEGIC_REGION" | "BAY" | "CAPE" | "STRAIT" | "ARCHIPELAGO" | "FOREST_REALM" | "WASTE" | "RIVER_BASIN" | "NARRATIVE_REGION" | "NARRATIVE_PATH" | "ICE_SHEET" | "REFUGE";
 
@@ -79,6 +86,12 @@ export type StrategicGraph = {
   nodes: StrategicNode[];
   edges: StrategicEdge[];
   protectedTileIndices: number[];
+  /** Reservation classes are deliberately separate: only start safety may be flattened. */
+  startSafetyTileIndices?: number[];
+  homeCapacityTileIndices?: number[];
+  routeTileIndices?: number[];
+  barrierTileIndices?: number[];
+  objectiveTileIndices?: number[];
   relaxations: string[];
   metrics: Record<string, number>;
   matchIntent: {
@@ -95,6 +108,23 @@ export type StrategicGraph = {
   victoryFeasibility: VictoryFeasibilityFinding[];
 };
 
+export type GenerationReviewAxis = {
+  status: "PASS" | "WEAK" | "FAIL" | "UNASSESSED";
+  score: number;
+  summary: string;
+  details: string[];
+};
+
+export type GenerationReviewEvidence = {
+  schemaVersion: 1;
+  legal: GenerationReviewAxis;
+  narrative: GenerationReviewAxis;
+  engine: GenerationReviewAxis;
+  naturalism: GenerationReviewAxis;
+  perceptual: GenerationReviewAxis;
+  relaxations: string[];
+};
+
 export type GenerationStructure = {
   schemaVersion?: 1;
   engine: "EXCOGITARE" | "ECCENTRIC" | "PHYSICAL" | "POLIS";
@@ -105,7 +135,19 @@ export type GenerationStructure = {
   strategicGraph?: StrategicGraph;
   matchAssessment?: MatchFeasibilityAssessment;
   narrativeSkeleton?: NarrativeSkeleton;
+  narrativeProgram?: NarrativeConstraintProgram;
+  /** Exact engine-native plan used by the selected candidate. Project files
+   * retain this; geography-only Civ5Map serialization deliberately does not. */
+  narrativeNativePlan?: NativeNarrativePlan;
+  narrativeAdapter?: NarrativeAdapterEvidence;
+  narrativeEvaluation?: NarrativeProgramEvaluation;
+  narrativeSemanticModel?: NarrativeSemanticModel;
+  narrativeNativeEvidence?: NarrativeNativeEvidence;
+  narrativeContentEvidence?: NarrativeContentEvidence;
+  narrativeNaturalismEvidence?: NarrativeNaturalismEvidence;
+  reviewEvidence?: GenerationReviewEvidence;
   narrativeAssessment?: NarrativeAssessment;
+  engineNarrativeEvidence?: EngineNarrativeEvidence;
   semanticLineage?: SemanticLineage[];
   inputHash?: string;
   generatorVersion?: string;
@@ -187,17 +229,24 @@ export function attachSemanticIdentities(structure: GenerationStructure, width: 
 export function markGenerationStructureStale(structure: GenerationStructure | undefined, reason: string, changedPassIds?: Iterable<string>) {
   const cloned = cloneGenerationStructure(structure);
   if (!cloned) return undefined;
+  const changed = [...(changedPassIds ?? GENERATION_PASS_DEFINITIONS.map((definition) => definition.id))];
+  if (!changed.length) return cloned;
   const invalidated = invalidatePassEvidence(
     cloned.passEvidence,
-    changedPassIds ?? GENERATION_PASS_DEFINITIONS.map((definition) => definition.id),
+    changed,
     reason,
   );
   const stalePasses = invalidated.filter((entry) => entry.state === "STALE");
+  // Older retained structures may not have carried pass evidence. A known
+  // authored change is still stale even when there is no historical pass row
+  // available to mark. Conversely, an empty change set is a true no-op and is
+  // returned above without manufacturing staleness.
+  const stale = stalePasses.length > 0 || changed.length > 0;
   return {
     ...cloned,
     passEvidence: invalidated,
-    evidenceState: stalePasses.length ? "STALE" as const : "CURRENT" as const,
-    staleReason: stalePasses.length ? reason : undefined,
+    evidenceState: stale ? "STALE" as const : "CURRENT" as const,
+    staleReason: stale ? reason : undefined,
   };
 }
 
@@ -223,7 +272,6 @@ export function generationPassChangesBetweenMaps(previous: Civ5Map, current: Civ
   }
   if (JSON.stringify(previous.startLocations) !== JSON.stringify(current.startLocations)) changed.add("STARTS");
   if (previous.players !== current.players || JSON.stringify(previous.cities ?? []) !== JSON.stringify(current.cities ?? [])) changed.add("STARTS");
-  if (!changed.size && previous !== current) changed.add("LEGALITY");
   return changed;
 }
 
@@ -312,6 +360,7 @@ export function cloneGenerationStructure(structure: GenerationStructure | undefi
     mountainRanges: structure.mountainRanges.map((range) => ({ ...range, tileIndices: [...range.tileIndices] })),
     riverSystems: structure.riverSystems.map((river) => ({ ...river, tileIndices: [...river.tileIndices] })),
     diagnostics: { ...structure.diagnostics },
+    engineNarrativeEvidence: cloneEngineNarrativeEvidence(structure.engineNarrativeEvidence),
     semanticLineage: structure.semanticLineage?.map((lineage) => ({ ...lineage })),
     provenance: structure.provenance?.map((entry) => ({ ...entry, dependencies: [...entry.dependencies], ownedOutputs: [...entry.ownedOutputs], relaxations: [...entry.relaxations] })),
     passEvidence: structure.passEvidence?.map((entry) => ({ ...entry })),
@@ -320,6 +369,11 @@ export function cloneGenerationStructure(structure: GenerationStructure | undefi
       nodes: structure.strategicGraph.nodes.map((node) => ({ ...node })),
       edges: structure.strategicGraph.edges.map((edge) => ({ ...edge, tileIndices: [...edge.tileIndices] })),
       protectedTileIndices: [...structure.strategicGraph.protectedTileIndices],
+      startSafetyTileIndices: structure.strategicGraph.startSafetyTileIndices ? [...structure.strategicGraph.startSafetyTileIndices] : undefined,
+      homeCapacityTileIndices: structure.strategicGraph.homeCapacityTileIndices ? [...structure.strategicGraph.homeCapacityTileIndices] : undefined,
+      routeTileIndices: structure.strategicGraph.routeTileIndices ? [...structure.strategicGraph.routeTileIndices] : undefined,
+      barrierTileIndices: structure.strategicGraph.barrierTileIndices ? [...structure.strategicGraph.barrierTileIndices] : undefined,
+      objectiveTileIndices: structure.strategicGraph.objectiveTileIndices ? [...structure.strategicGraph.objectiveTileIndices] : undefined,
       relaxations: [...structure.strategicGraph.relaxations],
       metrics: { ...structure.strategicGraph.metrics },
       version: 2,
@@ -337,6 +391,15 @@ export function cloneGenerationStructure(structure: GenerationStructure | undefi
       conflicts: [...structure.narrativeSkeleton.conflicts],
       relaxations: [...structure.narrativeSkeleton.relaxations],
     } : undefined,
+    narrativeProgram: structure.narrativeProgram ? structuredClone(structure.narrativeProgram) : undefined,
+    narrativeNativePlan: structure.narrativeNativePlan ? structuredClone(structure.narrativeNativePlan) : undefined,
+    narrativeAdapter: structure.narrativeAdapter ? structuredClone(structure.narrativeAdapter) : undefined,
+    narrativeSemanticModel: structure.narrativeSemanticModel ? structuredClone(structure.narrativeSemanticModel) : undefined,
+    narrativeNativeEvidence: structure.narrativeNativeEvidence ? structuredClone(structure.narrativeNativeEvidence) : undefined,
+    narrativeContentEvidence: structure.narrativeContentEvidence ? structuredClone(structure.narrativeContentEvidence) : undefined,
+    narrativeNaturalismEvidence: structure.narrativeNaturalismEvidence ? structuredClone(structure.narrativeNaturalismEvidence) : undefined,
+    narrativeEvaluation: structure.narrativeEvaluation ? structuredClone(structure.narrativeEvaluation) : undefined,
+    reviewEvidence: structure.reviewEvidence ? structuredClone(structure.reviewEvidence) : undefined,
     narrativeAssessment: structure.narrativeAssessment ? {
       ...structure.narrativeAssessment,
       motifs: structure.narrativeAssessment.motifs.map((finding) => ({ ...finding })),
