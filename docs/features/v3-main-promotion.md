@@ -1,6 +1,6 @@
 # V3 main promotion
 
-Status: **In progress**.
+Status: **Verified** for the local main promotion and its recorded checks.
 
 ## Approved contract
 
@@ -29,4 +29,12 @@ The root returns an immediate HTML refresh to the existing V3 document, with an 
 - Docker's daemon socket is unavailable, so Alpine could not be rerun. Existing game/export limitations remain as documented.
 - The user’s later semantic-commit and merge approval supersedes no-commit notes in earlier V3 work records. Remote push remains a separate authorization.
 
-The homepage implementation is ready for the approved fast-forward merge. Final merge and checkout verification will be recorded after the operation.
+## Merge completed
+
+Main was fast-forwarded from `85040b8` to `7abdf7b`, containing the generator, interface and homepage semantic commits. The primary checkout is now on main. Its dependencies were installed from the frozen lockfile, and its production build, Pages build/asset verification and TypeScript check all pass. The checkout was clean before this final documentation update.
+
+The normal localhost preview on port 3033 and the production preview on port 3035 now serve the primary main checkout. The temporary Pages server was stopped. The V3 branch is retained and receives this documentation-only verification update by fast-forward.
+
+V2 was not merged. Its former branch and the local snapshot `archive(v2): preserve discarded work before approved V3 merge` provide recovery, while the primary checkout contains V3. No remote push or deployment was performed; origin/main remains unchanged by this task.
+
+Contract, semantic history, main/V3 tree equality, working-tree cleanliness, dependencies, builds, browser entry points and documentation were reconciled. The earlier V3 export and empirical gameplay limits remain unchanged.
