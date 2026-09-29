@@ -83,7 +83,7 @@ test("social artwork is a high-resolution render of a generated Excogitare map",
   assert.match(renderer, /THEN CHANGE IT\./);
 });
 
-test("README visual guide includes every generation engine and the principal workspaces", async () => {
+test("legacy visual guide includes every generation engine and the principal workspaces", async () => {
   const [
     readme,
     renderer,
@@ -96,7 +96,7 @@ test("README visual guide includes every generation engine and the principal wor
     createWorkflow,
     exploreLegend,
   ] = await Promise.all([
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/legacy-user-guide.md", import.meta.url), "utf8"),
     readFile(new URL("../scripts/render-readme-gallery.mjs", import.meta.url), "utf8"),
     readFile(new URL("../public/readme/excogitare-presets.png", import.meta.url)),
     readFile(new URL("../public/readme/eccentric-presets.png", import.meta.url)),
@@ -156,7 +156,7 @@ test("durable projects expose a transactional ZIP lifecycle without claiming bro
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/excogitare-project.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/authoring-schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/legacy-user-guide.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/features/excogitare-project-files.md", import.meta.url), "utf8"),
   ]);
   assert.match(source, /className={`project-status\$\{projectDirty \? " is-unsaved" : projectLastSavedAt \? " is-downloaded" : ""\}`}/);
@@ -380,7 +380,7 @@ test("workspace navigation separates Create, Repair, Lab, and Lua stages", async
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/create-workspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/legacy-user-guide.md", import.meta.url), "utf8"),
   ]);
   assert.match(workflow, /label: "Design"[\s\S]{0,500}label: "Refine"[\s\S]{0,500}label: "Iterate"[\s\S]{0,500}label: "Edit"[\s\S]{0,500}label: "Review"/);
   assert.match(source, /aria-label="Workspaces"/);
@@ -456,7 +456,7 @@ test("Identity Lab runs continuous four-choice blind reviews and documents its v
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/identity-lab-continuous.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/identity-lab.ts", import.meta.url), "utf8"),
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/legacy-user-guide.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/features/identity-lab.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/features/map-type-narrative-identities.md", import.meta.url), "utf8"),
   ]);
@@ -493,7 +493,7 @@ test("dense controls expose unclipped contextual help on hover and focus", async
   const [source, css, readme] = await Promise.all([
     readFile(new URL("../app/civ5-map-viewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/legacy-user-guide.md", import.meta.url), "utf8"),
   ]);
   assert.match(source, /const \[uiTooltip, setUiTooltip\] = useState<UiTooltip \| null>\(null\)/);
   assert.match(source, /closest<HTMLElement>\("\[data-tooltip\]"\)/);
