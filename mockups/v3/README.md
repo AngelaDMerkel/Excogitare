@@ -1,10 +1,10 @@
 # V3 · Generate and Refine
 
-V3 browser application on `codex/v3-world-discovery`, using the approved Wayfinder visual foundation. Its source remains in this directory; the production build copies it to `public/v3`.
+The approved V3 browser application, using the Wayfinder visual foundation. Its source remains in this directory; the production build copies it to `public/v3`.
 
 ## Open
 
-From the repository root, run `pnpm run build:v3` to build the worker and copy the application to `public/v3`. Production and Pages builds include this step; open `/v3/index.html` on the app host (under `/Excogitare` for Pages). For the existing standalone preview, serve this directory with `python3 -m http.server 3033 --bind 127.0.0.1` after building. All generation runs locally in a dedicated browser worker.
+From the repository root, run `pnpm run build:v3` to build the worker and copy the application to `public/v3`. Production and Pages builds include this step. V3 is the homepage at `/`; `/v3/index.html` is also available (both under `/Excogitare` for Pages). For the existing standalone preview, serve this directory with `python3 -m http.server 3033 --bind 127.0.0.1` after building. All generation runs locally in a dedicated browser worker.
 
 ## Theme
 
@@ -63,7 +63,7 @@ The latest 100 accepted snapshots and the selected map are stored locally in thi
 - `samples.js`, `prepare-fixtures.mjs`: reduced existing-engine map illustrations and optional preparation script.
 - `rules.ts`, `rules.js`: adapter and bundled existing parser, placement checks and map writer. Bundle with esbuild using `--bundle --format=iife --global-name=V3ExistingRules --outfile=rules.js`.
 
-The branch starts from the committed native-foundation base. Pending V2 application changes remain in their original checkout. V3 is packaged at `/v3/index.html`; the existing root application remains available. The native generator exposes one candidate-construction entry point for V3, while legacy generation callers retain their original contract.
+The branch starts from the committed native-foundation base. Pending V2 application changes remain in their original checkout. V3 is the homepage and is also packaged at `/v3/index.html`; the original application remains available at `/legacy`. The native generator exposes one candidate-construction entry point for V3, while legacy generation callers retain their original contract.
 
 ## Selected design
 

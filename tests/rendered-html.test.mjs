@@ -2,25 +2,25 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
+async function render(path = "/legacy") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
 
-test("server-renders the Civ5 map viewer shell", async () => {
+test("server-renders the original Civ5 map viewer at /legacy", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Excogitare — Civ5 Map Viewer &amp; Editor<\/title>/i);
+  assert.match(html, /<title>Excogitare — Map Generator &amp; Editor<\/title>/i);
   assert.match(html, /Excogitare/);
   assert.match(html, /v1\.3\.0/);
   assert.match(html, /The Twin Continents/);
@@ -676,4 +676,15 @@ test("Lua uses an editable, staged, multi-file project workspace", async () => {
   assert.match(runtime, /worker\.onmessageerror/);
   assert.match(css, /\.lua-source-editor,/);
   assert.match(css, /\.lua-pipeline li\.is-complete::before/);
+});
+
+
+test("the homepage loads the approved V3 application and branding", async () => {
+  const response = await render("/");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /http-equiv="refresh"[^>]+content="0;url=\/v3\/index\.html"/);
+  assert.match(html, /href="\/v3\/index\.html">Open Excogitare V3/);
+  assert.match(html, /\/v3\/brand\/favicon\.svg/);
+  assert.doesNotMatch(html, /The Twin Continents|Start locations/);
 });

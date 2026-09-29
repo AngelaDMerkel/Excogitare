@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const outputDirectory = new URL("../out/", import.meta.url);
 const outputPath = fileURLToPath(outputDirectory);
-const requiredFiles = ["index.html", "404.html", "wasmoon.wasm", "og-editor.png", "v3/index.html", "v3/generation-worker.js", "v3/generation-build.js", "v3/brand/favicon.svg"];
+const requiredFiles = ["index.html", "legacy/index.html", "404.html", "wasmoon.wasm", "og-editor.png", "v3/index.html", "v3/generation-worker.js", "v3/generation-build.js", "v3/brand/favicon.svg"];
 
 await Promise.all(requiredFiles.map((file) => access(new URL(file, outputDirectory))));
 
@@ -13,6 +13,10 @@ const html = await readFile(new URL("index.html", outputDirectory), "utf8");
 assert.match(html, /\/Excogitare\/_next\//, "The static page must load its Next assets below /Excogitare.");
 assert.match(html, /https:\/\/angeladmerkel\.github\.io\/Excogitare\/og-editor\.png/, "Social metadata must use the final Pages URL.");
 assert.doesNotMatch(html, /(?:src|href)="\/_next\//, "No Next asset may escape to the github.io origin root.");
+assert.match(html, /http-equiv="refresh"[^>]+content="0;url=\/Excogitare\/v3\/index\.html"/, "The homepage must open V3 below the Pages prefix.");
+assert.match(html, /\/Excogitare\/v3\/brand\/favicon\.svg/, "The homepage favicon must use the Pages prefix.");
+const legacyHtml = await readFile(new URL("legacy/index.html", outputDirectory), "utf8");
+assert.match(legacyHtml, /The Twin Continents/, "The original interface remains at /legacy.");
 
 async function collectJavaScript(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

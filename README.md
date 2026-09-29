@@ -1,11 +1,22 @@
 # Excogitare
 
-## V3 development branch
+## V3 · Generate and Refine
 
-The approved Generate/Refine interface now runs real V3 generation. Build with `pnpm run build:v3` and open `/v3/index.html` on the application host. The existing root application remains available. V3 uses seeded gameplay planning, the four native engines, climate/movement development, opening-resource normalization and final-map checks. Generation runs in a cancellable browser worker; the latest 100 accepted maps persist locally.
+Opening `/` takes you to the approved V3 application at `/v3/index.html`. It uses seeded gameplay planning, four native engines, climate and movement development, starting-resource normalization and independent finished-map checks. Generation runs in a cancellable browser worker; the latest 100 accepted maps persist locally in the browser.
 
-Run `pnpm run test:v3` and `pnpm run audit:v3` for the dedicated checks. [V3 implementation and verification](docs/features/v3-generation-pipeline.md) records the supported controls and limits. Resource budgets refer to planned starting areas; ordinary `.Civ5Map` exports let Civ V assign starts.
+Standard offers eleven intent controls. Advanced replaces those fields inside the same sidebar frame. Both include the full native size and geometry catalogue, with contextual warnings for experimental dimensions. Refine supports local imports, selected terrain edits and supported placement corrections.
 
+Run `pnpm install --frozen-lockfile`, then `pnpm dev`. Production and Pages builds automatically package V3. The direct application URL `/v3/index.html` remains available; the original V1 interface is at `/legacy`. GitHub Pages serves the same routes below `/Excogitare`.
+
+Run `pnpm run test:v3`, `pnpm run audit:v3` and `pnpm run audit:v3-landforms` for V3 checks. `pnpm test` runs the full regression and rendered-interface checks. [Implementation and limits](docs/features/v3-generation-pipeline.md) · [Main promotion](docs/features/v3-main-promotion.md).
+
+Resource budgets refer to planned starting areas; ordinary `.Civ5Map` exports let Civ V assign starts. V3 portable projects, browser download delivery and actual in-game compatibility retain the limitations recorded in the feature documentation.
+
+![V3 Generate and Refine](mockups/v3/consistent-standard-preview.jpg)
+
+## Original interface at /legacy
+
+The following documentation describes the retained original interface and its broader authoring tools.
 
 ![Excogitare — Civilization V Map Viewer & Editor](public/og-editor.png)
 
