@@ -1,0 +1,57 @@
+/* Both variants keep the selected Two Workspaces app and full rear canvas. */
+body[data-layout=two-workspaces][data-history-layout]:not(.mobile-simple) .panel{max-height:calc(100% - 50px)}
+body[data-layout=two-workspaces][data-history-layout]:not(.mobile-simple) .world-list{pointer-events:auto;overscroll-behavior:contain}
+
+/* A: the bottom strip begins past the sidebar. */
+body[data-layout=two-workspaces][data-history-layout=bottom]:not(.mobile-simple) .shelf{left:316px;right:16px;bottom:24px}
+body[data-layout=two-workspaces][data-history-layout=bottom]:not(.mobile-simple) .world-list{overflow-x:auto;overflow-y:hidden}
+
+/* B: a vertical strip sits on the right, with nearby controls moved clear. */
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .shelf{left:auto;right:16px;top:59px;bottom:24px;width:104px;height:auto;flex-direction:column;gap:8px;align-items:center}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-list{flex:1;min-height:0;height:auto;width:104px;flex-direction:column;align-items:center;padding:4px;gap:9px;overflow-x:hidden;overflow-y:auto}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card{flex:0 0 52px;height:52px;min-height:52px;width:88px;min-width:88px}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .shelf-filter{flex:0 0 32px}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .view-actions{right:130px}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-header{max-width:calc(100% - 549px)}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .zoom{right:130px;bottom:24px}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .map-meta{bottom:32px}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .preview-bar{right:130px;bottom:72px}
+/* Selected right column: bare previews, without white frames or card shadows. */
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card{padding:0;border:0;background:transparent;box-shadow:none;border-radius:0;opacity:.86}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card canvas{background:transparent;border-radius:0}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card:hover,body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card.current{background:transparent;box-shadow:none;opacity:1;outline:none}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card.current::before{content:"";position:absolute;left:-5px;top:8px;bottom:8px;width:2px;background:var(--accent)}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* Fade fully out 32px before the measured bottom of the left menu. */
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .shelf{bottom:auto;height:max(0px, calc(var(--history-menu-end, 85vh) - 91px))}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-list{padding-bottom:108px;scroll-padding-top:4px;scroll-padding-bottom:108px;scroll-snap-type:y proximity;scrollbar-width:none;-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 96px),transparent 100%);mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 96px),transparent 100%)}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-list::-webkit-scrollbar{display:none}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-card{scroll-snap-align:start}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .shelf-filter{position:absolute;top:-60px;right:36px;bottom:auto}
+body[data-layout=two-workspaces] .world-header{background:transparent!important;box-shadow:none!important;border:0!important;padding:0!important}
+
+/* A direct download action sits below the menu in both workspaces. */
+body[data-layout=two-workspaces]:has(.desktop-save):not(.mobile-simple) .panel{max-height:calc(100% - 108px)}
+.desktop-save{position:absolute;left:16px;top:calc(var(--history-menu-end, 75vh) + 12px);width:278px;min-height:40px;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;font-size:12px;font-weight:500;color:var(--ink);text-decoration:none;border-radius:8px;z-index:5}
+.desktop-save:hover{background:#f5f0e7}
+.desktop-save:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.desktop-save[aria-disabled=true]{opacity:.4;pointer-events:none}
+body.mobile-simple .desktop-save{display:none!important}
+
+/* Export action below the left menu. */
+.desktop-map-actions{position:absolute;left:16px;top:calc(var(--history-menu-end, 75vh) + 12px);width:278px;display:flex;align-items:stretch;gap:8px;z-index:8}
+.desktop-map-actions .desktop-save{position:static;inset:auto;flex:1;width:auto;min-width:0;padding:10px 8px}
+body.mobile-simple .desktop-map-actions{display:none!important}
+
+/* Atlas heading: a distinct serif, with space around the title. */
+body[data-layout=two-workspaces] .world-header h2{font-family:Baskerville,"Iowan Old Style","Palatino Linotype",Palatino,serif;font-weight:500;line-height:1.12;letter-spacing:-.65px;color:#35372f}
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .world-header{top:24px;left:326px;min-height:44px;max-width:calc(100% - 470px)}
+body[data-layout=two-workspaces]:not(.mobile-simple) .world-header h2{font-size:30px}
+body[data-layout=two-workspaces].mobile-simple .world-header{top:18px!important;left:20px!important;right:20px!important}
+body[data-layout=two-workspaces].mobile-simple .world-header h2{font-size:26px!important;letter-spacing:-.45px}
+
+/* Layers heads the history column and aligns with the sidebar. */
+body[data-layout=two-workspaces][data-history-layout=right]:not(.mobile-simple) .canvas-layers{top:16px;right:24px;bottom:auto;width:88px}
+.canvas-layers>button{width:100%;padding-inline:8px;gap:6px;background:var(--paper);color:var(--ink)}
+.canvas-layers>button:hover,.canvas-layers>button[aria-expanded=true]{background:var(--soft);color:var(--accent)}
+.canvas-layers .layers-menu{top:0;bottom:auto;right:calc(100% + 16px);min-width:190px}

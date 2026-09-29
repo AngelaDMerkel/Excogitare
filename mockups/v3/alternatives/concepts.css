@@ -1,0 +1,88 @@
+.concept-review{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #cac6ba;font:10px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.02em;background:#f1eee7;color:#777668}
+.concept-review a{color:inherit;text-decoration:none;padding:8px 0}.concept-review a:hover{color:var(--accent)}
+body[data-concept] .workspace{height:calc(100dvh - 34px)}
+body[data-concept] .standard-fields>label{grid-template-columns:90px minmax(0,1fr);font-size:11px}
+body[data-concept] .standard-fields{gap:9px;padding-block:15px}
+body[data-concept] .generation-modes,body[data-concept] .modes{display:none!important}
+.panel-label{font-size:12px;font-weight:500;padding:13px 16px 0;border-top:1px solid var(--line)}
+.inspector{position:absolute;right:16px;top:69px;width:222px;max-height:calc(100% - 180px);overflow:auto;scrollbar-width:thin;z-index:4}
+.inspector-head{font-size:12px;font-weight:500;padding:16px 16px 13px;border-bottom:1px solid var(--line)}
+.inspector .import-block{padding:12px}.inspector .tweak-block,.inspector .terrain-check{padding-inline:12px}.inspector .tweak-option{font-size:11px}
+body[data-concept=workspace] .atlas{right:254px;left:294px}
+body[data-concept=workspace] .shelf{right:254px;left:294px}
+body[data-concept=workspace] .panel-actions{display:flex!important;flex-direction:column;gap:5px}
+body[data-concept=workspace] .panel-actions>.text-button{min-height:27px;font-size:11px}
+.peer-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:6px;border-block:1px solid var(--line)}
+.peer-nav button{font-size:11px;padding-inline:3px;min-height:36px;color:var(--muted)}.peer-nav [aria-pressed=true]{background:var(--soft);color:var(--accent)}
+body[data-concept=peers] .panel{width:278px}
+body[data-concept=peers] .atlas,body[data-concept=peers] .shelf{left:316px}
+body[data-concept=peers] #advanced-generation>.legacy-group:first-child{margin-top:0}
+.concept-dialog{padding:0;border:1px solid var(--line);width:min(700px,calc(100vw - 36px));max-height:calc(100dvh - 74px);color:var(--ink);overflow:hidden}
+.concept-dialog[open]{display:flex;flex-direction:column}
+.concept-dialog::backdrop{background:#39372d55;backdrop-filter:blur(2px)}
+.dialog-head{display:flex;justify-content:space-between;align-items:center;padding:20px 22px 17px;border-bottom:1px solid var(--line);flex:none}
+.dialog-head h2{font:25px/1.1 Georgia,serif;letter-spacing:-.5px}
+.dialog-close{font-size:25px;min-width:34px;min-height:34px;color:var(--muted);font-weight:400;padding:0}
+.dialog-body{overflow:auto;min-height:0;scrollbar-width:thin;padding:4px 8px}
+.dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 22px;border-top:1px solid var(--line);flex:none}
+.dialog-actions .full{width:auto;min-width:130px}
+.concept-dialog .legacy-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 20px}
+.concept-dialog .legacy-group summary{font-size:12px;padding-block:13px}
+.concept-dialog .legacy-fields>label{font-size:11px}
+.concept-dialog .legacy-fields select,.concept-dialog .legacy-fields input:not([type=checkbox]){font-size:12px;height:36px}
+.editor-bar{position:absolute;left:16px;top:16px;display:flex;align-items:center;gap:8px;padding:7px 9px;z-index:6;border-radius:10px}
+.editor-brand{font:23px/1.2 Georgia,serif;letter-spacing:-.8px;margin:0 12px 0 5px}
+.editor-bar button{font-size:11px;min-height:33px}
+body[data-concept=editor] .atlas{left:16px;right:264px;top:81px}
+body[data-concept=editor] .shelf{left:16px;right:264px}
+body[data-concept=editor] .inspector{top:82px;width:230px;max-height:calc(100% - 130px)}
+.setup-choice{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 22px;font-size:12px;flex:none}
+.setup-choice select{width:190px;height:35px;font-size:12px}
+#new-map-dialog>.panel{position:static;width:auto;max-height:none;min-height:0;border:0;box-shadow:none;border-radius:0;background:transparent;overflow:hidden;flex:1}
+#new-map-dialog .brand{display:none}
+#new-map-dialog .panel-scroll{overflow:auto;padding:0 6px}
+#new-map-dialog .standard-fields{display:grid;grid-template-columns:1fr 1fr;gap:15px 22px;padding:9px 16px 22px}
+#new-map-dialog .standard-fields>label{display:flex;flex-direction:column;align-items:stretch;gap:6px;font-size:11px}
+#new-map-dialog .standard-fields select{height:36px;font-size:12px}
+#new-map-dialog .panel-actions{display:flex!important;justify-content:flex-end;padding:13px 22px}
+#new-map-dialog .panel-actions .full{width:150px}
+#new-map-dialog #advanced-generation{padding-bottom:12px}
+@media(min-width:1550px){body[data-concept=workspace] .atlas,body[data-concept=workspace] .shelf{left:322px;right:273px}body[data-concept=workspace] .inspector{right:24px;width:232px}body[data-concept=peers] .atlas,body[data-concept=peers] .shelf{left:326px}}
+@media(max-width:1050px) and (min-width:761px){body[data-concept=workspace] .panel{width:226px}body[data-concept=workspace] .atlas,body[data-concept=workspace] .shelf{left:261px;right:222px}body[data-concept=workspace] .inspector{width:194px}.inspector .area-controls button{font-size:10px}.inspector .tweak-option{font-size:10px}body[data-concept=peers] .panel{width:256px}body[data-concept=peers] .atlas,body[data-concept=peers] .shelf{left:293px}body[data-concept=editor] .inspector{width:216px}body[data-concept=editor] .atlas,body[data-concept=editor] .shelf{right:245px}.world-header h2{font-size:21px}}
+@media(max-width:760px){
+ .concept-review{height:32px;padding-inline:13px;font-size:9px}
+ body[data-concept] .workspace{height:auto;min-height:calc(100dvh - 32px)}
+ body[data-concept] .atlas{position:relative;inset:auto}
+ body[data-concept] .panel{position:relative;inset:auto;width:100%;max-height:none}
+ body[data-concept] .shelf{position:relative;inset:auto;order:4}
+ body[data-concept] .footnote{order:5}
+ body[data-concept] .inspector{position:relative;inset:auto;width:100%;max-height:none;margin-top:12px;order:2;overflow:visible}
+ body[data-concept=workspace] .panel{order:1}
+ body[data-concept=workspace] .panel-actions{flex-direction:row;align-items:center}
+ body[data-concept=workspace] .panel-actions>.primary{flex:1}
+ body[data-concept=workspace] .panel-actions>.text-button{width:auto;min-height:42px;padding-inline:9px}
+ body[data-concept] .standard-fields>label{grid-template-columns:105px minmax(0,1fr);font-size:12px}
+ .peer-nav button{min-height:41px;font-size:12px}
+ .inspector .tweak-block,.inspector .terrain-check,.inspector .import-block{padding-inline:16px}.inspector .tweak-option{font-size:12px}
+ .concept-dialog{width:calc(100vw - 24px);max-height:calc(100dvh - 36px)}
+ .dialog-head{padding:16px}.dialog-head h2{font-size:23px}
+ .dialog-actions{padding:12px 16px}.dialog-actions button{min-height:42px}
+ .concept-dialog .legacy-fields{grid-template-columns:1fr;gap:11px}
+ .concept-dialog .legacy-fields select,.concept-dialog .legacy-fields input:not([type=checkbox]){font-size:16px;height:40px}
+ body[data-concept=editor] .editor-bar{position:relative;inset:auto;order:-1;flex-wrap:wrap;gap:7px;margin-top:12px;padding:10px}
+ .editor-brand{font-size:22px;flex:1;margin:0}.editor-bar button{min-height:37px;font-size:10px;padding-inline:8px}
+ body[data-concept=editor] .inspector{order:1}
+ #new-map-dialog>.panel{position:static;width:auto;margin:0;max-height:none;min-height:0}
+ #new-map-dialog .panel-scroll{overflow:auto}
+ #new-map-dialog .standard-fields{grid-template-columns:1fr;gap:10px}
+ #new-map-dialog .standard-fields>label{display:grid;grid-template-columns:100px minmax(0,1fr);align-items:center;gap:8px}
+ #new-map-dialog .standard-fields select{height:40px;font-size:16px}
+ .setup-choice{padding:12px 16px}.setup-choice select{font-size:16px;height:40px;width:180px}
+ #new-map-dialog .panel-actions{display:flex!important}
+}
+/* Editor first has one Import action in its persistent command bar. */
+body[data-concept=editor] .editor-import-block{padding:0!important}
+body[data-concept=editor] .editor-import-block>#import-map{display:none}
+body[data-concept=editor] .editor-import-block .import-name{padding:10px 16px;margin:0}
+.peer-nav{grid-template-columns:repeat(2,1fr)}
+#new-map-dialog .advanced-expansion{margin-top:0}

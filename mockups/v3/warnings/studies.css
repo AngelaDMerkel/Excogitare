@@ -1,0 +1,30 @@
+/* Three isolated treatments share the exact same field and dropdown grid. */
+.warning-studies{overflow:hidden}
+.warning-study-bar{height:44px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:0 16px;background:var(--paper);border-bottom:1px solid var(--line);font-size:11px}
+.warning-study-bar>div{display:flex;gap:5px}
+.warning-study-bar a{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:6px;text-decoration:none;color:var(--muted);white-space:nowrap}
+.warning-study-bar a:hover{background:var(--soft)}
+.warning-study-bar a[aria-current=page]{background:var(--brand-night);color:var(--brand-paper)}
+.warning-study-bar a span{font-size:10px;font-variant-numeric:tabular-nums;opacity:.65}
+.study-label{color:var(--muted)}
+.warning-study-bar .study-main-link{justify-self:end;padding-inline:0;font-size:10px}
+body.warning-studies .workspace{height:calc(100dvh - 44px)!important}
+.warning-studies .dimension-caption{justify-content:space-between;gap:0}
+.dimension-select{display:block;position:relative;width:100%;min-width:0}
+.warning-studies .dimension-popover{width:278px;border:1px solid var(--line);padding:16px;border-radius:8px;box-shadow:0 7px 24px #252c4020}
+.warning-studies .dimension-warning{width:24px;min-height:24px;height:24px;flex:none}
+/* 01: a constant-width label column puts both warning symbols on one vertical line. */
+[data-warning-design=rail] .dimension-caption .dimension-warning{margin-left:auto}
+/* 02: values keep their existing left edge; help occupies a fixed slot before the arrow. */
+[data-warning-design=control] .dimension-select .dimension-warning{position:absolute;right:20px;top:50%;transform:translateY(-50%)}
+[data-warning-design=control] .has-dimension-warning select{padding-right:47px;border-color:#c8b183;background:#fdf9f1}
+/* 03: one full-width trigger addresses the selected dimensions together. */
+.dimension-notice{grid-column:1/-1;min-width:0;border:1px solid #d8c7a7;border-radius:7px;background:#fcf8ef;color:var(--ink);margin:1px 0 3px}
+.dimension-notice>button{width:100%;padding:8px 10px;min-height:31px;justify-content:flex-start;gap:7px;font-size:11px;color:var(--warning-ink)}
+.dimension-notice>button svg{width:14px;height:14px;color:var(--warning-ink)}
+.dimension-notice>button .disclosure-mark{margin-left:auto;color:var(--warning-ink)}
+.dimension-notice>button[aria-expanded=true] .disclosure-mark{transform:rotate(180deg)}
+.dimension-notice>button:hover,.dimension-notice>button[aria-expanded=true]{background:var(--warning-soft)}
+@media(max-width:1000px){.warning-study-bar{grid-template-columns:1fr;justify-items:center;padding-inline:8px}.study-label,.warning-study-bar .study-main-link{display:none}}
+body.warning-studies.mobile-simple .warning-study-bar{display:none}
+body.warning-studies.mobile-simple .workspace{height:100dvh!important}

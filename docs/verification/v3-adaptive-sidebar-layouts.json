@@ -1,0 +1,62 @@
+[
+  {
+    "allVisible": true,
+    "historyGap": 32,
+    "noScroll": true,
+    "saveGap": 12,
+    "saveInWindow": true,
+    "scale": "1",
+    "viewport": [
+      1600,
+      1000
+    ]
+  },
+  {
+    "allVisible": true,
+    "historyGap": 32,
+    "noScroll": true,
+    "saveGap": 12,
+    "saveInWindow": true,
+    "scale": "0.9943",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "allVisible": true,
+    "historyGap": 32,
+    "noScroll": true,
+    "saveGap": 12,
+    "saveInWindow": true,
+    "scale": "0.9091",
+    "viewport": [
+      1024,
+      600
+    ]
+  },
+  {
+    "allVisible": true,
+    "historyGap": 32,
+    "noScroll": true,
+    "saveGap": 12,
+    "saveInWindow": true,
+    "scale": "0.6889",
+    "viewport": [
+      900,
+      480
+    ]
+  },
+  {
+    "allVisible": true,
+    "historyGap": 32,
+    "noScroll": true,
+    "saveGap": 12,
+    "saveInWindow": true,
+    "scale": "0.9644",
+    "viewport": [
+      645,
+      720
+    ]
+  }
+]

@@ -42,3 +42,15 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Generated V3 application bundles
+/public/v3/
+/mockups/v3/generation-worker.js
+/mockups/v3/generation-build.js
+
+# Generated geometry review
+/mockups/v3/review/
+
+/mockups/v3/dimensions.js
+
+/mockups/v3/rules.js

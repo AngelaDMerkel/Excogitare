@@ -1,0 +1,343 @@
+[
+  {
+    "state": "randomise-idle",
+    "busy": null,
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 1,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "The Verdant Divide",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "randomise-active",
+    "busy": "true",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 1,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "hidden",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "Shaping land and water",
+    "title": "The Verdant Divide",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "randomise-complete",
+    "busy": "false",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 2,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "Veyra Shores",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "generate-idle",
+    "busy": "false",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 2,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "Veyra Shores",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "generate-active",
+    "busy": "true",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 2,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "hidden",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "Shaping land and water",
+    "title": "Veyra Shores",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "generate-cancelled",
+    "busy": "false",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 2,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "Veyra Shores",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "generate-running-to-completion",
+    "busy": "true",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 2,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "hidden",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "Shaping land and water",
+    "title": "Veyra Shores",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "generate-complete",
+    "busy": "false",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 3,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "Harrow Reach",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "failure-idle",
+    "busy": "false",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 3,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "Harrow Reach",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "failure-active",
+    "busy": "true",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 3,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "hidden",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "Shaping land and water",
+    "title": "Harrow Reach",
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "state": "generate-failed",
+    "busy": "false",
+    "footer": {
+      "height": 86.3648681640625,
+      "left": 16.992700576782227,
+      "top": 544.1163940429688,
+      "width": 273.9851989746094
+    },
+    "history": 3,
+    "panel": {
+      "height": 615.4739990234375,
+      "left": 16,
+      "top": 16,
+      "width": 275.9705810546875
+    },
+    "randomiseVisibility": "visible",
+    "save": {
+      "height": 40,
+      "left": 16,
+      "top": 643.46875,
+      "width": 275.96875
+    },
+    "scale": "0.9927",
+    "status": "",
+    "title": "Harrow Reach",
+    "viewport": [
+      1280,
+      720
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+/* Approved warning treatment: icons inside the control, before its native arrow. */
+:root{--warning-ink:#926018;--warning-soft:#f6ecd8}
+.dimension-caption{display:flex;align-items:center;min-width:0}
+.dimension-caption label{cursor:pointer}
+.dimension-select{position:relative;display:block;width:100%;min-width:0}
+.dimension-warning{position:absolute;right:20px;top:50%;transform:translateY(-50%);width:24px;min-height:24px;height:24px;padding:4px;border-radius:5px;color:var(--warning-ink);cursor:help}
+.dimension-warning svg{width:15px;height:15px}
+.dimension-warning:hover,.dimension-warning[aria-expanded=true]{background:var(--warning-soft)}
+.dimension-warning:focus-visible{outline:2px solid var(--warning-ink);outline-offset:1px}
+body[data-layout=two-workspaces]:not(.mobile-simple) #generate-panel .has-dimension-warning select{padding-right:47px;border-color:#c8b183;background:#fdf9f1}
+.dimension-popover{position:fixed;z-index:40;width:278px;max-width:calc(100vw - 32px);padding:16px;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:0 7px 24px #252c4020;color:var(--ink);font-size:12px;line-height:1.55}
+.dimension-popover strong{display:block;color:var(--brand-night);font-size:13px;font-weight:600;margin-bottom:7px}
+.dimension-popover p+p{margin-top:10px;color:var(--muted);font-size:11px}
+body.mobile-simple .dimension-popover{display:none}

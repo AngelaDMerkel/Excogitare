@@ -1,0 +1,14 @@
+/* Preview-only additions; the selected application does not load these styles. */
+:root{--warning-ink:#926018;--warning-soft:#f6ecd8}
+.standard-fields>.dimension-field{display:grid;grid-template-columns:90px minmax(0,1fr);align-items:center;gap:8px;font-size:11px}
+.legacy-fields>.dimension-field{display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--muted)}
+.dimension-caption{display:flex;align-items:center;gap:3px;min-width:0;align-self:stretch}
+.dimension-caption label{cursor:pointer}
+.dimension-warning{min-height:24px;height:24px;width:24px;flex:none;padding:4px;border-radius:5px;color:var(--warning-ink);cursor:help}
+.dimension-warning svg{width:15px;height:15px}
+.dimension-warning:hover,.dimension-warning[aria-expanded=true]{background:var(--warning-soft)}
+.dimension-warning:focus-visible{outline:2px solid var(--warning-ink);outline-offset:1px}
+.dimension-popover{position:fixed;z-index:40;width:290px;max-width:calc(100vw - 32px);padding:16px 18px;background:var(--paper);border:1px solid var(--line);border-left:3px solid #b88436;border-radius:9px;box-shadow:0 8px 28px #252c4026;color:var(--ink);font-size:12px;line-height:1.55}
+.dimension-popover strong{display:block;color:var(--brand-night);font-size:13px;font-weight:600;margin-bottom:7px}
+.dimension-popover p+p{margin-top:10px;color:var(--muted);font-size:11px}
+body.mobile-simple .dimension-popover{display:none}

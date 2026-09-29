@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const outputDirectory = new URL("../out/", import.meta.url);
 const outputPath = fileURLToPath(outputDirectory);
-const requiredFiles = ["index.html", "404.html", "wasmoon.wasm", "og-editor.png"];
+const requiredFiles = ["index.html", "404.html", "wasmoon.wasm", "og-editor.png", "v3/index.html", "v3/generation-worker.js", "v3/generation-build.js", "v3/brand/favicon.svg"];
 
 await Promise.all(requiredFiles.map((file) => access(new URL(file, outputDirectory))));
 
@@ -32,3 +32,11 @@ assert.match(javascript, /wasmoon\.wasm/, "The Lua worker must retain its WebAss
 assert.match(javascript, /Regenerating /, "The map-generation worker must be present in the static export.");
 
 console.log(`Verified GitHub Pages export: ${requiredFiles.length} public files and ${javascriptFiles.length} JavaScript bundles.`);
+
+const v3Html = await readFile(new URL("v3/index.html", outputDirectory), "utf8");
+assert.match(v3Html, /generation-client\.js/, "V3 must include its worker client.");
+for (const match of v3Html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
+  const asset = match[1].split("?")[0];
+  if (!asset.startsWith("data:") && !asset.startsWith("http")) await access(new URL(`v3/${asset}`, outputDirectory));
+}
+console.log("Verified V3 page, worker, styles, scripts and brand assets.");

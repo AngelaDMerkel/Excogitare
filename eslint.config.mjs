@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "public/v3/**",
+    "mockups/v3/generation-worker.js",
+    "mockups/v3/generation-build.js",
+    "mockups/v3/dimensions.js",
+    "mockups/v3/rules.js",
+    "mockups/v3/samples.js",
   ]),
 ]);
 

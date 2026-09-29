@@ -1,5 +1,12 @@
 # Excogitare
 
+## V3 development branch
+
+The approved Generate/Refine interface now runs real V3 generation. Build with `pnpm run build:v3` and open `/v3/index.html` on the application host. The existing root application remains available. V3 uses seeded gameplay planning, the four native engines, climate/movement development, opening-resource normalization and final-map checks. Generation runs in a cancellable browser worker; the latest 100 accepted maps persist locally.
+
+Run `pnpm run test:v3` and `pnpm run audit:v3` for the dedicated checks. [V3 implementation and verification](docs/features/v3-generation-pipeline.md) records the supported controls and limits. Resource budgets refer to planned starting areas; ordinary `.Civ5Map` exports let Civ V assign starts.
+
+
 ![Excogitare — Civilization V Map Viewer & Editor](public/og-editor.png)
 
 *excōgitāre* /ɛk.skoː.ɡɪˈtaː.rɛ/ — Latin: to devise, contrive, or think something into being.
