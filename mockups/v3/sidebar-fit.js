@@ -1,4 +1,4 @@
-/* Both Generate editors share the measured Standard frame and scale. */
+/* Every desktop workspace uses the measured Standard Generate frame and scale. */
 (() => {
   const panel = document.querySelector('.panel');
   const workspace = document.querySelector('.workspace');
@@ -14,11 +14,11 @@
   let queued = false;
   function fit() {
     queued = false;
-    const active = !document.body.classList.contains('mobile-simple') && !generate.hidden;
+    const active = !document.body.classList.contains('mobile-simple');
     document.body.toggleAttribute('data-fit-sidebar', active);
     let scale = 1, frame = '';
     if (active) {
-      // Hidden Standard remains a noninteractive layout reference in Advanced.
+      // Hidden Generate content remains a noninteractive reference in Advanced and Refine.
       // No selected controls are hidden or focused merely to measure the frame.
       const naturalHeight = Math.ceil(reference.reduce((sum, element) => sum + height(element), 0) + borders(panel) + borders(advanced));
       const boundary = Math.min(workspace.getBoundingClientRect().bottom - 16, footer.getBoundingClientRect().top - 12);

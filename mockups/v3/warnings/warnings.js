@@ -21,7 +21,7 @@
   function position() {
     if (!active) return;
     const anchor = active.button.getBoundingClientRect();
-    if (!anchor.width || document.body.classList.contains('mobile-simple')) { close(); return; }
+    if (!anchor.width || active.button.closest('[hidden]') || document.body.classList.contains('mobile-simple')) { close(); return; }
     const panel = document.querySelector('.panel').getBoundingClientRect();
     const left = Math.max(16, Math.min(panel.right + 12, innerWidth - popup.offsetWidth - 16));
     const top = Math.max(16, Math.min(anchor.top - 9, innerHeight - popup.offsetHeight - 16));
@@ -68,7 +68,7 @@
   document.addEventListener('pointerdown', event => { if (active && !active.button.contains(event.target) && !popup.contains(event.target)) close(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
   document.addEventListener('toggle', position, true);
-  document.querySelector('.modes').addEventListener('click', close);
+  document.addEventListener('v3-workspace-change', close);
   document.getElementById('reset-advanced').addEventListener('click', () => fields.forEach(field => field.refresh()));
   document.querySelector('.panel-scroll').addEventListener('scroll', close);
   window.addEventListener('resize', position);

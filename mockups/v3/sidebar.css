@@ -1,0 +1,32 @@
+/* Shared desktop sidebar frame, density and actions for every V3 workspace. */
+body[data-layout=two-workspaces]:not(.mobile-simple) .workspace{min-height:0}
+body[data-layout=two-workspaces]:not(.mobile-simple) .brand{padding-block:clamp(8px,calc((100dvh - 500px)/24),15px);flex:none}
+body[data-layout=two-workspaces]:not(.mobile-simple) .modes{flex:none}
+body[data-layout=two-workspaces]:not(.mobile-simple) .modes button{min-height:31px}
+body[data-layout=two-workspaces]{--sidebar-width:278px;--generation-gap:clamp(3px,calc((100dvh - 600px)/24),11px);--generation-padding:clamp(8px,calc((100dvh - 600px)/10),18px);--generation-control-height:clamp(26px,calc((100dvh - 480px)/8),35px)}
+body[data-layout=two-workspaces]:not(.mobile-simple) :is(.standard-fields,.legacy-fields){gap:var(--generation-gap);padding-inline:16px}
+body[data-layout=two-workspaces]:not(.mobile-simple) .standard-fields{padding-block:var(--generation-padding)}
+body[data-layout=two-workspaces]:not(.mobile-simple) .legacy-fields{padding-bottom:var(--generation-padding)}
+body[data-layout=two-workspaces]:not(.mobile-simple) :is(.standard-fields,.legacy-fields)>:is(label,.generation-field){display:grid;grid-template-columns:90px minmax(0,1fr);align-items:center;gap:8px;font-size:11px;line-height:1.25;color:var(--ink)}
+body[data-layout=two-workspaces]:not(.mobile-simple) #generate-panel :is(select,input:not([type=checkbox])){width:100%;min-width:0;height:var(--generation-control-height);padding:2px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font-size:11px;line-height:normal;color:var(--ink)}
+body[data-layout=two-workspaces]:not(.mobile-simple) .advanced-actions .text-button{font-size:11px}
+body[data-layout=two-workspaces]:not(.mobile-simple) .advanced-expansion>summary{min-height:32px;padding-block:8px;font-size:11px}
+body[data-layout=two-workspaces]:not(.mobile-simple) .panel-actions{flex:none;padding-block:8px}
+body[data-layout=two-workspaces]:not(.mobile-simple) .panel-actions .primary{min-height:35px}
+body[data-layout=two-workspaces][data-fit-sidebar]:not(.mobile-simple) .panel{width:var(--sidebar-width);height:var(--sidebar-frame-height);max-height:none;transform:scale(var(--sidebar-scale,1));transform-origin:top left}
+body[data-layout=two-workspaces][data-fit-sidebar]:not(.mobile-simple) .panel-scroll{position:relative;overflow:auto;flex:1;min-height:0;scrollbar-width:none}
+body[data-layout=two-workspaces]:not(.mobile-simple) .desktop-map-actions{width:calc(var(--sidebar-width) * var(--sidebar-scale,1))}
+body[data-layout=two-workspaces][data-fit-sidebar][data-history-layout=right]:not(.mobile-simple) .world-header{left:calc(48px + var(--sidebar-width) * var(--sidebar-scale,1));max-width:calc(100% - 192px - var(--sidebar-width) * var(--sidebar-scale,1))}
+
+body[data-layout=two-workspaces][data-fit-sidebar] .panel-scroll::-webkit-scrollbar{display:none}
+/* Keep an accurate measurement while excluding inactive fields from interaction and accessibility. */
+body[data-layout=two-workspaces][data-fit-sidebar] #standard-generation[hidden]{display:grid!important;position:absolute;inset:0 0 auto;visibility:hidden;pointer-events:none}
+
+/* Progress reuses the secondary action slot, so jobs never resize the frame. */
+.panel-actions{position:relative}
+.panel-actions .generation-status{position:absolute;left:16px;right:16px;bottom:8px;height:31px;margin:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;line-height:1.35;pointer-events:none}
+.panel-actions:has(.generation-status:not([hidden])) .randomise-all{visibility:hidden}
+
+/* Refine uses Generate's frame without presenting its controls or reserving an empty footer. */
+body[data-layout=two-workspaces][data-fit-sidebar] #generate-panel[hidden]{display:block!important;position:absolute;inset:0 0 auto;height:0;overflow:hidden;visibility:hidden;pointer-events:none}
+body[data-layout=two-workspaces][data-fit-sidebar] .panel.refine .panel-actions{display:block;position:absolute;left:0;right:0;bottom:0;visibility:hidden;pointer-events:none}

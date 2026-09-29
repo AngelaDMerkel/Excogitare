@@ -6,7 +6,7 @@ Status: **Implemented**. The scoped browser and packaging checks below are verif
 
 The user requests that the left sidebar scale to the screen so all dropdowns fit. In Standard, show all eleven dropdowns, the Advanced disclosure, Generate and Randomise without scrolling. Advanced uses exactly the same measured frame, scale, typography and label/control columns, and scrolls its longer contents within that frame. Reduce unused spacing with viewport height, then proportionally fit the whole panel if necessary. Keep Save immediately below its visible bounds and history fading before the panel bottom. React to resizing and progress text without losing control values or keyboard focus.
 
-The existing mobile Randomise/Save layout is retained. Advanced exposes dozens of grouped controls; keep its readable scrolling rather than shrinking every expanded group into illegible text. Refine keeps its existing scrollable inspection results. No generator, history, editing, import/export or legality behavior changes.
+The existing mobile Randomise/Save layout is retained. Advanced exposes dozens of grouped controls; keep its readable scrolling rather than shrinking every expanded group into illegible text. Refine shares the Generate reference frame and keeps its scrollable inspection results. No generator, history, editing, import/export or legality behavior changes.
 
 ## Acceptance
 
@@ -36,3 +36,8 @@ Changing Climate to Warm, opening and closing Advanced by keyboard, and returnin
 The initial version reset scaling when Advanced opened. The user identified that jump, along with stacked labels and inconsistent text/control sizes. Both Generate editors now use the measured Standard reference frame and shared row styles, including during resize. See [the correction and current verification](v3-consistent-generate-controls.md). The earlier measurements above document the initial revision; the new record is authoritative for mode-switch behavior.
 
 Generation progress now occupies the secondary-action slot, so it cannot change the measured frame. Active, completed, cancelled and failed Generate/Randomise states have identical recorded bounds; see the consistent-controls record.
+
+
+## Shared workspace frame
+
+Generate is now the sizing reference for Standard, Advanced and Refine. They load the same `sidebar.css`, and Refine resizing and populated checks preserve that frame. See [current implementation and measurements](v3-shared-workspace-sidebar.md).

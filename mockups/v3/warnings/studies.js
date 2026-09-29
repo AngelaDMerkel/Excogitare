@@ -33,7 +33,7 @@
   function position() {
     if (!active) return;
     const anchor = active.button.getBoundingClientRect();
-    if (!anchor.width || document.body.classList.contains('mobile-simple')) { close(); return; }
+    if (!anchor.width || active.button.closest('[hidden]') || document.body.classList.contains('mobile-simple')) { close(); return; }
     const scroller=document.querySelector('.panel-scroll').getBoundingClientRect();
     if(anchor.bottom<scroller.top||anchor.top>scroller.bottom){close();return;}
     const panel = document.querySelector('.panel').getBoundingClientRect();
@@ -100,7 +100,7 @@
   document.addEventListener('pointerdown', event => { if (active && !active.button.contains(event.target) && !popup.contains(event.target)) close(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
   document.addEventListener('toggle', position, true);
-  document.querySelector('.modes').addEventListener('click', close);
+  document.addEventListener('v3-workspace-change', close);
   document.getElementById('reset-advanced').addEventListener('click', () => fields.forEach(field => field.refresh()));
   document.querySelector('.panel-scroll').addEventListener('scroll', position);
   window.addEventListener('resize', position);

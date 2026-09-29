@@ -93,7 +93,14 @@ canvas.addEventListener('keydown',e=>{if(['+','=','-','0'].includes(e.key))e.pre
 if($('zoom-in'))$('zoom-in').onclick=()=>zoom(1.2);if($('zoom-out'))$('zoom-out').onclick=()=>zoom(.8);if($('fit'))$('fit').onclick=()=>fitMap(true);
 function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,4200);}
 function guardPreview(){if(generationPending){toast('Finish or cancel generation first.');return true;}if(historyBusy){toast('Local history is busy. Try again in a moment.');return true;}if(!preview)return false;toast('Keep or discard the proposed change first.');return true;}
-function setMode(next){mode=next;$('generate-panel').hidden=next!=='generate';$('refine-panel').hidden=next!=='refine';$('generate-tab').setAttribute('aria-selected',String(next==='generate'));$('refine-tab').setAttribute('aria-selected',String(next==='refine'));document.querySelector('.panel').classList.toggle('refine',next==='refine');if(next==='generate'){selectMode=false;selection=[];updateSelection();}document.dispatchEvent(new CustomEvent('v3-workspace-change',{detail:next}));}
+function setMode(next){
+  mode=next;
+  for(const workspace of ['generate','refine']){const inactive=next!==workspace,panel=$(`${workspace}-panel`);panel.hidden=inactive;panel.inert=inactive;panel.setAttribute('aria-hidden',String(inactive));$(`${workspace}-tab`).setAttribute('aria-selected',String(!inactive));}
+  const actions=document.querySelector('.panel-actions');actions.inert=next!=='generate';actions.setAttribute('aria-hidden',String(next!=='generate'));
+  document.querySelector('.panel').classList.toggle('refine',next==='refine');
+  if(next==='generate'){selectMode=false;selection=[];updateSelection();}
+  document.dispatchEvent(new CustomEvent('v3-workspace-change',{detail:next}));
+}
 $('generate-tab').onclick=()=>setMode('generate');$('refine-tab').onclick=()=>setMode('refine');
 document.querySelector('.modes').setAttribute('role','tablist');
 document.querySelectorAll('.modes button').forEach(button=>button.onkeydown=e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const next=mode==='generate'?'refine':'generate';setMode(next);$(`${next}-tab`).focus();}});

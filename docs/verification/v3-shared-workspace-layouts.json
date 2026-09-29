@@ -1,0 +1,577 @@
+[
+  {
+    "size": {
+      "width": 1600,
+      "height": 1000
+    },
+    "generate": {
+      "mode": "Generate",
+      "brand": [
+        17,
+        17,
+        276,
+        63
+      ],
+      "footerInert": false,
+      "footerVisibility": "visible",
+      "frame": "758px",
+      "generateAriaHidden": "false",
+      "generateHidden": false,
+      "generateInert": false,
+      "history": [
+        1480,
+        59,
+        104,
+        683
+      ],
+      "nav": [
+        17,
+        80,
+        276,
+        42
+      ],
+      "panel": [
+        16,
+        16,
+        278,
+        758
+      ],
+      "save": [
+        16,
+        786,
+        278,
+        40
+      ],
+      "scale": "1",
+      "scroll": [
+        564,
+        564
+      ],
+      "title": [
+        326,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        1600,
+        1000
+      ]
+    },
+    "refine": {
+      "mode": "Refine",
+      "brand": [
+        17,
+        17,
+        276,
+        63
+      ],
+      "footerInert": true,
+      "footerVisibility": "hidden",
+      "frame": "758px",
+      "generateAriaHidden": "true",
+      "generateHidden": true,
+      "generateInert": true,
+      "history": [
+        1480,
+        59,
+        104,
+        683
+      ],
+      "nav": [
+        17,
+        80,
+        276,
+        42
+      ],
+      "panel": [
+        16,
+        16,
+        278,
+        758
+      ],
+      "save": [
+        16,
+        786,
+        278,
+        40
+      ],
+      "scale": "1",
+      "scroll": [
+        651,
+        651
+      ],
+      "title": [
+        326,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        1600,
+        1000
+      ]
+    },
+    "matched": true
+  },
+  {
+    "size": {
+      "width": 1280,
+      "height": 720
+    },
+    "generate": {
+      "mode": "Generate",
+      "brand": [
+        16.992700576782227,
+        16.992700576782227,
+        273.9851989746094,
+        50.95343017578125
+      ],
+      "footerInert": false,
+      "footerVisibility": "visible",
+      "frame": "620px",
+      "generateAriaHidden": "false",
+      "generateHidden": false,
+      "generateInert": false,
+      "history": [
+        1160,
+        59,
+        104,
+        540.46875
+      ],
+      "nav": [
+        16.992700576782227,
+        67.94612884521484,
+        273.9851989746094,
+        41.693397521972656
+      ],
+      "panel": [
+        16,
+        16,
+        275.9705810546875,
+        615.4739990234375
+      ],
+      "save": [
+        16,
+        643.46875,
+        275.96875,
+        40
+      ],
+      "scale": "0.9927",
+      "scroll": [
+        438,
+        438
+      ],
+      "title": [
+        323.96875,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        1280,
+        720
+      ]
+    },
+    "refine": {
+      "mode": "Refine",
+      "brand": [
+        16.992700576782227,
+        16.992700576782227,
+        273.9851989746094,
+        50.95343017578125
+      ],
+      "footerInert": true,
+      "footerVisibility": "hidden",
+      "frame": "620px",
+      "generateAriaHidden": "true",
+      "generateHidden": true,
+      "generateInert": true,
+      "history": [
+        1160,
+        59,
+        104,
+        540.46875
+      ],
+      "nav": [
+        16.992700576782227,
+        67.94612884521484,
+        273.9851989746094,
+        41.693397521972656
+      ],
+      "panel": [
+        16,
+        16,
+        275.9705810546875,
+        615.4739990234375
+      ],
+      "save": [
+        16,
+        643.46875,
+        275.96875,
+        40
+      ],
+      "scale": "0.9927",
+      "scroll": [
+        525,
+        525
+      ],
+      "title": [
+        323.96875,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        1280,
+        720
+      ]
+    },
+    "matched": true
+  },
+  {
+    "size": {
+      "width": 1024,
+      "height": 600
+    },
+    "generate": {
+      "mode": "Generate",
+      "brand": [
+        16.909099578857422,
+        16.909099578857422,
+        250.9115753173828,
+        44.5458984375
+      ],
+      "footerInert": false,
+      "footerVisibility": "visible",
+      "frame": "545px",
+      "generateAriaHidden": "false",
+      "generateHidden": false,
+      "generateInert": false,
+      "history": [
+        904,
+        59,
+        104,
+        420.453125
+      ],
+      "nav": [
+        16.909099578857422,
+        61.45499801635742,
+        250.9115753173828,
+        38.18220138549805
+      ],
+      "panel": [
+        16,
+        16,
+        252.72979736328125,
+        495.4595031738281
+      ],
+      "save": [
+        16,
+        523.453125,
+        252.7265625,
+        40
+      ],
+      "scale": "0.9091",
+      "scroll": [
+        365,
+        365
+      ],
+      "title": [
+        300.7265625,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        1024,
+        600
+      ]
+    },
+    "refine": {
+      "mode": "Refine",
+      "brand": [
+        16.909099578857422,
+        16.909099578857422,
+        250.9115753173828,
+        44.5458984375
+      ],
+      "footerInert": true,
+      "footerVisibility": "hidden",
+      "frame": "545px",
+      "generateAriaHidden": "true",
+      "generateHidden": true,
+      "generateInert": true,
+      "history": [
+        904,
+        59,
+        104,
+        420.453125
+      ],
+      "nav": [
+        16.909099578857422,
+        61.45499801635742,
+        250.9115753173828,
+        38.18220138549805
+      ],
+      "panel": [
+        16,
+        16,
+        252.72979736328125,
+        495.4595031738281
+      ],
+      "save": [
+        16,
+        523.453125,
+        252.7265625,
+        40
+      ],
+      "scale": "0.9091",
+      "scroll": [
+        452,
+        452
+      ],
+      "title": [
+        300.7265625,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        1024,
+        600
+      ]
+    },
+    "matched": true
+  },
+  {
+    "size": {
+      "width": 900,
+      "height": 480
+    },
+    "generate": {
+      "mode": "Generate",
+      "brand": [
+        16.688899993896484,
+        16.688899993896484,
+        190.1363983154297,
+        33.756099700927734
+      ],
+      "footerInert": false,
+      "footerVisibility": "visible",
+      "frame": "545px",
+      "generateAriaHidden": "false",
+      "generateHidden": false,
+      "generateInert": false,
+      "history": [
+        780,
+        59,
+        104,
+        300.4453125
+      ],
+      "nav": [
+        16.688899993896484,
+        50.44499969482422,
+        190.1363983154297,
+        28.933799743652344
+      ],
+      "panel": [
+        16,
+        16,
+        191.51419067382812,
+        375.4505004882813
+      ],
+      "save": [
+        16,
+        403.4453125,
+        191.5078125,
+        40
+      ],
+      "scale": "0.6889",
+      "scroll": [
+        365,
+        365
+      ],
+      "title": [
+        239.5078125,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        900,
+        480
+      ]
+    },
+    "refine": {
+      "mode": "Refine",
+      "brand": [
+        16.688899993896484,
+        16.688899993896484,
+        190.1363983154297,
+        33.756099700927734
+      ],
+      "footerInert": true,
+      "footerVisibility": "hidden",
+      "frame": "545px",
+      "generateAriaHidden": "true",
+      "generateHidden": true,
+      "generateInert": true,
+      "history": [
+        780,
+        59,
+        104,
+        300.4453125
+      ],
+      "nav": [
+        16.688899993896484,
+        50.44499969482422,
+        190.1363983154297,
+        28.933799743652344
+      ],
+      "panel": [
+        16,
+        16,
+        191.51419067382812,
+        375.4505004882813
+      ],
+      "save": [
+        16,
+        403.4453125,
+        191.5078125,
+        40
+      ],
+      "scale": "0.6889",
+      "scroll": [
+        452,
+        452
+      ],
+      "title": [
+        239.5078125,
+        24,
+        230.328125,
+        44
+      ],
+      "viewport": [
+        900,
+        480
+      ]
+    },
+    "matched": true
+  },
+  {
+    "size": {
+      "width": 645,
+      "height": 720
+    },
+    "generate": {
+      "mode": "Generate",
+      "brand": [
+        16.962900161743164,
+        16.962900161743164,
+        265.7604064941406,
+        49.423851013183594
+      ],
+      "footerInert": false,
+      "footerVisibility": "visible",
+      "frame": "620px",
+      "generateAriaHidden": "false",
+      "generateHidden": false,
+      "generateInert": false,
+      "history": [
+        525,
+        59,
+        104,
+        521.9921875
+      ],
+      "nav": [
+        16.962900161743164,
+        66.38674926757812,
+        265.7604064941406,
+        40.441802978515625
+      ],
+      "panel": [
+        16,
+        16,
+        267.6861877441406,
+        596.9979858398438
+      ],
+      "save": [
+        16,
+        624.9921875,
+        267.6796875,
+        40
+      ],
+      "scale": "0.9629",
+      "scroll": [
+        438,
+        438
+      ],
+      "title": [
+        315.6796875,
+        24,
+        185.3125,
+        44
+      ],
+      "viewport": [
+        645,
+        720
+      ]
+    },
+    "refine": {
+      "mode": "Refine",
+      "brand": [
+        16.962900161743164,
+        16.962900161743164,
+        265.7604064941406,
+        49.423851013183594
+      ],
+      "footerInert": true,
+      "footerVisibility": "hidden",
+      "frame": "620px",
+      "generateAriaHidden": "true",
+      "generateHidden": true,
+      "generateInert": true,
+      "history": [
+        525,
+        59,
+        104,
+        521.9921875
+      ],
+      "nav": [
+        16.962900161743164,
+        66.38674926757812,
+        265.7604064941406,
+        40.441802978515625
+      ],
+      "panel": [
+        16,
+        16,
+        267.6861877441406,
+        596.9979858398438
+      ],
+      "save": [
+        16,
+        624.9921875,
+        267.6796875,
+        40
+      ],
+      "scale": "0.9629",
+      "scroll": [
+        525,
+        525
+      ],
+      "title": [
+        315.6796875,
+        24,
+        185.3125,
+        44
+      ],
+      "viewport": [
+        645,
+        720
+      ]
+    },
+    "matched": true
+  }
+]
