@@ -35,7 +35,7 @@ Main was fast-forwarded from `85040b8` to `7abdf7b`, containing the generator, i
 
 The normal localhost preview on port 3033 and the production preview on port 3035 now serve the primary main checkout. The temporary Pages server was stopped. The V3 branch received the verification update by fast-forward before the later cleanup recorded below.
 
-V2 was not merged. Its committed history is retained by the local snapshot `archive(v2): preserve discarded work before approved V3 merge` provide recovery, while the primary checkout contains V3. No remote push or deployment was performed; origin/main remains unchanged by this task.
+V2 was not merged. The local snapshot `archive(v2): preserve discarded work before approved V3 merge` retains its pending files and committed ancestry, while the primary checkout contains V3. Main was not pushed or deployed.
 
 Contract, semantic history, main/V3 tree equality, working-tree cleanliness, dependencies, builds, browser entry points and documentation were reconciled. The earlier V3 export and empirical gameplay limits remain unchanged.
 
@@ -44,4 +44,11 @@ Contract, semantic history, main/V3 tree equality, working-tree cleanliness, dep
 
 Following the user's cleanup request, the fully merged local `codex/v3-world-discovery` branch and discarded local `v2/map-studio` branch were deleted. The V3 worktree was archived through the managed worktree tool, preserving a recoverable snapshot. Its obsolete port-3034 preview was stopped first; the active previews on ports 3033 and 3035 continue to use main.
 
-Only the primary main checkout remains active. The V2 stash retains its pending work and its former branch-tip ancestry. The GitHub `v2/map-studio` branch still exists; deleting that remote branch awaits explicit authorization under the no-push instruction. No remote V3 branch exists. This cleanup changes no application code.
+Only the primary main checkout remains active. The V2 stash retains its pending work and its former branch-tip ancestry. The later GitHub cleanup is recorded below. No remote V3 branch exists. This cleanup changes no application code.
+
+
+## GitHub V2 archive and removal
+
+The user explicitly authorized tagging and deleting V2. The annotated tag `archive/v2-map-studio` was published and verified to resolve to the former branch tip `2b2ecb27ada35e0ad136c6f56d86adbdc0923f02`, preserving its complete committed ancestry on GitHub. Only after that verification was `v2/map-studio` deleted, guarded against a concurrent change to its tip.
+
+Remote verification confirms the branch is absent and the archive tag remains. Uncommitted V2 work remains recoverable in the local stash. GitHub main is still `85040b8`; publishing local main/V3 was not part of this authorization. No application code changed.
