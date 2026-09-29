@@ -1,0 +1,416 @@
+{
+  "cases": 23,
+  "generated": 22,
+  "capacityRejections": 1,
+  "rows": [
+    {
+      "request": {
+        "mode": "STANDARD",
+        "parameters": {
+          "size": "TINY",
+          "geometry": "NEEDLE"
+        }
+      },
+      "success": true,
+      "width": 13,
+      "height": 155,
+      "candidate": 1,
+      "ms": 183,
+      "seed": "extended-dimensions-0"
+    },
+    {
+      "request": {
+        "mode": "STANDARD",
+        "parameters": {
+          "size": "TINY",
+          "geometry": "RIBBON"
+        }
+      },
+      "success": true,
+      "width": 156,
+      "height": 13,
+      "candidate": 2,
+      "ms": 189,
+      "seed": "extended-dimensions-1"
+    },
+    {
+      "request": {
+        "mode": "STANDARD",
+        "parameters": {
+          "size": "TINY",
+          "geometry": "PIN"
+        }
+      },
+      "success": true,
+      "width": 7,
+      "height": 288,
+      "candidate": 1,
+      "ms": 98,
+      "seed": "extended-dimensions-2"
+    },
+    {
+      "request": {
+        "mode": "STANDARD",
+        "parameters": {
+          "size": "TINY",
+          "geometry": "STRING"
+        }
+      },
+      "success": false,
+      "error": "Could not satisfy this map request after 3 attempts. Not enough viable starting land for 4 players. Try more land or a larger map.",
+      "ms": 2413,
+      "seed": "extended-dimensions-3"
+    },
+    {
+      "request": {
+        "mode": "STANDARD",
+        "parameters": {
+          "size": "EXTREME"
+        }
+      },
+      "success": true,
+      "width": 180,
+      "height": 94,
+      "candidate": 1,
+      "ms": 3529,
+      "seed": "extended-dimensions-4"
+    },
+    {
+      "request": {
+        "mode": "STANDARD",
+        "parameters": {
+          "size": "COLOSSAL"
+        }
+      },
+      "success": true,
+      "width": 170,
+      "height": 110,
+      "candidate": 1,
+      "ms": 2345,
+      "seed": "extended-dimensions-5"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "NEEDLE",
+          "engine": "EXCOGITARE",
+          "preset": "CONTINENTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 13,
+      "height": 155,
+      "candidate": 1,
+      "ms": 382,
+      "seed": "extended-dimensions-6"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "RIBBON",
+          "engine": "EXCOGITARE",
+          "preset": "CONTINENTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 156,
+      "height": 13,
+      "candidate": 2,
+      "ms": 237,
+      "seed": "extended-dimensions-7"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "PIN",
+          "engine": "EXCOGITARE",
+          "preset": "CONTINENTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 7,
+      "height": 288,
+      "candidate": 3,
+      "ms": 381,
+      "seed": "extended-dimensions-8"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "STRING",
+          "engine": "EXCOGITARE",
+          "preset": "CONTINENTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 284,
+      "height": 7,
+      "candidate": 2,
+      "ms": 267,
+      "seed": "extended-dimensions-9"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "NEEDLE",
+          "engine": "ECCENTRIC",
+          "preset": "LIVING_WORLD",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 13,
+      "height": 155,
+      "candidate": 3,
+      "ms": 1441,
+      "seed": "extended-dimensions-10"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "RIBBON",
+          "engine": "ECCENTRIC",
+          "preset": "LIVING_WORLD",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 156,
+      "height": 13,
+      "candidate": 1,
+      "ms": 656,
+      "seed": "extended-dimensions-11"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "PIN",
+          "engine": "ECCENTRIC",
+          "preset": "LIVING_WORLD",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 7,
+      "height": 288,
+      "candidate": 1,
+      "ms": 1619,
+      "seed": "extended-dimensions-12"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "STRING",
+          "engine": "ECCENTRIC",
+          "preset": "LIVING_WORLD",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 284,
+      "height": 7,
+      "candidate": 1,
+      "ms": 708,
+      "seed": "extended-dimensions-13"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "NEEDLE",
+          "engine": "PHYSICAL",
+          "preset": "DYNAMIC_EARTH",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 13,
+      "height": 155,
+      "candidate": 3,
+      "ms": 1061,
+      "seed": "extended-dimensions-14"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "RIBBON",
+          "engine": "PHYSICAL",
+          "preset": "DYNAMIC_EARTH",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 156,
+      "height": 13,
+      "candidate": 1,
+      "ms": 636,
+      "seed": "extended-dimensions-15"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "PIN",
+          "engine": "PHYSICAL",
+          "preset": "DYNAMIC_EARTH",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 7,
+      "height": 288,
+      "candidate": 2,
+      "ms": 516,
+      "seed": "extended-dimensions-16"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "STRING",
+          "engine": "PHYSICAL",
+          "preset": "DYNAMIC_EARTH",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 284,
+      "height": 7,
+      "candidate": 1,
+      "ms": 1038,
+      "seed": "extended-dimensions-17"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "NEEDLE",
+          "engine": "POLIS",
+          "preset": "OPPOSING_FRONTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 13,
+      "height": 155,
+      "candidate": 2,
+      "ms": 173,
+      "seed": "extended-dimensions-18"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "RIBBON",
+          "engine": "POLIS",
+          "preset": "OPPOSING_FRONTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 156,
+      "height": 13,
+      "candidate": 1,
+      "ms": 97,
+      "seed": "extended-dimensions-19"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "PIN",
+          "engine": "POLIS",
+          "preset": "OPPOSING_FRONTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 7,
+      "height": 288,
+      "candidate": 2,
+      "ms": 222,
+      "seed": "extended-dimensions-20"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "TINY",
+          "geometry": "STRING",
+          "engine": "POLIS",
+          "preset": "OPPOSING_FRONTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 284,
+      "height": 7,
+      "candidate": 1,
+      "ms": 318,
+      "seed": "extended-dimensions-21"
+    },
+    {
+      "request": {
+        "mode": "ADVANCED",
+        "options": {
+          "size": "COLOSSAL",
+          "geometry": "RIBBON",
+          "engine": "EXCOGITARE",
+          "preset": "CONTINENTS",
+          "players": 4,
+          "cityStates": 2
+        }
+      },
+      "success": true,
+      "width": 474,
+      "height": 39,
+      "candidate": 2,
+      "ms": 9084,
+      "seed": "extended-dimensions-22"
+    }
+  ]
+}

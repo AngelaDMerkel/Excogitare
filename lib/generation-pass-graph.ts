@@ -52,6 +52,8 @@ export type GenerationProgressListener = (stage: string, progress: GenerationPro
 export type GenerationControl = {
   isCancelled?: () => boolean;
   constraints?: GenerationConstraintPayload;
+  /** Versioned native construction for V3; legacy callers keep their replay. */
+  fieldConstruction?: "BRANCHING";
   /** Internal ordered grammar negotiation. Public recipes remain immutable; a
    * candidate is regenerated against this exact authored relaxation prefix. */
   narrativeRelaxationIds?: readonly string[];

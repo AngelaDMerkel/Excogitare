@@ -1,0 +1,265 @@
+{
+  "passed": 45,
+  "nativeMapTypes": 33,
+  "randomizedRequests": 12,
+  "rows": [
+    {
+      "type": "CONTINENTS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 63
+    },
+    {
+      "type": "PANGAEA",
+      "candidate": 3,
+      "players": 4,
+      "spread": 71
+    },
+    {
+      "type": "ARCHIPELAGO",
+      "candidate": 2,
+      "players": 4,
+      "spread": 27
+    },
+    {
+      "type": "INLAND_SEAS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 80
+    },
+    {
+      "type": "EARTHSEA",
+      "candidate": 1,
+      "players": 4,
+      "spread": 25
+    },
+    {
+      "type": "RIFT_REALMS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 36
+    },
+    {
+      "type": "LABYRINTH",
+      "candidate": 2,
+      "players": 4,
+      "spread": 30
+    },
+    {
+      "type": "WILD_REGIONS",
+      "candidate": 2,
+      "players": 4,
+      "spread": 49
+    },
+    {
+      "type": "LIVING_WORLD",
+      "candidate": 2,
+      "players": 4,
+      "spread": 58
+    },
+    {
+      "type": "TECTONIC_CONTINENTS",
+      "candidate": 2,
+      "players": 4,
+      "spread": 28
+    },
+    {
+      "type": "GREAT_WATERSHEDS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 51
+    },
+    {
+      "type": "SHATTERED_BASINS",
+      "candidate": 3,
+      "players": 4,
+      "spread": 63
+    },
+    {
+      "type": "MYTHIC_REGIONS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 70
+    },
+    {
+      "type": "ENCIRCLING_LANDS",
+      "candidate": 3,
+      "players": 4,
+      "spread": 25
+    },
+    {
+      "type": "ASTRAL_PANGAEA",
+      "candidate": 1,
+      "players": 4,
+      "spread": 40
+    },
+    {
+      "type": "RIFTWORLD",
+      "candidate": 2,
+      "players": 4,
+      "spread": 44
+    },
+    {
+      "type": "LONELY_OCEANS",
+      "candidate": 2,
+      "players": 4,
+      "spread": 57
+    },
+    {
+      "type": "PENINSULA_REALM",
+      "candidate": 3,
+      "players": 4,
+      "spread": 67
+    },
+    {
+      "type": "SHATTERED_ARCHIPELAGO",
+      "candidate": 2,
+      "players": 4,
+      "spread": 38
+    },
+    {
+      "type": "DYNAMIC_EARTH",
+      "candidate": 1,
+      "players": 4,
+      "spread": 69
+    },
+    {
+      "type": "COLLIDING_PLATES",
+      "candidate": 3,
+      "players": 4,
+      "spread": 29
+    },
+    {
+      "type": "ANCIENT_CRATONS",
+      "candidate": 3,
+      "players": 4,
+      "spread": 23
+    },
+    {
+      "type": "ISLAND_ARC_EARTH",
+      "candidate": 1,
+      "players": 4,
+      "spread": 51
+    },
+    {
+      "type": "SUPERCONTINENT_INTERIOR",
+      "candidate": 2,
+      "players": 4,
+      "spread": 47
+    },
+    {
+      "type": "MONSOON_CONTINENTS",
+      "candidate": 3,
+      "players": 4,
+      "spread": 69
+    },
+    {
+      "type": "ICEHOUSE_EARTH",
+      "candidate": 1,
+      "players": 4,
+      "spread": 12
+    },
+    {
+      "type": "IMPERIAL_RING",
+      "candidate": 1,
+      "players": 4,
+      "spread": 9
+    },
+    {
+      "type": "OPPOSING_FRONTS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 9
+    },
+    {
+      "type": "CONTESTED_HEARTLAND",
+      "candidate": 1,
+      "players": 4,
+      "spread": 7
+    },
+    {
+      "type": "RIVAL_CONTINENTS",
+      "candidate": 1,
+      "players": 4,
+      "spread": 13
+    },
+    {
+      "type": "THREE_REALMS",
+      "candidate": 1,
+      "players": 3,
+      "spread": 4
+    },
+    {
+      "type": "THALASSIC_LEAGUE",
+      "candidate": 1,
+      "players": 4,
+      "spread": 20
+    },
+    {
+      "type": "UNEQUAL_REALMS",
+      "candidate": 2,
+      "players": 4,
+      "spread": 18
+    },
+    {
+      "randomSeed": 0,
+      "players": 6,
+      "spread": 23
+    },
+    {
+      "randomSeed": 1,
+      "players": 6,
+      "spread": 13
+    },
+    {
+      "randomSeed": 2,
+      "players": 3,
+      "spread": 0
+    },
+    {
+      "randomSeed": 3,
+      "players": 8,
+      "spread": 28
+    },
+    {
+      "randomSeed": 4,
+      "players": 6,
+      "spread": 25
+    },
+    {
+      "randomSeed": 5,
+      "players": 4,
+      "spread": 6
+    },
+    {
+      "randomSeed": 6,
+      "players": 2,
+      "spread": 5
+    },
+    {
+      "randomSeed": 7,
+      "players": 4,
+      "spread": 23
+    },
+    {
+      "randomSeed": 8,
+      "players": 6,
+      "spread": 50
+    },
+    {
+      "randomSeed": 9,
+      "players": 4,
+      "spread": 2
+    },
+    {
+      "randomSeed": 10,
+      "players": 2,
+      "spread": 6
+    },
+    {
+      "randomSeed": 11,
+      "players": 4,
+      "spread": 16
+    }
+  ]
+}

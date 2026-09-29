@@ -1,4 +1,5 @@
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
+import { buildNativeFieldLandform, NATIVE_LANDFORM_VERSION } from "./native-landforms.ts";
 import type { ClimateProjection } from "./climate-projection.ts";
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict } from "./civ5-rules.ts";
 import { appendEngineNarrativeEvidence, captureEngineNarrativeStage, compareEngineNarrativeStages, createEngineNarrativeEvidence, observableFromMap, snapshotEngineNarrativeStage, type EngineNarrativeEvidence, type EngineNarrativeObservable, type EngineNarrativeStageName, type EngineNarrativeStageSnapshot } from "./engine-narrative-diagnostics.ts";
@@ -5335,11 +5336,25 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     });
     return [path.id, { ...path, points }] as const;
   }) ?? []);
+  const nativeLandformRelief = new Float32Array(width * height);
+  const nativeLandformStrength = new Map<string, Map<number, number>>();
+  let nativeLandformBranches = 0;
   const nativeFieldSourceReservations = new Map(fieldPlan?.sources.map((source) => {
     const id = source.id.replace(/^field-/, "");
     const protectedMembers = protectedFieldMembers(id);
     const adjusted = adjustedFieldSourceById.get(id) ?? source;
-    const rasterized = rasterFieldSource(adjusted, width, height, wraps);
+    const ellipseBudget = rasterFieldSource(adjusted, width, height, wraps);
+    const landform = control?.fieldConstruction === "BRANCHING" && !protectedMembers.length
+      ? buildNativeFieldLandform(adjusted, width, height, wraps, seed, ellipseBudget.length)
+      : undefined;
+    const rasterized = landform?.tiles ?? ellipseBudget;
+    if (landform) {
+      nativeLandformBranches += landform.branchCount;
+      nativeLandformStrength.set(id, new Map(landform.backbone.map(point => [point.index, .15 + point.strength * .85])));
+      if (source.effect === "LAND" || source.effect === "RIDGE" || source.effect === "VOLCANIC") {
+        for (const point of landform.backbone) nativeLandformRelief[point.index] = Math.max(nativeLandformRelief[point.index], point.strength * (source.effect === "LAND" ? .18 : .3));
+      }
+    }
     let anchorX = Math.round(adjusted.x * width - 0.5);
     if (wraps) anchorX = (anchorX % width + width) % width;
     else anchorX = Math.max(0, Math.min(width - 1, anchorX));
@@ -5356,7 +5371,8 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   for (const source of fieldPlan?.sources ?? []) {
     const members = nativeFieldSourceReservations.get(source.id.replace(/^field-/, "")) ?? [];
     const priority = source.strength * 2;
-    for (const index of members) (source.effect === "WATER" ? nativeFieldWaterPriority : nativeFieldLandPriority)[index] += priority;
+    const strengths = nativeLandformStrength.get(source.id.replace(/^field-/, ""));
+    for (const index of members) (source.effect === "WATER" ? nativeFieldWaterPriority : nativeFieldLandPriority)[index] += priority * (strengths?.get(index) ?? 1);
   }
   for (const path of fieldPlan?.paths ?? []) {
     if (path.effect === "TRANSITION" && fieldPlan?.grammarFamily !== "FIELD_PATCHWORK_PROVINCES") continue;
@@ -5404,7 +5420,10 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
         }
       }
       const index = y * width + x;
-      fieldValues[index] = field - polarPenalty + narrativeAdapter.topology[index] * narrativeInfluenceStrength("EXCOGITARE").topology;
+      const topology = control?.fieldConstruction === "BRANCHING"
+        ? .75 * (nativeFieldLandPriority[index] - nativeFieldWaterPriority[index]) / (2 + Math.abs(nativeFieldLandPriority[index] - nativeFieldWaterPriority[index]))
+        : narrativeAdapter.topology[index] * narrativeInfluenceStrength("EXCOGITARE").topology;
+      fieldValues[index] = field - polarPenalty + topology;
     }
   }
 
@@ -5416,8 +5435,8 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     fieldValues = diffuseRefine(fieldValues, width, height, seed + 3001, wraps, character.excogitare.landRefinementPasses, 0.2, 0.07);
   }
   let shelfTopologyChanged = false;
-  if (fieldPlan) {
-    // Native field sources and paths participate in the same scalar field that
+  if (fieldPlan && control?.fieldConstruction !== "BRANCHING") {
+    // Legacy replay: native field sources and paths participate in the same scalar field that
     // sea level thresholds. They are not painted onto an already-selected map.
     // Conflicts are resolved by authored strength; an explicit path therefore
     // cuts through the broader regions it connects while leaving viable land
@@ -5792,7 +5811,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
         relief += Math.pow(Math.max(ridgeA, ridgeB * 0.8), 3) * 0.76;
       }
       if (resolved.modifier === "DOOMSDAY") relief += valueNoise(x + 13, y + 29, 6, seed + 817) * 0.3;
-      reliefValues[index] = relief + narrativeAdapter.relief[index] * narrativeInfluenceStrength("EXCOGITARE").relief;
+      reliefValues[index] = relief + nativeLandformRelief[index] + narrativeAdapter.relief[index] * narrativeInfluenceStrength("EXCOGITARE").relief;
     }
   }
   if (character.excogitare.reliefRefinementPasses > 0) {
@@ -7967,6 +7986,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
         narrativeReliefInfluences: narrativeAdapter.evidence.diagnostics.reliefInfluences,
         narrativeClimateInfluences: narrativeAdapter.evidence.diagnostics.climateInfluences,
         narrativeHydrologyInfluences: narrativeAdapter.evidence.diagnostics.hydrologyInfluences,
+        ...(control?.fieldConstruction === "BRANCHING" ? { nativeLandformVersion: NATIVE_LANDFORM_VERSION, nativeLandformBranches } : {}),
         nativeFieldPreTopologyReservations: (fieldPlan?.sources.length ?? 0) + (fieldPlan?.paths.length ?? 0),
         nativeFieldSources: fieldPlan?.sources.length ?? 0,
         nativeFieldPaths: fieldPlan?.paths.length ?? 0,
@@ -8981,4 +9001,11 @@ export function generateMapFromRecipe(recipe: GenerationRecipe, onProgress?: Gen
 export function generateMap(options: MapGenerationOptions, onProgress?: GenerationProgressListener, control?: GenerationControl): Civ5Map {
   const normalized = { ...DEFAULT_GENERATION_OPTIONS, ...options, dominantTerrains: [...(options.dominantTerrains ?? DEFAULT_GENERATION_OPTIONS.dominantTerrains)] };
   return generateMapWithRecipe(generationRecipeFromOptions(normalized), onProgress, control);
+}
+
+/** Build one native candidate for callers with their own final acceptance contract.
+ * This deliberately does not claim the legacy narrative proof or select retries.
+ * Native geography, placement rules and engine-specific construction are retained. */
+export function generateMapFoundation(recipe: GenerationRecipe, onProgress?: (stage: string) => void, control?: GenerationControl): Civ5Map {
+  return generateMapInternal(generationOptionsFromRecipe(recipe), onProgress, recipe.scale, recipe, control);
 }

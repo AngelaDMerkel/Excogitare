@@ -1,0 +1,47 @@
+import { V3_DIMENSION_WARNING } from './dimensions.ts';
+import { assessCoastlines, type CoastlineAssessment } from '../coastline-quality.ts';
+import type { Civ5Map } from '../civ5-map.ts';
+import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict, isWaterTerrain, isPassableLand } from '../civ5-rules.ts';
+import { validateCiv5Map } from '../map-analysis.ts';
+import { resolveMapDimensions, isGameBreakingGeometry, isGameBreakingMapSize } from '../map-generator.ts';
+import { generationOptionsFromRecipe } from '../generation-recipe.ts';
+import { openingAreas, resourceGroup, type BalanceChanges } from './balance.ts';
+import { adjacency, reachable, distance } from './spatial.ts';
+import type { V3Plan } from './plan.ts';
+export type V3Assessment = { coastlines: CoastlineAssessment; accepted: boolean; errors: string[]; warnings: string[]; waterPercent: number; mountainPercent: number; movementCost: number; coldLandPercent: number; terrainVariety: number; resourceTiles: number; sharedResourceAccess: number; scoreSpread: number; starts: { player: number; reachableLand: number; expansionLand: number; bonus: number; luxury: number; earlyStrategic: number; earlyStrategicUnits: number; openingValue: number }[] };
+export function assessV3Map(map: Civ5Map, plan: V3Plan, balance: BalanceChanges): V3Assessment {
+  const errors: string[] = [], warnings: string[] = [], options = generationOptionsFromRecipe(plan.recipe), dimensions = resolveMapDimensions(options.size, options.geometry);
+  if (map.width !== dimensions.width || map.height !== dimensions.height || map.tiles.length !== map.width * map.height) errors.push('The generated dimensions do not match the request.');
+  if (isGameBreakingMapSize(options.size) || isGameBreakingGeometry(options.geometry)) warnings.push(V3_DIMENSION_WARNING);
+  const majors = map.startLocations.filter(s => !s.cityState), minors = map.startLocations.filter(s => s.cityState);
+  if (majors.length !== options.players) errors.push(`Requested ${options.players} players; found ${majors.length} viable starts.`);
+  if (minors.length !== options.cityStates) errors.push(`Requested ${options.cityStates} city states; found ${minors.length}.`);
+  for (const issue of validateCiv5Map(map)) if (issue.severity === 'ERROR') errors.push(issue.message);
+  let placementErrors = 0;
+  for (const tile of map.tiles) if (!featurePlacementVerdict(map, tile).valid || !resourcePlacementVerdict(map, tile).valid || !wonderPlacementVerdict(map, tile).valid || (isWaterTerrain(map, tile) && tile.elevation !== 0)) placementErrors++;
+  if (placementErrors) errors.push(`${placementErrors} illegal terrain/content placements remain.`);
+  const coastlines = assessCoastlines(map);
+  errors.push(...coastlines.errors);
+  const graph = adjacency(map), areas = openingAreas(map, graph);
+  const starts = majors.map((start, player) => {
+    const index = start.y * map.width + start.x, area = areas[player];
+    if (!map.tiles[index] || !isPassableLand(map, map.tiles[index])) errors.push(`Player ${player + 1} has an impassable start.`);
+    if (area.length < plan.minimumOpeningLand) errors.push(`Player ${player + 1} has too little reachable opening land.`);
+    if (majors.some((other, j) => j < player && distance(map, index, other.y * map.width + other.x) < 5)) errors.push('Major starts are too close.');
+    const count = (group: string) => area.filter(i => resourceGroup(map.resources[map.tiles[i].resource] ?? '') === group).length;
+    for (const [group, target] of Object.entries(balance.targets)) if (count(group) !== target) errors.push(`Player ${player + 1} does not have the normalized ${group} budget.`);
+    const earlyStrategicUnits = area.reduce((sum, i) => sum + (resourceGroup(map.resources[map.tiles[i].resource] ?? '') === 'earlyStrategic' ? map.tiles[i].resourceAmount : 0), 0);
+    const openingValue = area.reduce((sum, i) => { const tile = map.tiles[i], terrain = map.terrains[tile.terrain]; return sum + (/GRASS|PLAINS/.test(terrain) ? 2 : /SNOW/.test(terrain) ? .25 : 1) + (tile.elevation === 1 ? .7 : 0) + (tile.resource !== 255 ? 1.5 : 0); }, 0);
+    return { player: start.player, reachableLand: area.length, expansionLand: reachable(map, graph, index, 6).length, bonus: count('bonus'), luxury: count('luxury'), earlyStrategic: count('earlyStrategic'), earlyStrategicUnits, openingValue: Math.round(openingValue * 10) / 10 };
+  });
+  const land = map.tiles.filter(tile => !isWaterTerrain(map, tile)), passable = land.filter(tile => tile.elevation < 2);
+  const values = starts.map(start => start.openingValue), average = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
+  const scoreSpread = values.length ? Math.round((Math.max(...values) - Math.min(...values)) / Math.max(1, average) * 100) : 0;
+  if (scoreSpread > 25) warnings.push(balance.normalized ? `Opening terrain estimates differ by ${scoreSpread}%, despite matched early resource budgets.` : `Starting-opportunity estimates differ by ${scoreSpread}% under these settings.`);
+  const waterPercent = (map.tiles.length - land.length) / map.tiles.length * 100, mountainPercent = land.filter(tile => tile.elevation === 2).length / Math.max(1, land.length) * 100;
+  if (Math.abs(waterPercent - options.waterPercent) > 10) warnings.push('The native geography differs from the requested water target.');
+  const openingTiles = new Set(areas.flat()), startIndices = majors.map(start => start.y * map.width + start.x);
+  const frontiers = map.tiles.flatMap((tile, i) => !openingTiles.has(i) && isPassableLand(map, tile) && ['luxury', 'lateStrategic'].includes(resourceGroup(map.resources[tile.resource] ?? '')) ? [i] : []);
+  const sharedResourceAccess = frontiers.reduce((sum, i) => { const ds = startIndices.map(start => distance(map, start, i)).sort((a, b) => a - b); return sum + 1 - (ds[1] - ds[0]) / Math.max(1, ds[0] + ds[1]); }, 0) / Math.max(1, frontiers.length);
+  return { coastlines, sharedResourceAccess, accepted: !errors.length, errors: [...new Set(errors)], warnings, waterPercent, mountainPercent, movementCost: passable.reduce((sum, t) => sum + 1 + Number(t.elevation === 1 || /FOREST|JUNGLE|MARSH/.test(map.features[t.feature] ?? '')), 0) / Math.max(1, passable.length), coldLandPercent: land.filter(t => /SNOW|TUNDRA/.test(map.terrains[t.terrain])).length / Math.max(1, land.length) * 100, terrainVariety: new Set(land.map(t => t.terrain)).size, resourceTiles: map.tiles.filter(t => t.resource !== 255).length, scoreSpread, starts };
+}
