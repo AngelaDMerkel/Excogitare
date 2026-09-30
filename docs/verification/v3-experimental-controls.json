@@ -1,0 +1,82 @@
+{
+  "desktop": [
+    {
+      "badges": 0,
+      "design": "grouped",
+      "footer": true,
+      "gap": 5.999237060546875,
+      "leftDelta": -0.0033111572265625,
+      "panel": [
+        16,
+        60,
+        256.23260498046875,
+        571.4539794921875
+      ],
+      "widthDelta": -0.0057220458984375,
+      "selected": "WIDE",
+      "escapeClosed": true,
+      "size": "HUGE",
+      "snapshots": 1
+    },
+    {
+      "badges": 0,
+      "design": "tagged",
+      "footer": false,
+      "gap": 5.999237060546875,
+      "leftDelta": -0.0033111572265625,
+      "panel": [
+        16,
+        60,
+        256.23260498046875,
+        571.4539794921875
+      ],
+      "widthDelta": -0.0057220458984375,
+      "selected": "WIDE",
+      "escapeClosed": true,
+      "size": "HUGE",
+      "snapshots": 1
+    },
+    {
+      "badges": 0,
+      "design": "folded",
+      "footer": true,
+      "gap": 5.999237060546875,
+      "leftDelta": -0.0033111572265625,
+      "panel": [
+        16,
+        60,
+        256.23260498046875,
+        571.4539794921875
+      ],
+      "widthDelta": -0.0057220458984375,
+      "selected": "WIDE",
+      "escapeClosed": true,
+      "size": "HUGE",
+      "snapshots": 1
+    }
+  ],
+  "responsive": [
+    {
+      "gap": 5.99627685546875,
+      "leftDelta": -0.00037384033203125,
+      "viewport": [
+        900,
+        600
+      ],
+      "withinViewport": true
+    },
+    {
+      "gap": 5.9934539794921875,
+      "leftDelta": -0.00018310546875,
+      "viewport": [
+        760,
+        420
+      ],
+      "withinViewport": true
+    }
+  ],
+  "mobileMenuHidden": true,
+  "advancedDrafts": true,
+  "resetAdvanced": true,
+  "foldedKeyboard": true
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<base href="../">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Excogitare · 02 Gold text</title><link rel="icon" href="brand/favicon.svg" type="image/svg+xml"><link rel="icon" href="brand/favicon.ico" sizes="16x16 32x32 48x48"><link rel="apple-touch-icon" href="brand/apple-touch-icon.png"><meta name="theme-color" content="#252c40"><link rel="stylesheet" href="style.css?v=randomise-all"><link rel="stylesheet" href="history-layouts/layouts.css?v=history-gap"><link rel="stylesheet" href="theme.css?v=stable-progress"><link rel="stylesheet" href="sidebar.css?v=workspace-frame">
+<script src="samples.js" defer></script><script src="rules.js" defer></script><script src="v1-catalogue.js" defer></script><script src="dimensions.js?v=extended" defer></script><script src="generation-controls.js?v=consistent-editors" defer></script><script src="map-fit.js?v=stable-centre" defer></script><script src="snapshot-store.js?v=latest-history" defer></script><script src="generation-build.js" defer></script><script src="generation-client.js" defer></script><script src="app.js?v=map-hotkeys" defer></script><script src="history-carousel.js?v=sidebar-fit" defer></script><script src="mobile-ui.js?v=map-actions" defer></script>
+<script src="sidebar-fit.js?v=workspace-frame" defer></script>
+
+
+<link rel="stylesheet" href="layers.css">
+<script src="layers.js" defer></script>
+<link rel="stylesheet" href="experimental-options/studies.css?v=4">
+<script src="experimental-options/studies.js?v=4" defer></script>
+</head>
+<body class="choice-study" data-choice-design="tagged" data-history-persistence="session" data-layout="two-workspaces" data-history-layout="right">
+<header class="choice-study-bar"><span>Experimental options</span><nav aria-label="Menu studies"><a href="experimental-options/grouped.html">01 Grouped</a><a href="experimental-options/tagged.html" aria-current="page">02 Gold text</a><a href="experimental-options/folded.html">03 Expandable</a></nav><a href="experimental-options/">Overview</a></header>
+<main class="workspace">
+  <aside class="panel paper" aria-label="World controls">
+    <header class="brand"><img class="brand-mark" src="brand/wayfinder-small.svg" width="32" height="32" alt="" aria-hidden="true"><h1><img class="brand-wordmark" src="brand/wordmark.svg" alt="Excogitare"></h1><span class="version">V3</span></header>
+    <nav class="modes" aria-label="Workspace"><button id="generate-tab" aria-selected="true" aria-controls="generate-panel" role="tab">Generate</button><button id="refine-tab" aria-selected="false" aria-controls="refine-panel" role="tab">Refine</button></nav>
+    <div class="panel-scroll">
+      <section id="generate-panel" role="tabpanel" aria-labelledby="generate-tab">
+        <div id="standard-generation" class="standard-fields"></div>
+        <details id="advanced-options" class="advanced-expansion"><summary><span id="advanced-label">Advanced options</span><span id="advanced-status" hidden></span><span class="disclosure-mark" aria-hidden="true">⌄</span></summary><div class="advanced-actions"><button class="text-button" id="reset-advanced" disabled>Reset advanced</button></div><div id="advanced-generation"></div></details>
+      </section>
+      <section id="refine-panel" role="tabpanel" aria-labelledby="refine-tab" hidden>
+        <div class="import-block"><button class="outline full" id="import-map"><span data-icon="upload"></span>Import .Civ5Map</button><input id="map-file" type="file" accept=".Civ5Map" hidden><span class="import-name" id="import-note" hidden></span></div>
+        <div class="tweak-block"><div class="label-row"><h3>Edit terrain</h3><span class="quiet-tag" id="edit-scope">Auto area</span></div><div class="area-controls"><button class="outline" id="select-area" aria-pressed="false"><span data-icon="scan"></span>Select area</button><button class="text-button" id="clear-area" hidden>Clear</button></div><button class="tweak-option" data-tweak="green"><span data-icon="leaf"></span><span>Add woodland</span><span data-icon="arrow"></span></button><button class="tweak-option" data-tweak="pass"><span data-icon="mountain"></span><span>Lower mountains</span><span data-icon="arrow"></span></button></div>
+        <section class="terrain-check" aria-labelledby="terrain-heading"><div class="label-row"><h3 id="terrain-heading">Tile legality</h3><span id="issue-count" class="quiet-tag">Not checked</span></div><button class="outline full" id="check-terrain"><span data-icon="scan"></span>Check terrain</button><div id="issues" hidden></div></section>
+      </section>
+    </div>
+    <div class="panel-actions"><small class="generation-status" id="generation-status" role="status" hidden></small><button class="primary full" id="surprise"><span data-icon="shuffle"></span>Generate</button><button class="text-button full randomise-all" id="randomise-all">Randomise all</button></div>
+  </aside>
+  <div class="desktop-map-actions" role="group" aria-label="Map actions">
+    <a class="desktop-save paper" id="desktop-save" href="#" role="button"><span data-icon="download"></span>Save .Civ5Map</a>
+  </div>
+  <section class="atlas" aria-label="World preview">
+    <div class="view-actions canvas-layers"><button class="paper compact" id="layers-button" aria-expanded="false" aria-controls="layers-menu"><span data-icon="layers"></span>Layers</button><div class="paper layer-popover" id="layers-menu" hidden><label><input type="checkbox" data-layer="relief" checked>Relief</label><label><input type="checkbox" data-layer="vegetation" checked>Vegetation</label><label><input type="checkbox" data-layer="resources">Resources</label><label><input type="checkbox" data-layer="grid">Hex grid</label><label><input type="checkbox" data-layer="starts">Planned starts</label></div></div>
+    <header class="world-header"><h2 id="world-title">The Verdant Divide</h2></header>
+    <div class="map-stage" id="map-stage"><canvas id="map" tabindex="0" role="img" aria-label="Map preview. Drag to pan; plus and minus to zoom; zero to fit."></canvas></div>
+    <div class="map-meta" hidden><span id="selection-hint" hidden>Drag on the map to select tiles</span></div>
+    <div class="preview-bar paper" id="preview-bar" hidden><div class="preview-copy"><strong id="preview-title">Add woodland</strong><span id="preview-detail"></span></div><button class="outline" id="compare" aria-pressed="false">Show original</button><button class="text-button" id="discard">Discard</button><button class="primary" id="accept">Apply<span data-icon="check"></span></button></div>
+    <div class="drop-target" id="drop-target" hidden><span data-icon="upload"></span><h2>Import .Civ5Map</h2></div>
+  </section>
+  <section class="shelf" aria-label="Map history" aria-roledescription="carousel"><div class="world-list" id="world-list"></div></section>
+  <footer class="footnote"><details class="prototype-info"><summary>Map details<span data-icon="chevron"></span></summary><div class="paper prototype-details"><p id="generation-summary">Example map. Generate creates a new world locally. History retains the latest 100 maps in this browser. Civ V assigns starts when loading an ordinary map file.</p><button class="text-button" id="example-map">Load repair example</button></div></details></footer>
+  <div class="toast paper" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="mobile-actions"><button class="primary" id="mobile-randomise">Randomise</button><a class="outline" id="mobile-save" href="#" role="button">Save</a><small id="mobile-status" role="status" hidden></small></div>
+</main>
+</body>
+</html>
