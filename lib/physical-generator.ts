@@ -7,6 +7,7 @@ import { scaledPoleProximity, worldScaleProfile } from "./world-scale.ts";
 import { applyConstrainedLandBudget, applyConstrainedRelief, applyConstrainedSurface, nativeConstraintDiagnostics, type GenerationConstraintPayload } from "./generation-constraints.ts";
 import { narrativeInfluenceStrength, type NarrativeAdapterPlan, type PhysicalConditionPlan } from "./narrative-engine-adapters.ts";
 import { riverEdgeDefinitions, riverFlowsFromAToB, RIVER_DATA_MASK } from "./rivers.ts";
+import { generationSpace, spaceOffset, spaceSegmentDistance, tilePoint } from "./generation-space.ts";
 
 type Point = { x: number; y: number };
 type Plate = Point & {
@@ -872,6 +873,7 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
   const area = width * height;
   const profile = physicalProfile(options);
   const physicalPlan = narrative?.native.kind === "PHYSICAL_PLAN" ? narrative.native : undefined;
+  const space = physicalPlan?.coordinateSpace === "HEX" ? generationSpace(width, height) : undefined;
   const semanticFields = physicalSemanticFields(constraints, area);
   const character = worldCharacterProfile(options.style);
   const scaleProfile = worldScaleProfile(scale);
@@ -908,8 +910,9 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     const continentalNoise = valueNoise(x + 101, y + 211, 18 * scaleProfile.physical.reliefSpan, seed + 101) * 0.22 * character.physical.continentalNoise;
     const regionalNoise = valueNoise(x + 307, y + 83, 7 * scaleProfile.physical.reliefSpan, seed + 211) * 0.12 * character.physical.continentalNoise;
     const narrativeStrength = narrativeInfluenceStrength("PHYSICAL");
-    const nx = (x + 0.5) / width - 0.5;
-    const ny = (y + 0.5) / height - 0.5;
+    const { x: nx, y: ny } = space
+      ? spaceOffset(tilePoint(index, width, height), { x: .5, y: .5 }, space, wraps)
+      : { x: (x + 0.5) / width - 0.5, y: (y + 0.5) / height - 0.5 };
     const radialDistortion = options.preset === "SUPERCONTINENT_INTERIOR" ? (valueNoise(x + 509, y + 271, Math.max(7, Math.min(width, height) * 0.18), seed + 263) - 0.5) * 0.085 : 0;
     const supercontinentRadius = Math.hypot(nx, ny * 1.08) + radialDistortion;
     const supercontinentBoundary = options.preset === "SUPERCONTINENT_INTERIOR"
@@ -936,6 +939,12 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     islandArcGroups.set(key, group);
   }
   const distanceToPath = (index: number, points: readonly Point[]) => {
+    if (space) {
+      let nearest = Infinity;
+      const point = tilePoint(index, width, height);
+      for (let i = 0; i < points.length; i++) nearest = Math.min(nearest, spaceSegmentDistance(point, points[Math.max(0, i - 1)], points[i], space, wraps) * space.scale);
+      return nearest;
+    }
     const x = (index % width + 0.5) / width;
     const y = (Math.floor(index / width) + 0.5) / height;
     let nearest = Number.POSITIVE_INFINITY;
@@ -1076,10 +1085,11 @@ export function generatePhysicalGeography(options: MapGenerationOptions, width: 
     const y = (Math.floor(index / width) + 0.5) / height;
     let dx = Math.abs(x - region.anchor.x);
     if (wraps) dx = Math.min(dx, 1 - dx);
-    const within = Math.hypot(
+    const delta = space ? spaceOffset(tilePoint(index, width, height), region.anchor, space, wraps) : undefined;
+    const within = (delta ? Math.hypot(delta.x, delta.y) : Math.hypot(
       dx * width / Math.max(width, height),
       (y - region.anchor.y) * height / Math.max(width, height) * 0.866,
-    ) <= region.radius;
+    )) <= region.radius;
     if (!within) return [];
     if (region.effect === "WATER") return land ? [] : [index];
     return land ? [index] : [];

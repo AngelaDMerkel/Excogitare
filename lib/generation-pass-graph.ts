@@ -54,6 +54,8 @@ export type GenerationControl = {
   constraints?: GenerationConstraintPayload;
   /** Versioned native construction for V3; legacy callers keep their replay. */
   fieldConstruction?: "BRANCHING";
+  /** Generate local features in physical hex space within the requested grid. */
+  coordinateSpace?: "HEX";
   /** Internal ordered grammar negotiation. Public recipes remain immutable; a
    * candidate is regenerated against this exact authored relaxation prefix. */
   narrativeRelaxationIds?: readonly string[];

@@ -2,6 +2,7 @@ import type { GenerationEngine } from "./map-generator.ts";
 import type { NarrativeConstraintProgram } from "./narrative-constraints.ts";
 import { narrativeNativeContract, type NarrativeGenerativeContract, type NarrativeGrammarFamily, type NarrativeNativeRelaxationOperation } from "./narrative-native-contracts.ts";
 import type { NarrativeSkeleton, NarrativeSkeletonRegion, NarrativeSkeletonRelationship } from "./narrative-types.ts";
+import { generationSpace, spaceOffset, spaceSegmentDistance, tilePoint, type GenerationSpace } from "./generation-space.ts";
 
 export const NARRATIVE_ADAPTER_SCHEMA_VERSION = 1 as const;
 
@@ -43,6 +44,7 @@ export type NarrativeRegionReservation = {
 };
 
 type NativePlanCommon = {
+  coordinateSpace?: "HEX";
   schemaVersion: 1;
   profileId: NarrativeConstraintProgram["profileId"];
   grammarFamily: NarrativeGrammarFamily;
@@ -408,26 +410,31 @@ function createNativePlan(program: NarrativeConstraintProgram, skeleton: Narrati
 function pointCoordinates(index: number, width: number, height: number) { return { x: (index % width + 0.5) / width, y: (Math.floor(index / width) + 0.5) / height }; }
 function wrappedDx(one: number, two: number, wraps: boolean) { const direct = Math.abs(one - two); return wraps ? Math.min(direct, 1 - direct) : direct; }
 
-function fieldInfluence(index: number, source: NarrativeFieldSource, width: number, height: number, wraps: boolean) {
+function fieldInfluence(index: number, source: NarrativeFieldSource, width: number, height: number, wraps: boolean, space?: GenerationSpace) {
   const point = pointCoordinates(index, width, height);
   let dx = wrappedDx(point.x, source.x, wraps);
   if (point.x < source.x) dx = -dx;
-  const dy = point.y - source.y;
+  let dy = point.y - source.y;
+  if (space) ({ x: dx, y: dy } = spaceOffset(tilePoint(index, width, height), source, space, wraps));
   const cosine = Math.cos(source.rotation); const sine = Math.sin(source.rotation);
   const rotatedX = dx * cosine - dy * sine; const rotatedY = dx * sine + dy * cosine;
   return clamp(1 - Math.hypot(rotatedX / source.radiusX, rotatedY / source.radiusY) / 1.75, 0, 1) * source.strength;
 }
 
-function regionInfluence(index: number, region: NarrativeRegionReservation, width: number, height: number, wraps: boolean) {
+function regionInfluence(index: number, region: NarrativeRegionReservation, width: number, height: number, wraps: boolean, space?: GenerationSpace) {
   const point = pointCoordinates(index, width, height); const maximum = Math.max(width, height);
-  const distance = Math.hypot(wrappedDx(point.x, region.anchor.x, wraps) * width / maximum, (point.y - region.anchor.y) * height / maximum * 0.866);
+  const delta = space ? spaceOffset(tilePoint(index, width, height), region.anchor, space, wraps) : undefined;
+  const distance = delta ? Math.hypot(delta.x, delta.y) : Math.hypot(wrappedDx(point.x, region.anchor.x, wraps) * width / maximum, (point.y - region.anchor.y) * height / maximum * 0.866);
   return clamp(1 - distance / (Math.max(0.015, region.radius) * 1.75), 0, 1) * region.priority;
 }
 
-function pathInfluence(index: number, path: NarrativePathReservation, width: number, height: number, wraps: boolean) {
+function pathInfluence(index: number, path: NarrativePathReservation, width: number, height: number, wraps: boolean, space?: GenerationSpace) {
   if (!path.points.length) return 0;
   const point = pointCoordinates(index, width, height); const maximum = Math.max(width, height); let nearest = Number.POSITIVE_INFINITY;
-  for (const sample of path.points) nearest = Math.min(nearest, Math.hypot(wrappedDx(point.x, sample.x, wraps) * width / maximum, (point.y - sample.y) * height / maximum * 0.866));
+  if (space) {
+    const location = tilePoint(index, width, height);
+    for (let i = 0; i < path.points.length; i++) nearest = Math.min(nearest, spaceSegmentDistance(location, path.points[Math.max(0, i - 1)], path.points[i], space, wraps));
+  } else for (const sample of path.points) nearest = Math.min(nearest, Math.hypot(wrappedDx(point.x, sample.x, wraps) * width / maximum, (point.y - sample.y) * height / maximum * 0.866));
   return clamp(1 - nearest / (path.width * 2.4), 0, 1) * path.strength;
 }
 
@@ -450,16 +457,21 @@ function addPathEffect(effect: RelationshipEffect, influence: number, index: num
   if (effect === "TRANSITION") { plan.temperature[index] += influence * 0.08; plan.moisture[index] += influence * 0.08; }
 }
 
-export function compileNarrativeAdapterPlan(program: NarrativeConstraintProgram, skeleton: NarrativeSkeleton, appliedRelaxationIds: readonly string[] = []): NarrativeAdapterPlan {
+export function compileNarrativeAdapterPlan(program: NarrativeConstraintProgram, skeleton: NarrativeSkeleton, appliedRelaxationIds: readonly string[] = [], coordinateSpace?: "HEX"): NarrativeAdapterPlan {
   if (program.profileId !== skeleton.profileId || program.context.width !== skeleton.width || program.context.height !== skeleton.height) throw new Error("Narrative adapter inputs do not describe the same map.");
   const { width, height, wraps } = program.context; const area = width * height; const native = createNativePlan(program, skeleton, appliedRelaxationIds);
+  const space = coordinateSpace === "HEX" ? generationSpace(width, height) : undefined;
+  if (space) {
+    native.coordinateSpace = coordinateSpace;
+    native.paths = native.paths.map(path => ({ ...path, width: path.width * Math.max(width, height) / space.scale }));
+  }
   const plan: NarrativeAdapterPlan = { native, topology: new Array<number>(area).fill(0), relief: new Array<number>(area).fill(0), temperature: new Array<number>(area).fill(0), moisture: new Array<number>(area).fill(0), rivers: new Array<number>(area).fill(0), evidence: undefined as never };
   const fieldSources = native.kind === "FIELD_PLAN" ? native.sources : [];
   for (const region of native.regions) {
     const source = fieldSources.find((candidate) => candidate.id === `field-${region.id}`);
-    for (let index = 0; index < area; index += 1) { const influence = source ? fieldInfluence(index, source, width, height, wraps) : regionInfluence(index, region, width, height, wraps); if (influence > 0) addRegionEffect(region.effect, influence, index, plan); }
+    for (let index = 0; index < area; index += 1) { const influence = source ? fieldInfluence(index, source, width, height, wraps, space) : regionInfluence(index, region, width, height, wraps, space); if (influence > 0) addRegionEffect(region.effect, influence, index, plan); }
   }
-  for (const path of native.paths) for (let index = 0; index < area; index += 1) { const influence = pathInfluence(index, path, width, height, wraps); if (influence > 0) addPathEffect(path.effect, influence, index, plan); }
+  for (const path of native.paths) for (let index = 0; index < area; index += 1) { const influence = pathInfluence(index, path, width, height, wraps, space); if (influence > 0) addPathEffect(path.effect, influence, index, plan); }
   for (const field of [plan.topology, plan.relief, plan.temperature, plan.moisture, plan.rivers]) for (let index = 0; index < field.length; index += 1) field[index] = clamp(field[index]);
   const missingExplicitEffects = skeleton.regions.filter((region) => !region.effect).length + skeleton.relationships.filter((relationship) => !relationship.effect).length;
   const causalObjects: NarrativeCausalObject[] = [
@@ -531,6 +543,7 @@ export function narrativeAdapterConsumedFingerprint(plan: NarrativeAdapterPlan) 
           };
   return JSON.stringify({
     engine: plan.native.engine,
+    ...(plan.native.coordinateSpace ? { coordinateSpace: plan.native.coordinateSpace } : {}),
     regions,
     paths,
     ownerPolicy,

@@ -94,9 +94,13 @@ Fit geometry passed nine layout/aspect-ratio cases and empty/blocked/invalid cas
 
 ## Native coastlines
 
-Generator version **2** builds connected landforms with curved branching interiors, varying widths and broad bays before sea-level selection. That structure contributes to relief; bounded land/water influence passes through native refinement. Independent finished-map checks reject large or repeated unexplained oval islands. Supported volcanic islands and hollow atolls remain possible.
+Generator version **3** builds connected landforms with curved branching interiors, varying widths and broad bays before sea-level selection. That structure contributes to relief; bounded land/water influence passes through native refinement. Independent finished-map checks reject large or repeated unexplained oval islands. Supported volcanic islands and hollow atolls remain possible.
 
 Existing history and imports keep their original geography. Map details marks earlier generator snapshots; Generate or Randomise creates maps with the new construction. The check targets geometric island silhouettes and does not score every aspect of appearance.
+
+Version 3 generates local geography in physical hex space. Rotation, widths, source areas, field warping and path distances share one length scale instead of stretching separately with width and height. Connected growth uses only the available grid; it keeps its area budget when a narrow boundary changes where it can grow. Latitude still describes the whole world. The same coordinate contract reaches all four native engines through their shared influences, while their existing native construction remains in place.
+
+See [generation within the canvas](../../docs/features/v3-canvas-generation.md) for tests, comparisons and limits. Earlier saved maps retain their original geography.
 
 [Same-seed comparison](coastline-construction-preview.jpg) · [Implementation and verification](../../docs/features/v3-landform-construction.md)
 

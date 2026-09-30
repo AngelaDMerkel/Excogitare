@@ -4,6 +4,7 @@ import type { GenerationConstraintPayload } from '../generation-constraints.ts';
 import { advancedRecipe, choose, randomStream, type V3Request } from './request.ts';
 import { deterministicPassSeed } from '../generation-pass-graph.ts';
 import { noise } from './spatial.ts';
+import { HEX_ROW_HEIGHT } from '../generation-space.ts';
 export type V3Plan = { version: 1; seed: string; premise: string; isolationMechanism: 'OPEN' | 'OCEAN' | 'PASSES' | 'DRY_INTERIOR'; recipe: GenerationRecipe; homelands: { x: number; y: number }[]; minimumOpeningLand: number; resourceFloor: number; competition: number; isolationStrength: number };
 export function compileV3Plan(request: V3Request): V3Plan {
   if (request.mode === 'ADVANCED') { const recipe = advancedRecipe(request); return { version: 1, seed: request.seed, premise: MAP_PRESETS.find(p => p.id === recipe.mapType)!.label, isolationMechanism: recipe.settings.waterPercent > 60 ? 'OCEAN' : 'OPEN', recipe, homelands: [], minimumOpeningLand: 7, resourceFloor: 1, competition: .5, isolationStrength: .5 }; }
@@ -23,7 +24,7 @@ export function compileV3Plan(request: V3Request): V3Plan {
   const spread = 1 - competition * .23 + (isolation - .5) * .16;
   for (let i = 0; i < p.players; i++) {
     const candidates = Array.from({ length: 48 }, () => ({ x: Math.round(width * (.5 + (random() - .5) * .78 * spread)), y: Math.round(height * (.5 + (random() - .5) * .72 * spread)) }));
-    const distance = (point: { x: number; y: number }) => homelands.length ? Math.min(...homelands.map(other => Math.hypot(point.x - other.x, (point.y - other.y) * 1.15))) : 1;
+    const distance = (point: { x: number; y: number }) => homelands.length ? Math.min(...homelands.map(other => Math.hypot(point.x - other.x, (point.y - other.y) * HEX_ROW_HEIGHT))) : 1;
     candidates.sort((a, b) => distance(b) - distance(a)); homelands.push(candidates[0]);
   }
   return { version: 1, seed: request.seed, premise: mechanism === 'OCEAN' ? 'Distant maritime homelands' : mechanism === 'PASSES' ? 'Rival valleys and mountain crossings' : mechanism === 'DRY_INTERIOR' ? 'Fertile borders around a difficult interior' : competition > .6 ? 'Shared frontier and contested expansion' : 'Connected homelands and open frontiers', isolationMechanism: mechanism, recipe: generationRecipeFromOptions(options), homelands, minimumOpeningLand: p.challenge === 'GENTLE' ? 15 : 12, resourceFloor: p.challenge === 'GENTLE' ? 3 : p.challenge === 'HARSH' ? 1 : 2, competition, isolationStrength: isolation };

@@ -86,7 +86,7 @@ test('The reproduced native ellipses are corrected before climate and resource p
     const request = normalizeV3Request({ mode: 'STANDARD', parameters: { size: 'STANDARD', players: 4, water: 'HIGH', isolation: 'HIGH' } }, seed);
     const plan = compileV3Plan(request), recipe = { ...plan.recipe, settings: { ...plan.recipe.settings, seed: `${seed}:v3:geography:1` } };
     const old = generateMapFoundation(recipe);
-    const updated = generateMapFoundation(recipe, undefined, { fieldConstruction: 'BRANCHING' });
+    const updated = generateMapFoundation(recipe, undefined, { fieldConstruction: 'BRANCHING', coordinateSpace: 'HEX' });
     assert.equal(assessCoastlines(old).accepted, false);
     assert.equal(assessCoastlines(updated).accepted, true);
     assert.ok(assessCoastlines(updated).inspected >= 2, "The fix must retain inspectable islands, not merely clip them against map edges.");
@@ -95,7 +95,7 @@ test('The reproduced native ellipses are corrected before climate and resource p
     const constraints = homelandConstraints(plan)!;
     constraints.topology[10 * updated.width + 10] = 1;
     constraints.topology[11 * updated.width + 10] = 0;
-    const protectedMap = generateMapFoundation(recipe, undefined, { fieldConstruction: 'BRANCHING', constraints });
+    const protectedMap = generateMapFoundation(recipe, undefined, { fieldConstruction: 'BRANCHING', coordinateSpace: 'HEX', constraints });
     assert.ok(protectedMap.tiles[10 * updated.width + 10].terrain >= 2);
     assert.ok(protectedMap.tiles[11 * updated.width + 10].terrain < 2);
   }
@@ -103,7 +103,7 @@ test('The reproduced native ellipses are corrected before climate and resource p
 
 test('Accepted V3 output retains its new geometry through game-map round trip', () => {
   const result = generateV3({ mode: 'STANDARD', parameters: { size: 'TINY', water: 'HIGH', isolation: 'HIGH', players: 4 } }, 'coastline-round-trip');
-  assert.equal(result.provenance.version, '2');
+  assert.equal(result.provenance.version, '3');
   assert.equal(result.provenance.assessment.coastlines.accepted, true);
   const restored = parseCiv5Map(serializeCiv5Map(result.map), result.map.name);
   assert.equal(generationInputHash(restored.tiles.map(tile => tile.terrain < 2)), generationInputHash(result.map.tiles.map(tile => tile.terrain < 2)));
@@ -139,7 +139,7 @@ test('Native map families retain their distinct topology after coastline reconst
   for (const id of ['PANGAEA', 'CONTINENTS', 'ARCHIPELAGO', 'EARTHSEA', 'INLAND_SEAS'] as const) {
     const preset = MAP_PRESETS.find(p => p.id === id)!;
     const recipe = generationRecipeFromOptions({ ...DEFAULT_GENERATION_OPTIONS, engine: 'EXCOGITARE', preset: id, seed: 'coast-identity', size: 'STANDARD', style: 'REALISTIC', waterPercent: preset.water, mountainPercent: preset.mountains, players: 4, cityStates: 0, wrapType: 'NONE' });
-    const map = generateMapFoundation(recipe, undefined, { fieldConstruction: 'BRANCHING' });
+    const map = generateMapFoundation(recipe, undefined, { fieldConstruction: 'BRANCHING', coordinateSpace: 'HEX' });
     const land = groups(map, false), water = groups(map, true), totalLand = land.reduce((sum, region) => sum + region.length, 0);
     assert.ok(Math.abs((map.tiles.length - totalLand) - Math.round(map.tiles.length * preset.water / 100)) <= 1, `${id} lost its water budget`);
     if (id === 'PANGAEA') assert.ok(land[0].length / totalLand >= .6, 'Pangaea lost its dominant continent');

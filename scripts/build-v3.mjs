@@ -16,4 +16,13 @@ for (const file of ['index.html', 'style.css', 'theme.css', 'sidebar.css', 'laye
 await mkdir(new URL('history-layouts/', destination), { recursive: true });
 await copyFile(new URL('history-layouts/layouts.css', source), new URL('history-layouts/layouts.css', destination));
 await cp(new URL('brand/', source), new URL('brand/', destination), { recursive: true });
+// Cache keys must change with the actual client and worker-bootstrap bytes.
+// Otherwise an updated page can keep using a previous generator build token.
+let html = await readFile(new URL('index.html', destination), 'utf8');
+const versions = await Promise.all([...html.matchAll(/\b(src|href)="([^"?]+\.(?:js|css))(?:\?[^" ]*)?"/g)].map(async ([reference, attribute, file]) => {
+  const hash = createHash('sha256').update(await readFile(new URL(file, destination))).digest('hex').slice(0, 16);
+  return [reference, `${attribute}="${file}?v=${hash}"`];
+}));
+for (const [reference, versioned] of versions) html = html.replaceAll(reference, versioned);
+await writeFile(new URL('index.html', destination), html);
 console.log(`Built V3 generator ${digest} and /v3/index.html.`);

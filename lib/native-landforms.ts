@@ -1,8 +1,9 @@
 import type { NarrativeFieldSource } from './narrative-engine-adapters.ts';
 import { adjacentCoordinates } from './civ5-rules.ts';
 import { deterministicPassSeed } from './generation-pass-graph.ts';
+import { generationSpace, spaceOffset, tilePoint } from './generation-space.ts';
 
-export const NATIVE_LANDFORM_VERSION = 1;
+export const NATIVE_LANDFORM_VERSION = 2;
 type Point = { x: number; y: number; width: number };
 type Segment = { from: Point; to: Point };
 export type NativeFieldLandform = {
@@ -25,7 +26,8 @@ function randomSource(seed: number) {
 /** The graph is the large-scale anatomy: bends, unequal lobes, peninsulas and
  * the open bays between them. It is not a noisy radial outline. */
 function constructionGraph(source: NarrativeFieldSource, seed: number) {
-  const random = randomSource(deterministicPassSeed(String(seed), source.id, NATIVE_LANDFORM_VERSION));
+  // Keep the branch graph stable while changing how it occupies the canvas.
+  const random = randomSource(deterministicPassSeed(String(seed), source.id, 1));
   const water = source.effect === 'WATER';
   const bend = (random() - .5) * 1.3;
   const reverse = random() < .5 ? -1 : 1;
@@ -125,11 +127,10 @@ export function buildNativeFieldLandform(
   const target = Math.max(0, Math.min(width * height, Math.round(requestedArea)));
   if (!target) return { tiles: [], backbone: [], branchCount: 0 };
   const { segments, branches } = constructionGraph(source, seed);
+  const space = generationSpace(width, height);
   const cosine = Math.cos(source.rotation), sine = Math.sin(source.rotation);
   const score = (index: number) => {
-    let dx = (index % width + .5) / width - source.x;
-    if (wraps && Math.abs(dx) > .5) dx += dx > 0 ? -1 : 1;
-    const dy = (Math.floor(index / width) + .5) / height - source.y;
+    const { x: dx, y: dy } = spaceOffset(tilePoint(index, width, height), source, space, wraps);
     const x = (dx * cosine - dy * sine) / Math.max(.0001, source.radiusX);
     const y = (dx * sine + dy * cosine) / Math.max(.0001, source.radiusY);
     return backboneField(x, y, segments);

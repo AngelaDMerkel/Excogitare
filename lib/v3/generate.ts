@@ -9,7 +9,7 @@ import { compileV3Plan, homelandConstraints, type V3Plan } from './plan.ts';
 import { developV3Surface, type ClimateEvidence } from './surface.ts';
 import { placeV3Starts, balanceV3Content, type BalanceChanges } from './balance.ts';
 import { assessV3Map, type V3Assessment } from './assessment.ts';
-export const V3_GENERATOR_VERSION = '2';
+export const V3_GENERATOR_VERSION = '3';
 export type V3Phase = 'PLAN' | 'GEOGRAPHY' | 'CLIMATE' | 'STARTS' | 'BALANCE' | 'ASSESS';
 export type V3Progress = { phase: V3Phase; label: string; candidate: number; candidates: number };
 export type V3Provenance = { version: string; state: 'CURRENT' | 'STALE'; request: V3Request; inputHash: string; plan: V3Plan; climate: ClimateEvidence; balance: BalanceChanges; assessment: V3Assessment; candidate: number; passSeeds: Record<string, number> };
@@ -28,7 +28,7 @@ export function generateV3(input: unknown, seed?: string, control: V3Control = {
       const recipe = { ...plan.recipe, settings: { ...plan.recipe.settings, seed: candidateSeed } };
       let native: EngineNarrativeStageSnapshot | undefined;
       notify('GEOGRAPHY', 'Shaping land and water', candidate);
-      const foundation = generateMapFoundation(recipe, () => { if (control.isCancelled?.()) throw new GenerationCancelledError(); }, { fieldConstruction: 'BRANCHING', constraints: homelandConstraints(plan), onEngineNarrativeStage: stage => { if (stage.reliefValues && (stage.stage === 'RAW_NATIVE' || stage.stage === 'NARRATIVE_REALIZED')) native = stage; } });
+      const foundation = generateMapFoundation(recipe, () => { if (control.isCancelled?.()) throw new GenerationCancelledError(); }, { fieldConstruction: 'BRANCHING', coordinateSpace: 'HEX', constraints: homelandConstraints(plan), onEngineNarrativeStage: stage => { if (stage.reliefValues && (stage.stage === 'RAW_NATIVE' || stage.stage === 'NARRATIVE_REALIZED')) native = stage; } });
       notify('CLIMATE', 'Developing climate and terrain', candidate);
       const surfaced = developV3Surface(foundation, request, plan, native);
       notify('STARTS', 'Finding starting regions', candidate);

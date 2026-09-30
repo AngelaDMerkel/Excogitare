@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const outputDirectory = new URL("../out/", import.meta.url);
 const outputPath = fileURLToPath(outputDirectory);
@@ -42,5 +43,10 @@ assert.match(v3Html, /generation-client\.js/, "V3 must include its worker client
 for (const match of v3Html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
   const asset = match[1].split("?")[0];
   if (!asset.startsWith("data:") && !asset.startsWith("http")) await access(new URL(`v3/${asset}`, outputDirectory));
+  if (/\.(js|css)$/.test(asset)) {
+    const bytes = await readFile(new URL(`v3/${asset}`, outputDirectory));
+    const version = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+    assert.equal(new URL(match[1], "https://local.invalid/").searchParams.get("v"), version, `${asset} must invalidate stale browser caches when its content changes.`);
+  }
 }
 console.log("Verified V3 page, worker, styles, scripts and brand assets.");

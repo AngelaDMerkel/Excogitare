@@ -14,7 +14,7 @@ Generation and editing run locally in your browser. No account is required.
 
 Start with **Randomise all** to discover a world. It chooses fresh Standard settings, generates the map, then shows the chosen values so you can make small adjustments. **Generate** keeps your settings and creates another map.
 
-Standard describes how you want the world to play. The generator chooses the underlying map type and develops its geography, climate and resources.
+Standard describes how you want the world to play. The generator chooses the underlying map type and develops its geography, climate and resources. Geometry defines the available space: local landforms keep consistent proportions while their growth and arrangement respond to the canvas boundaries.
 
 | Control | What it changes |
 |---|---|

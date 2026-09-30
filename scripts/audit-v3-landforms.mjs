@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
-import { generateV3 } from '../lib/v3/generate.ts';
+import { generateV3, V3_GENERATOR_VERSION } from '../lib/v3/generate.ts';
 import { MAP_PRESETS } from '../lib/map-generator.ts';
 const rows = [], failures = [];
 function run(options, seed, label) {
@@ -21,7 +21,7 @@ for (let i = 0; i < 12; i++) {
   try { const r = generateV3({ mode: 'RANDOMISE' }, `v3-random-${i}`); assert.ok(r.provenance.assessment.coastlines.accepted); rows.push({ label: 'randomise', seed: i, type: r.provenance.plan.recipe.mapType, candidate: r.provenance.candidate, inspected: r.provenance.assessment.coastlines.inspected }); }
   catch(error) { failures.push({ label: 'randomise', seed: i, message: error.message }); }
 }
-const report = { generatorVersion: '2', cases: rows.length + failures.length, passed: rows.length, failed: failures.length, failures, rows };
+const report = { generatorVersion: V3_GENERATOR_VERSION, cases: rows.length + failures.length, passed: rows.length, failed: failures.length, failures, rows };
 if (process.argv[2]) writeFileSync(process.argv[2], JSON.stringify(report, null, 2)+'\n');
 console.log(JSON.stringify({ ...report, rows: undefined }, null, 2));
 if (failures.length) process.exitCode = 1;

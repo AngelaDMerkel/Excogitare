@@ -1,0 +1,108 @@
+{
+  "nativeLandform": [
+    {
+      "geometry": "STANDARD",
+      "width": 80,
+      "height": 52,
+      "landTiles": 500,
+      "bounds": [
+        43,
+        19
+      ]
+    },
+    {
+      "geometry": "WIDE",
+      "width": 129,
+      "height": 32,
+      "landTiles": 500,
+      "bounds": [
+        69,
+        12
+      ]
+    },
+    {
+      "geometry": "RIBBON",
+      "width": 223,
+      "height": 19,
+      "landTiles": 500,
+      "bounds": [
+        118,
+        7
+      ]
+    }
+  ],
+  "generated": [
+    {
+      "seed": "geometry-review-0",
+      "geometry": "STANDARD",
+      "width": 80,
+      "height": 52,
+      "engine": "PHYSICAL",
+      "mapType": "SUPERCONTINENT_INTERIOR",
+      "candidate": 1,
+      "accepted": true,
+      "waterPercent": 48.00480769230769,
+      "elapsedMs": 872
+    },
+    {
+      "seed": "geometry-review-0",
+      "geometry": "WIDE",
+      "width": 129,
+      "height": 32,
+      "engine": "PHYSICAL",
+      "mapType": "SUPERCONTINENT_INTERIOR",
+      "candidate": 1,
+      "accepted": true,
+      "waterPercent": 47.98934108527132,
+      "elapsedMs": 817
+    },
+    {
+      "seed": "geometry-review-0",
+      "geometry": "RIBBON",
+      "width": 223,
+      "height": 19,
+      "engine": "PHYSICAL",
+      "mapType": "SUPERCONTINENT_INTERIOR",
+      "candidate": 1,
+      "accepted": true,
+      "waterPercent": 48.00566438517819,
+      "elapsedMs": 2347
+    },
+    {
+      "seed": "geometry-review-2",
+      "geometry": "STANDARD",
+      "width": 80,
+      "height": 52,
+      "engine": "EXCOGITARE",
+      "mapType": "CONTINENTS",
+      "candidate": 1,
+      "accepted": true,
+      "waterPercent": 48.00480769230769,
+      "elapsedMs": 293
+    },
+    {
+      "seed": "geometry-review-2",
+      "geometry": "WIDE",
+      "width": 129,
+      "height": 32,
+      "engine": "EXCOGITARE",
+      "mapType": "CONTINENTS",
+      "candidate": 1,
+      "accepted": true,
+      "waterPercent": 47.98934108527132,
+      "elapsedMs": 258
+    },
+    {
+      "seed": "geometry-review-2",
+      "geometry": "RIBBON",
+      "width": 223,
+      "height": 19,
+      "engine": "EXCOGITARE",
+      "mapType": "CONTINENTS",
+      "candidate": 1,
+      "accepted": true,
+      "waterPercent": 48.00566438517819,
+      "elapsedMs": 332
+    }
+  ]
+}

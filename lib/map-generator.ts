@@ -1,3 +1,4 @@
+import { generationSpace, spaceOffset, spaceCoordinates, tilePoint, type GenerationSpace } from './generation-space.ts';
 import type { Civ5Map, Civ5StartLocation, Civ5Tile } from "./civ5-map.ts";
 import { buildNativeFieldLandform, NATIVE_LANDFORM_VERSION } from "./native-landforms.ts";
 import type { ClimateProjection } from "./climate-projection.ts";
@@ -590,9 +591,9 @@ function fractalNoise(x: number, y: number, seed: number) {
   return valueNoise(x, y, 18, seed) * 0.5 + valueNoise(x, y, 9, seed + 31) * 0.3 + valueNoise(x, y, 4.5, seed + 67) * 0.2;
 }
 
-function wrappedDistance(a: number, b: number) {
-  const distance = Math.abs(a - b);
-  return Math.min(distance, 1 - distance);
+function wrappedDistance(a: number, b: number, period = 1) {
+  const distance = Math.abs(a - b) % period;
+  return Math.min(distance, period - distance);
 }
 
 type Center = { x: number; y: number; radiusX: number; radiusY: number };
@@ -606,10 +607,10 @@ function createCenters(count: number, random: () => number, radius: [number, num
   }));
 }
 
-function centerField(nx: number, ny: number, centers: Center[], wraps: boolean) {
+function centerField(nx: number, ny: number, centers: Center[], wraps: boolean, period = 1) {
   let field = 0;
   for (const center of centers) {
-    const dx = (wraps ? wrappedDistance(nx, center.x) : Math.abs(nx - center.x)) / center.radiusX;
+    const dx = (wraps ? wrappedDistance(nx, center.x, period) : Math.abs(nx - center.x)) / center.radiusX;
     const dy = Math.abs(ny - center.y) / center.radiusY;
     field = Math.max(field, 1 - Math.hypot(dx, dy));
   }
@@ -620,11 +621,11 @@ function clamp(value: number, minimum = 0, maximum = 1) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-function voronoiBoundary(nx: number, ny: number, centers: Center[], wraps: boolean) {
+function voronoiBoundary(nx: number, ny: number, centers: Center[], wraps: boolean, period = 1) {
   let nearest = Number.POSITIVE_INFINITY;
   let second = Number.POSITIVE_INFINITY;
   for (const center of centers) {
-    const dx = wraps ? wrappedDistance(nx, center.x) : Math.abs(nx - center.x);
+    const dx = wraps ? wrappedDistance(nx, center.x, period) : Math.abs(nx - center.x);
     const distance = Math.hypot(dx, Math.abs(ny - center.y));
     if (distance < nearest) {
       second = nearest;
@@ -634,12 +635,12 @@ function voronoiBoundary(nx: number, ny: number, centers: Center[], wraps: boole
   return clamp((second - nearest) * 9);
 }
 
-function warpedCoordinates(x: number, y: number, width: number, height: number, seed: number, strength: number) {
+function warpedCoordinates(x: number, y: number, width: number, height: number, seed: number, strength: number, space?: GenerationSpace) {
   const warpX = (fractalNoise(x + 401, y + 193, seed + 2003) - 0.5) * strength;
   const warpY = (fractalNoise(x + 89, y + 577, seed + 4001) - 0.5) * strength;
   return {
-    x: x / width + warpX,
-    y: y / Math.max(1, height - 1) + warpY,
+    x: x / width + warpX * (space ? space.scale / space.width : 1),
+    y: y / Math.max(1, height - 1) + warpY * (space ? space.scale / space.spanY : 1),
   };
 }
 
@@ -682,7 +683,7 @@ function exactHighestMask(values: number[], count: number) {
   return values.map((_value, index) => selected.has(index));
 }
 
-function rasterFieldSource(source: NarrativeFieldSource, width: number, height: number, wraps: boolean) {
+function rasterFieldSource(source: NarrativeFieldSource, width: number, height: number, wraps: boolean, space?: GenerationSpace) {
   const members: number[] = [];
   const cosine = Math.cos(source.rotation);
   const sine = Math.sin(source.rotation);
@@ -692,17 +693,18 @@ function rasterFieldSource(source: NarrativeFieldSource, width: number, height: 
       const normalizedY = (y + 0.5) / height;
       let dx = normalizedX - source.x;
       if (wraps && Math.abs(dx) > 0.5) dx += dx > 0 ? -1 : 1;
-      const dy = normalizedY - source.y;
+      let dy = normalizedY - source.y;
+      if (space) ({ x: dx, y: dy } = spaceOffset(tilePoint(y * width + x, width, height), source, space, wraps));
       if (Math.hypot((dx * cosine - dy * sine) / source.radiusX, (dx * sine + dy * cosine) / source.radiusY) <= 1) members.push(y * width + x);
     }
   }
   return members;
 }
 
-function rasterFieldPath(path: NarrativePathReservation, width: number, height: number, wraps: boolean) {
+function rasterFieldPath(path: NarrativePathReservation, width: number, height: number, wraps: boolean, space?: GenerationSpace) {
   if (!path.points.length) return [];
   const members = new Set<number>();
-  const radius = Math.max(0, Math.min(2, Math.round(path.width * Math.max(width, height) * 0.45)));
+  const radius = Math.max(0, Math.min(2, Math.round(path.width * (space?.scale ?? Math.max(width, height)) * 0.45)));
   const stamp = (rawX: number, rawY: number) => {
     let x = Math.floor(rawX * width);
     const y = Math.max(0, Math.min(height - 1, Math.floor(rawY * height)));
@@ -2166,9 +2168,10 @@ function presetField(
   noise: number,
   centers: Center[],
   wraps: boolean,
+  period = 1,
 ) {
-  const blobs = centerField(nx, ny, centers, wraps);
-  const boundaries = voronoiBoundary(nx, ny, centers, wraps);
+  const blobs = centerField(nx, ny, centers, wraps, period);
+  const boundaries = voronoiBoundary(nx, ny, centers, wraps, period);
   if (preset === "PANGAEA") return blobs * 0.7 + noise * 0.46 + boundaries * 0.08 - Math.abs(ny - 0.5) * 0.08;
   if (preset === "ARCHIPELAGO") return blobs * 0.48 + noise * 0.56 + boundaries * 0.06;
   if (preset === "INLAND_SEAS") return 0.78 - blobs * 0.5 + noise * 0.27 - boundaries * 0.08;
@@ -3726,6 +3729,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const character = worldCharacterProfile(resolved.style);
   const size = MAP_SIZES.find((item) => item.id === resolved.size) ?? MAP_SIZES[3];
   const { width, height } = resolveMapDimensions(size.id, resolved.geometry);
+  const space = control?.coordinateSpace === "HEX" ? generationSpace(width, height) : undefined;
   const geometrySeed = resolved.geometry === "STANDARD" ? "" : `:${resolved.geometry}`;
   const projectionSeed = resolved.projectionType === "NORTH_SOUTH" ? "" : `:${resolved.projectionType}`;
   const scaleProfile = worldScaleProfile(scale);
@@ -3744,7 +3748,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   let narrativeSkeleton = compileNarrativeSkeleton(resolved, narrativeRecipe, width, height, wraps);
   const narrativeProgram = compileCatalogueNarrativeProgram(narrativeRecipe, { width, height, wraps });
   const appliedNativeRelaxationIds = nativeRelaxationIds(narrativeProgram, control?.narrativeRelaxationIds ?? []);
-  let narrativeAdapter = compileNarrativeAdapterPlan(narrativeProgram, narrativeSkeleton, appliedNativeRelaxationIds);
+  let narrativeAdapter = compileNarrativeAdapterPlan(narrativeProgram, narrativeSkeleton, appliedNativeRelaxationIds, control?.coordinateSpace);
   const targetMajorPopulation = narrativePopulationTarget(resolved.players, narrativeAdapter.native.populationAdjustment);
   const targetCityStatePopulation = narrativeCityStateTarget(resolved.cityStates, narrativeAdapter.native.populationAdjustment);
   const nativeGenerationOptions: MapGenerationOptions = targetMajorPopulation === requestedMajorPopulation(resolved.players)
@@ -3755,7 +3759,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     // Population changes alter realm, refuge and strategic reservations. Rebuild
     // those causes before asking the owning engine for another candidate.
     narrativeSkeleton = compileNarrativeSkeleton(nativeGenerationOptions, narrativeRecipe, width, height, wraps);
-    narrativeAdapter = compileNarrativeAdapterPlan(narrativeProgram, narrativeSkeleton, appliedNativeRelaxationIds);
+    narrativeAdapter = compileNarrativeAdapterPlan(narrativeProgram, narrativeSkeleton, appliedNativeRelaxationIds, control?.coordinateSpace);
   }
   // The native plan owns the effective contract for this retry. In particular,
   // authored content relaxations must alter placement and evidence on the map
@@ -5246,6 +5250,9 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   const centers = createCenters(centerCount, random, centerRadius, !wraps);
   const plateCenters = createCenters(Math.max(3, Math.round(baseCenterCount * 0.7 * scaleProfile.excogitare.plateFrequency)), random, [0.09 * radiusExpansion, Math.min(0.42, 0.19 * radiusExpansion)], !wraps);
   if (resolved.preset === "PANGAEA") centers[0] = { x: 0.5, y: 0.5, radiusX: 0.49, radiusY: 0.43 };
+  const fieldCenters = space ? centers.map(center => ({ ...center, ...spaceCoordinates(center, space) })) : centers;
+  const fieldPlateCenters = space ? plateCenters.map(center => ({ ...center, ...spaceCoordinates(center, space) })) : plateCenters;
+  const fieldPeriod = space ? space.width / space.scale : 1;
   let nativeFieldSemanticReservations = 0;
   const protectedFieldMembers = (id: string) => {
     const semantic = nativeConstraints?.semantics.find((candidate) => candidate.sourceSemanticId === `narrative:${id}`);
@@ -5343,9 +5350,11 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
     const id = source.id.replace(/^field-/, "");
     const protectedMembers = protectedFieldMembers(id);
     const adjusted = adjustedFieldSourceById.get(id) ?? source;
-    const ellipseBudget = rasterFieldSource(adjusted, width, height, wraps);
+    const ellipseBudget = rasterFieldSource(adjusted, width, height, wraps, space);
+    // The canvas bounds constrain connected growth, not the requested source area.
+    const sourceArea = space ? Math.round(Math.PI * adjusted.radiusX * adjusted.radiusY * width * height) : ellipseBudget.length;
     const landform = control?.fieldConstruction === "BRANCHING" && !protectedMembers.length
-      ? buildNativeFieldLandform(adjusted, width, height, wraps, seed, ellipseBudget.length)
+      ? buildNativeFieldLandform(adjusted, width, height, wraps, seed, sourceArea)
       : undefined;
     const rasterized = landform?.tiles ?? ellipseBudget;
     if (landform) {
@@ -5363,7 +5372,7 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   }) ?? []);
   const nativeFieldPathReservations = new Map(fieldPlan?.paths.map((path) => {
     const protectedMembers = protectedFieldMembers(path.id);
-    return [path.id, protectedMembers.length ? protectedMembers : rasterFieldPath(adjustedFieldPaths.get(path.id) ?? path, width, height, wraps)] as const;
+    return [path.id, protectedMembers.length ? protectedMembers : rasterFieldPath(adjustedFieldPaths.get(path.id) ?? path, width, height, wraps, space)] as const;
   }) ?? []);
   const nativeFieldLandPriority = new Float64Array(width * height);
   const nativeFieldWaterPriority = new Float64Array(width * height);
@@ -5399,21 +5408,23 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const warped = warpedCoordinates(x, y, width, height, seed, warpStrength);
+      const warped = warpedCoordinates(x, y, width, height, seed, warpStrength, space);
       const nx = wraps ? ((warped.x % 1) + 1) % 1 : clamp(warped.x, -0.1, 1.1);
       const ny = clamp(warped.y, -0.08, 1.08);
       const sampledX = x / scaleProfile.excogitare.fieldSpan;
       const sampledY = y / scaleProfile.excogitare.fieldSpan;
       const noise = fractalNoise(sampledX, sampledY, seed);
       const fineDetail = valueNoise(sampledX + 701, sampledY + 311, character.excogitare.fineDetailScale, seed + 9001) - 0.5;
-      let field = presetField(resolved.preset, nx, ny, noise, centers, wraps);
+      const location = space ? spaceCoordinates({ x: nx, y: ny }, space) : { x: nx, y: ny };
+      let field = presetField(resolved.preset, location.x, location.y, noise, fieldCenters, wraps, fieldPeriod);
       field += fineDetail * character.excogitare.fineDetailAmplitude;
       if (resolved.modifier === "FRACTURED") field += (valueNoise(x, y, 2.1, seed + 1171) - 0.5) * 0.28;
       const polarPenalty = wraps ? Math.max(0, scaledPoleProximity(x, y, width, height, resolved.projectionType, scale, seed + 31) - 0.86) * character.excogitare.polarPenalty : 0;
       if (!wraps) {
-        const edge = Math.min(x / width, 1 - x / width, y / height, 1 - y / height);
-        if (edge < 0.075) {
-          const edgeInfluence = (0.075 - edge) / 0.075;
+        const edgeWidth = space ? Math.min(space.scale * .075, Math.min(space.width, space.spanY) * .16) : .075;
+        const edge = space ? Math.min(x, width - 1 - x, y * space.spanY / height, (height - 1 - y) * space.spanY / height) : Math.min(x / width, 1 - x / width, y / height, 1 - y / height);
+        if (edge < edgeWidth) {
+          const edgeInfluence = (edgeWidth - edge) / edgeWidth;
           if (fieldEdgePolicy === "LAND") field += edgeInfluence * 2.4;
           else if (fieldEdgePolicy === "WATER" || fieldEdgePolicy === "OPEN") field -= edgeInfluence * 0.8;
           else field -= edgeInfluence * 0.26;
@@ -5794,13 +5805,13 @@ function generateMapInternal(options: MapGenerationOptions, onProgress?: (stage:
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      const nx = x / width;
-      const ny = y / Math.max(1, height - 1);
+      const location = { x: x / width, y: y / Math.max(1, height - 1) };
+      const { x: nx, y: ny } = space ? spaceCoordinates(location, space) : location;
       const detail = fractalNoise(x + 211, y + 307, seed + 1301);
-      const plateBoundary = 1 - voronoiBoundary(nx, ny, plateCenters, wraps);
+      const plateBoundary = 1 - voronoiBoundary(nx, ny, fieldPlateCenters, wraps, fieldPeriod);
       let relief = detail * 0.62 + Math.max(0, fieldValues[index] - reliefBaseline) * 0.16;
       relief += Math.pow(plateBoundary, 3) * character.excogitare.plateRelief;
-      relief += Math.pow(1 - voronoiBoundary(nx, ny, centers, wraps), 2) * character.excogitare.polygonRelief;
+      relief += Math.pow(1 - voronoiBoundary(nx, ny, fieldCenters, wraps, fieldPeriod), 2) * character.excogitare.polygonRelief;
       if (character.excogitare.contestedRidge > 0) {
         const contestedRidge = 1 - Math.abs(Math.sin((nx * 4.8 + detail * 0.56 + Math.sin(ny * 8.2) * 0.18) * Math.PI));
         relief += Math.pow(plateBoundary, 2.4) * character.excogitare.plateRelief + Math.pow(contestedRidge, 3.2) * character.excogitare.contestedRidge;

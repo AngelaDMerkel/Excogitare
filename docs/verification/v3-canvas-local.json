@@ -1,0 +1,46 @@
+{
+  "seed": 42,
+  "source": {
+    "id": "geometry-audit",
+    "role": "CONTINENT",
+    "effect": "LAND",
+    "x": 0.5,
+    "y": 0.5,
+    "radiusX": 0.18,
+    "radiusY": 0.15,
+    "rotation": 0.8,
+    "strength": 1
+  },
+  "rows": [
+    {
+      "geometry": "STANDARD",
+      "width": 80,
+      "height": 52,
+      "landTiles": 500,
+      "bounds": [
+        32,
+        26
+      ]
+    },
+    {
+      "geometry": "WIDE",
+      "width": 129,
+      "height": 32,
+      "landTiles": 500,
+      "bounds": [
+        33,
+        26
+      ]
+    },
+    {
+      "geometry": "RIBBON",
+      "width": 223,
+      "height": 19,
+      "landTiles": 500,
+      "bounds": [
+        35,
+        19
+      ]
+    }
+  ]
+}

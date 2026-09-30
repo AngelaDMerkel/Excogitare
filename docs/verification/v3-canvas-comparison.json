@@ -1,0 +1,50 @@
+[
+  {
+    "seed": "geometry-review-2",
+    "geometry": "STANDARD",
+    "engine": "EXCOGITARE",
+    "accepted": true,
+    "waterPercent": 48.00480769230769,
+    "candidate": 1
+  },
+  {
+    "seed": "geometry-review-2",
+    "geometry": "WIDE",
+    "engine": "EXCOGITARE",
+    "accepted": true,
+    "waterPercent": 47.98934108527132,
+    "candidate": 1
+  },
+  {
+    "seed": "geometry-review-2",
+    "geometry": "RIBBON",
+    "engine": "EXCOGITARE",
+    "accepted": true,
+    "waterPercent": 48.00566438517819,
+    "candidate": 1
+  },
+  {
+    "seed": "geometry-review-0",
+    "geometry": "STANDARD",
+    "engine": "PHYSICAL",
+    "accepted": true,
+    "waterPercent": 48.00480769230769,
+    "candidate": 1
+  },
+  {
+    "seed": "geometry-review-0",
+    "geometry": "WIDE",
+    "engine": "PHYSICAL",
+    "accepted": true,
+    "waterPercent": 47.98934108527132,
+    "candidate": 1
+  },
+  {
+    "seed": "geometry-review-0",
+    "geometry": "RIBBON",
+    "engine": "PHYSICAL",
+    "accepted": true,
+    "waterPercent": 48.00566438517819,
+    "candidate": 1
+  }
+]
