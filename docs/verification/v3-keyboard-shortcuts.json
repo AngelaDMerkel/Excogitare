@@ -1,0 +1,64 @@
+{
+  "pixelChecks": [
+    {
+      "check": "pan changes view",
+      "passed": true,
+      "pixelsIdentical": false,
+      "region": [
+        500,
+        300,
+        850,
+        600
+      ]
+    },
+    {
+      "check": "F restores fit",
+      "passed": true,
+      "pixelsIdentical": true,
+      "region": [
+        500,
+        300,
+        850,
+        600
+      ]
+    },
+    {
+      "check": "typing leaves view",
+      "passed": true,
+      "pixelsIdentical": true,
+      "region": [
+        500,
+        300,
+        850,
+        600
+      ]
+    }
+  ],
+  "desktopDownload": {
+    "name": "Sable Marches",
+    "width": 90,
+    "height": 22,
+    "bytes": 16872,
+    "seed": "57b4b0d0-dc6f-497a-b099-501b66078a33",
+    "modified": "2026-09-30T00:49:57.269Z",
+    "downloadedFileVerified": true
+  },
+  "mobileDownload": {
+    "name": "Orin Reach",
+    "width": 28,
+    "height": 72,
+    "bytes": 17153,
+    "seed": "bfd9dcf0-dcef-4c9a-98ba-20fe83753115",
+    "modified": "2026-09-30T00:52:32.590Z",
+    "downloadedFileVerified": true
+  },
+  "browser": {
+    "typing": "rgfd retained in seed field; no generation or download",
+    "previewGuards": true,
+    "busyGDoesNotCancel": true,
+    "randomiseReturnsToGenerate": true,
+    "uppercaseG": true,
+    "mobileGDoesNotGenerate": true,
+    "errors": []
+  }
+}

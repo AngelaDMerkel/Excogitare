@@ -28,11 +28,15 @@ Desktop **Save .Civ5Map** sits 12px below the left sidebar in Generate and Refin
 
 Save uses the existing `.Civ5Map` format. Civ VI export is not implemented. Ordinary Civ5Map output does not carry the planned starting positions; Civ V assigns starts at game creation.
 
+## Keyboard shortcuts
+
+R invokes Randomise all, G opens Generate and runs the current editor, F fits the map, and D invokes Save. R/G preserve pending-preview guards and do not cancel a running generation. Text/select/editable fields, Ctrl/Command/Alt combinations, composition, held-key repeats and open modal dialogs are excluded. Mobile supports R/F/D through its existing compact generation and Save actions.
+
 ## Mobile
 
 The mobile application shows the accepted map and exactly **Randomise** and **Save**. It hides editing, imports, history, layers, zoom buttons and configuration panels, and closes an open desktop dialog when entering mobile. Mobile Randomise chooses a new compact-size Standard request and runs the real generator, independently of hidden Advanced settings. Save prepares the accepted `.Civ5Map` using the existing writer; files with supported placement or binary errors are blocked. Imported maps retain original bytes for the existing update writer. Pending previews are not exported.
 
-Shared desktop/mobile Save export/parse checks passed for all six samples and an imported map. The in-app browser download-event waiter timed out for both controls, and download delivery has not been independently confirmed. The link receives the verified Blob and filename. No successful browser delivery is inferred from serialization alone.
+Shared desktop/mobile Save export/parse checks passed for all six samples and an imported map. The keyboard-shortcut checks additionally confirmed actual desktop and mobile downloads on disk, parsed both files, and matched their seeds to the displayed maps. The in-app browser download-event waiter still does not report these Blob downloads; file delivery was verified independently.
 
 ## Refine
 

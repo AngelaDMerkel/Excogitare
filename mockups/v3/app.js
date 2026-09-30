@@ -161,7 +161,7 @@ async function toggleKeep(){if(guardPreview())return;const kept=!current.kept;bu
 if($('keep-world'))$('keep-world').onclick=toggleKeep;
 if($('kept-only'))$('kept-only').onclick=()=>{showKept=!showKept;$('kept-only').setAttribute('aria-pressed',String(showKept));renderShelf();};
 function updateGenerationSummary(){const info=$('generation-summary');if(!info)return;const v=current.v3;if(!v){info.textContent=current.source==='imported'?'Imported map. Tile checks and corrections run locally.':'Example map. Generate creates a new world locally.';return;}info.textContent=`${v.version!=='3'?'Created with an earlier generator. Generate again for updated geography. ':''}${v.plan.premise}. Seed ${v.request.seed}. ${v.state==='STALE'?'Edited since generation; the original balance assessment is out of date.':`${v.assessment.starts.length} starting regions checked. ${v.assessment.warnings.join(' ')}`} Civ V assigns starts when loading an ordinary map file.`;}
-function generationUI(progress){for(const id of ['generation-status','mobile-status'])if($(id)){$(id).hidden=!generationPending;$(id).textContent=progress?.label||'Generating';}$('surprise').innerHTML=generationPending?'Cancel generation':'<span data-icon="shuffle"></span>Generate';icons($('surprise'));if($('mobile-randomise'))$('mobile-randomise').textContent=generationPending?'Cancel':'Randomise';busyHistory(historyBusy);}
+function generationUI(progress){for(const id of ['generation-status','mobile-status'])if($(id)){$(id).hidden=!generationPending;$(id).textContent=progress?.label||'Generating';}$('surprise').innerHTML=generationPending?'Cancel generation':'<span data-icon="shuffle"></span>Generate';icons($('surprise'));if($('mobile-randomise'))$('mobile-randomise').textContent=generationPending?'Cancel':'Randomise';shortcutHint('surprise','G',generationPending?'Cancel generation':'Generate',!generationPending);shortcutHint('mobile-randomise','R',generationPending?'Cancel':'Randomise',!generationPending);busyHistory(historyBusy);}
 async function runGeneration(request,reflectSettings=false){if(generationPending){window.V3Generator.cancel();return;}if(guardPreview())return;generationPending=true;generationUI();try{const result=await window.V3Generator.generate(request,generationUI);generationPending=false;const world={uid:++serial,id:`generated-${serial}`,title:result.map.name,map:result.map,source:'generated',change:'Generated world',seed:result.provenance.request.seed,generationRequest:result.provenance.request,v3:result.provenance};if(await addSnapshot(world)){if(reflectSettings&&result.provenance.request.mode==='STANDARD')window.V3GenerationControls.applyStandard(result.provenance.request.parameters);setCurrent(world);if(result.provenance.assessment.warnings.length)toast(result.provenance.assessment.warnings[0]);}}catch(error){toast(error.name==='AbortError'?'Generation cancelled.':error.message);}finally{generationPending=false;generationUI();}}
 $('surprise').onclick=()=>runGeneration(window.V3GenerationControls.read());
 if($('randomise-all'))$('randomise-all').onclick=()=>runGeneration({mode:'RANDOMISE',fullSizeRange:true},true);
@@ -203,3 +203,27 @@ new MutationObserver(()=>{const list=$('world-list');if(list.getBoundingClientRe
 initialiseHistory();
 
 $('world-list').addEventListener('keydown',event=>{const vertical=getComputedStyle($('world-list')).flexDirection==='column',previous=vertical?'ArrowUp':'ArrowLeft',next=vertical?'ArrowDown':'ArrowRight';if(![previous,next,'Home','End'].includes(event.key))return;const cards=[...$('world-list').querySelectorAll('.world-card')],index=cards.indexOf(document.activeElement);if(index<0)return;event.preventDefault();const target=event.key==='Home'?0:event.key==='End'?cards.length-1:Math.max(0,Math.min(cards.length-1,index+(event.key===next?1:-1)));cards[target]?.focus();});
+
+
+function shortcutHint(id,key,label,active=true){
+  const button=$(id);if(!button)return;
+  button.title=active?`${label} (${key})`:label;
+  if(active)button.setAttribute('aria-keyshortcuts',key);else button.removeAttribute('aria-keyshortcuts');
+}
+for(const [id,key,label] of [['randomise-all','R','Randomise all'],['surprise','G','Generate'],['desktop-save','D','Save .Civ5Map'],['mobile-randomise','R','Randomise'],['mobile-save','D','Save']])shortcutHint(id,key,label);
+canvas.setAttribute('aria-keyshortcuts','F');
+document.addEventListener('keydown',event=>{
+  const target=event.target;
+  if(event.defaultPrevented||event.repeat||event.isComposing||event.ctrlKey||event.metaKey||event.altKey)return;
+  if(target instanceof Element&&(target.closest('input,textarea,select')||target.isContentEditable))return;
+  if(document.querySelector('dialog[open]'))return;
+  const key=event.key.toLowerCase();if(!['r','g','f','d'].includes(key))return;
+  const mobile=mobileMedia.matches;if(key==='g'&&mobile)return;
+  event.preventDefault();
+  if(key==='f'){fitMap(true);return;}
+  if(generationPending||historyBusy)return;
+  if(!mobile&&(key==='r'||key==='g')){if(guardPreview())return;setMode('generate');}
+  const id=key==='r'?(mobile?'mobile-randomise':'randomise-all'):key==='g'?'surprise':mobile?'mobile-save':'desktop-save';
+  const action=$(id);if(!action||action.disabled||action.getAttribute('aria-disabled')==='true')return;
+  action.click();
+});

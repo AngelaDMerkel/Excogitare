@@ -91,6 +91,17 @@ Close Layers with its button, **Escape**, or a click outside the checklist.
 
 History keeps the latest **100 snapshots**, newest first. Click a thumbnail to restore it. Generated maps, imports and accepted edits survive reloads in the same browser and site. Clearing site data removes them; save important maps as files. Draft settings and unaccepted previews are not persistent snapshots.
 
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| **R** | Randomise all settings and generate a map. |
+| **G** | Generate using the current settings. |
+| **F** | Fit and centre the map between the controls. |
+| **D** | Download the accepted map as `.Civ5Map`. |
+
+Shortcuts work outside input fields. Held keys do not repeat actions, and Ctrl/Command/Alt combinations keep their browser behavior.
+
 ## On a phone
 
 <img src="docs/images/v3-mobile.jpg" alt="Phone interface showing the map with Randomise and Save buttons at the bottom" width="260">

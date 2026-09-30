@@ -39,7 +39,7 @@ Wayfinder gold/night branding, warm paper, navy actions, rounded floating contro
 | 4. Interface | Desktop/mobile review, reversible tweaks and a clear primary random action required. |
 | 5. Rendering | Atlas-inspired sample rendering and overlays required; no geographic correctness claim. |
 | 6. Editing/history | Local latest-100 history, selected map and preview acceptance are implemented. Existing tile corrections and local terrain tweaks are supported; accepted edits invalidate the generation assessment. Selective pass regeneration remains separate work. |
-| 7. Persistence/export | Browser-local history retains snapshots and imported source bytes across reloads. Mobile Save reuses the existing Civ5Map writer; serialization/parse checks pass, while browser download delivery remains unverified. Portable project files and new game-compatibility guarantees are deferred. |
+| 7. Persistence/export | Browser-local history retains snapshots and imported source bytes across reloads. Mobile Save reuses the existing Civ5Map writer; serialization/parse checks pass. Actual desktop/mobile file delivery was subsequently verified in the keyboard-shortcut workflow. Portable project files and new game-compatibility guarantees are deferred. |
 | 8. Validation/Repair | Preview/discard/accept selected tile corrections, disclose removed content, and recheck supported placement rules. No full repair, game compatibility or fairness claims. |
 | 9. Checks | Generator tests, regression suite, types/lint, production/Pages and browser interaction checks pass. Alpine is unavailable; see the generator record. |
 | 10. Documentation | Adjacent README documents launch, interactions, samples and limitations. |
@@ -352,3 +352,8 @@ The approved interface now generates actual V3 maps. Generate/Randomise run the 
 ## Adaptive Standard sidebar
 
 The Standard editor now reduces spacing with the viewport height and proportionally scales the whole panel when needed. All eleven dropdowns, the Advanced disclosure, Generate and Randomise stay visible without scrolling. Save follows the visible panel width and sits 12px below it; the history fade remains 32px above the panel bottom. The longer Advanced/Refine editors retain scrolling, and mobile retains its two actions. See [implementation and evidence](v3-adaptive-sidebar.md).
+
+
+## Download delivery follow-up
+
+The [keyboard-shortcut verification](v3-keyboard-shortcuts.md) located the desktop and mobile downloads on disk, parsed the files and matched their seeds to the displayed maps. This resolves the browser-delivery uncertainty recorded in the earlier checks above. It does not extend the game-compatibility boundary.
