@@ -60,7 +60,7 @@ function shownMap(){return !mobileMedia.matches&&preview&&!showOriginal?preview.
 function drawPlannedStarts(c,map){if(!layers.starts||mobileMedia.matches)return;c.textAlign='center';c.textBaseline='middle';c.font=`600 ${10/view.zoom}px -apple-system, sans-serif`;for(const start of map.startLocations.filter(s=>!s.cityState)){const {x,y}=center(map,start.y*map.width+start.x);c.fillStyle='#252c40';c.strokeStyle='#f2e8d6';c.lineWidth=1/view.zoom;c.beginPath();c.arc(x,y,9/view.zoom,0,Math.PI*2);c.fill();c.stroke();c.fillStyle='#d9b678';c.fillText(String(start.player+1),x,y+.5/view.zoom);}}
 function renderMap(){ctx.setTransform(viewport.ratio,0,0,viewport.ratio,0,0);ctx.clearRect(0,0,viewport.width,viewport.height);ctx.save();ctx.translate(view.x,view.y);ctx.scale(view.zoom,view.zoom);drawTiles(ctx,shownMap(),layers,mobileMedia.matches?[]:preview&&!showOriginal?preview.changed:[...highlight,...selection]);drawPlannedStarts(ctx,shownMap());ctx.restore();if($('zoom-level'))$('zoom-level').textContent=`${Math.round(view.zoom/view.fit*100)}%`;}
 let fitActive=true;
-const fitSelectors='.panel,.world-header,.view-actions,.layers-menu,.shelf,.zoom,.map-meta,.preview-bar,.mobile-actions,.prototype-details,.footnote,.shelf-filter,.desktop-save,.desktop-map-actions';
+const fitSelectors='.panel,.world-header,.view-actions,.shelf,.zoom,.map-meta,.preview-bar,.mobile-actions,.prototype-details,.footnote,.shelf-filter,.desktop-save,.desktop-map-actions';
 function fittedView(){
   const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return null;
   const sx=viewport.width/bounds.width,sy=viewport.height/bounds.height;

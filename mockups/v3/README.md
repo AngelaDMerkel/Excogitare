@@ -24,7 +24,7 @@ Generate becomes Cancel generation while a worker is running. Progress uses the 
 
 ## Save
 
-Desktop **Save .Civ5Map** sits 12px below the left sidebar in Generate and Refine. **Layers** sits above the snapshots, aligned with the sidebar top and matching the 88px thumbnail width, with a 12px gap before the first snapshot. An opaque paper background keeps it visible. Its menu opens to the left with Relief, Vegetation, Resources, Hex grid and Planned starts controls. Planned-start markers make the evaluated regions inspectable; ordinary game-map exports still let Civ V assign starts. It downloads the accepted map through the existing writer and blocks supported placement or binary errors. Keep/Kept, bookmark filtering and saved-state markers are removed.
+Desktop **Save .Civ5Map** sits 12px below the left sidebar in Generate and Refine. **Layers** sits above the snapshots, aligned with the sidebar top and matching the 88px thumbnail width, with a 12px gap before the first snapshot. An opaque paper background keeps it visible. The approved checklist opens over the canvas with Relief, Vegetation, Resources, Hex grid and Planned starts controls. It stays outside map-fit calculations, so opening or closing it preserves map position and zoom. Close, Escape and outside clicks dismiss it; the menu repositions within smaller desktop windows and closes on mobile. Planned-start markers make the evaluated regions inspectable; ordinary game-map exports still let Civ V assign starts. It downloads the accepted map through the existing writer and blocks supported placement or binary errors. Keep/Kept, bookmark filtering and saved-state markers are removed.
 
 Save uses the existing `.Civ5Map` format. Civ VI export is not implemented. Ordinary Civ5Map output does not carry the planned starting positions; Civ V assigns starts at game creation.
 
@@ -56,6 +56,7 @@ The latest 100 accepted snapshots and the selected map are stored locally in thi
 - `map-fit.js`: fits the map into a clear rectangle between measured controls.
 - `history-carousel.js`: aligns the history fade with the sidebar bottom.
 - `sidebar.css`: shared panel width, spacing, control grid, frame scaling and action/progress layout for Generate, Advanced and Refine.
+- `layers.css`, `layers.js`: approved checklist overlay, shared by Generate and Refine; keeps existing native layer inputs and rendering handlers.
 - `sidebar-fit.js`: measures the Standard Generate reference for every desktop workspace; updates canvas/history alignment.
 - `dimension-warnings.js`, `dimension-warnings.css`: approved inside-control warnings for experimental dimensions in both editors.
 - `snapshot-store.js`: local snapshot storage, selection and the latest-100 limit.

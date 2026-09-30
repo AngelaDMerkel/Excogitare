@@ -1,0 +1,113 @@
+{
+  "date": "2026-09-29",
+  "scope": "Approved V3 Layers checklist overlay",
+  "automaticView": {
+    "imageSize": [
+      1280,
+      720
+    ],
+    "mapRegion": [
+      563,
+      360,
+      998,
+      540
+    ],
+    "mapPixelsUnchanged": true,
+    "differenceBounds": null
+  },
+  "interactionPixels": [
+    {
+      "check": "close_preserves_view",
+      "pixelRegion": [
+        563,
+        360,
+        998,
+        540
+      ],
+      "pixelsIdentical": true,
+      "passed": true,
+      "differenceBounds": null
+    },
+    {
+      "check": "grid_changes_rendering",
+      "pixelRegion": [
+        563,
+        360,
+        998,
+        540
+      ],
+      "pixelsIdentical": false,
+      "passed": true,
+      "differenceBounds": [
+        0,
+        0,
+        435,
+        180
+      ]
+    },
+    {
+      "check": "manual_view_changes_map",
+      "pixelRegion": [
+        563,
+        360,
+        998,
+        540
+      ],
+      "pixelsIdentical": false,
+      "passed": true,
+      "differenceBounds": [
+        0,
+        0,
+        435,
+        180
+      ]
+    },
+    {
+      "check": "open_preserves_manual_view",
+      "pixelRegion": [
+        563,
+        360,
+        998,
+        540
+      ],
+      "pixelsIdentical": true,
+      "passed": true,
+      "differenceBounds": null
+    }
+  ],
+  "browser": {
+    "layoutObstaclesUnchanged": true,
+    "keyboardSpace": true,
+    "escapeDismissal": true,
+    "closeReturnsFocus": "layers-button",
+    "outsideDismissal": true,
+    "workspaceDismissal": true,
+    "refineReopensChecklist": true,
+    "popupWithinViewport": [
+      [
+        900,
+        600
+      ],
+      [
+        760,
+        420
+      ]
+    ],
+    "mobileHidesAndCloses": [
+      390,
+      844
+    ],
+    "packagedRuntimeChecklist": true
+  },
+  "checks": {
+    "lint": "pass",
+    "typescript": "pass",
+    "rendered": {
+      "passed": 24,
+      "failed": 0
+    },
+    "productionBuild": "pass",
+    "pagesBuildAndAssetVerification": "pass",
+    "alpine": "Unavailable: Docker daemon socket absent"
+  }
+}

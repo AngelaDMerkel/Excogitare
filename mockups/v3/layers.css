@@ -1,0 +1,21 @@
+/* Approved checklist overlay, shared by Generate and Refine. */
+body[data-layout=two-workspaces] .canvas-layers>button{gap:5px;padding-inline:6px;font-size:11px}
+.canvas-layers .layers-chevron{width:10px;height:10px}
+.canvas-layers>button[aria-expanded=true] .layers-chevron{transform:rotate(180deg)}
+.layer-popover{position:fixed;z-index:40;width:224px;max-width:calc(100vw - 32px);padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:0 7px 24px #252c4020;overflow:auto}
+.layer-popover header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 6px 8px}
+.layer-popover h3{font-size:13px;font-weight:600;color:var(--brand-night)}
+.layer-close{min-height:24px;width:24px;height:24px;padding:4px;color:var(--muted);border-radius:5px}
+.layer-close svg{width:14px;height:14px}
+.layer-list{display:grid;gap:2px}
+.layer-choice{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr) 18px;gap:9px;align-items:center;min-height:36px;padding:7px 8px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--ink)}
+.layer-choice:hover{background:var(--soft)}
+.layer-symbol{color:var(--muted)}
+.layer-symbol svg{width:16px;height:16px}
+.layer-choice.is-on .layer-symbol{color:var(--accent)}
+.layer-choice:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+.layer-choice input{appearance:none;-webkit-appearance:none;position:relative;display:block;width:16px;height:16px;margin:0;border:1px solid var(--line);border-radius:3px;background:var(--paper);cursor:pointer;justify-self:end}
+.layer-choice input:focus-visible{outline:none}
+.layer-choice input:checked{background:var(--accent);border-color:var(--accent)}
+.layer-choice input:checked::after{content:"";position:absolute;left:4px;top:2px;width:4px;height:7px;border:solid var(--paper);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+body.mobile-simple .layer-popover{display:none}

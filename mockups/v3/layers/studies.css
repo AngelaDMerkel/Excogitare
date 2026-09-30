@@ -1,0 +1,52 @@
+/* Shared review chrome and overlay behavior for all three proposals. */
+.layer-studies{overflow:hidden}
+.layer-study-bar{height:44px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:0 16px;background:var(--paper);border-bottom:1px solid var(--line);font-size:11px}
+.layer-study-bar>div{display:flex;gap:5px}
+.layer-study-bar a{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:6px;text-decoration:none;color:var(--muted);white-space:nowrap}
+.layer-study-bar a:hover{background:var(--soft)}
+.layer-study-bar a[aria-current=page]{background:var(--brand-night);color:var(--brand-paper)}
+.layer-study-bar a span{font-size:10px;font-variant-numeric:tabular-nums;opacity:.65}
+.study-label{color:var(--muted)}
+.layer-study-bar .study-main-link{justify-self:end;padding-inline:0;font-size:10px}
+body.layer-studies .workspace{height:calc(100dvh - 44px)!important}
+.layer-studies .canvas-layers>button{gap:5px;padding-inline:6px;font-size:11px}
+.layer-studies .canvas-layers .layers-chevron{width:10px;height:10px}
+.layer-studies .canvas-layers>button[aria-expanded=true] .layers-chevron{transform:rotate(180deg)}
+.layer-popover{position:fixed;z-index:40;width:224px;max-width:calc(100vw - 32px);padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:0 7px 24px #252c4020;overflow:auto}
+.layer-popover header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 6px 8px}
+.layer-popover h3{font-size:13px;font-weight:600;color:var(--brand-night)}
+.layer-close{min-height:24px;width:24px;height:24px;padding:4px;color:var(--muted);border-radius:5px}
+.layer-close svg{width:14px;height:14px}
+.layer-list{display:grid;gap:2px}
+.layer-choice{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr) 18px;gap:9px;align-items:center;min-height:36px;padding:7px 8px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--ink)}
+.layer-choice:hover{background:var(--soft)}
+.layer-symbol{color:var(--muted)}
+.layer-symbol svg{width:16px;height:16px}
+.layer-choice.is-on .layer-symbol{color:var(--accent)}
+.layer-choice:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+.layer-choice input{appearance:none;-webkit-appearance:none;position:relative;display:block;width:16px;height:16px;margin:0;border:1px solid var(--line);border-radius:3px;background:var(--paper);cursor:pointer;justify-self:end}
+.layer-choice input:focus-visible{outline:none}
+.layer-choice input:checked{background:var(--accent);border-color:var(--accent)}
+.layer-choice input:checked::after{content:"";position:absolute;left:4px;top:2px;width:4px;height:7px;border:solid var(--paper);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+/* 02: switches provide a familiar visible/hidden state. */
+[data-layer-design=switches] .layer-popover{width:240px;padding:10px}
+[data-layer-design=switches] .layer-choice{grid-template-columns:18px minmax(0,1fr) 30px;min-height:39px;border-radius:0;border-top:1px solid var(--line)}
+[data-layer-design=switches] .layer-choice:first-child{border-top:0}
+[data-layer-design=switches] .layer-choice input{width:28px;height:16px;border:0;border-radius:9px;background:#d9d1c7}
+[data-layer-design=switches] .layer-choice input::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border:0;border-radius:50%;background:var(--paper);box-shadow:0 1px 2px #252c4022;transform:none;transition:transform .12s ease}
+[data-layer-design=switches] .layer-choice input:checked{background:var(--accent)}
+[data-layer-design=switches] .layer-choice input:checked::after{transform:translateX(12px)}
+/* 03: four visual tiles plus a full-width planned-starts control. */
+[data-layer-design=tiles] .layer-popover{width:254px;padding:10px}
+[data-layer-design=tiles] .layer-list{grid-template-columns:1fr 1fr;gap:7px}
+[data-layer-design=tiles] .layer-choice{display:flex;flex-direction:column;justify-content:center;gap:7px;min-height:68px;padding:10px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);text-align:center}
+[data-layer-design=tiles] .layer-choice.is-on{background:var(--soft);border-color:var(--accent)}
+[data-layer-design=tiles] .layer-symbol svg{width:22px;height:22px}
+[data-layer-design=tiles] .layer-choice input{position:absolute;width:1px;height:1px;padding:0;border:0;clip-path:inset(50%);overflow:hidden}
+[data-layer-design=tiles] .layer-choice.is-on::after{content:"";position:absolute;right:8px;top:6px;width:3px;height:6px;border:solid var(--accent);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+[data-layer-design=tiles] .layer-choice[data-kind=starts]{grid-column:1/-1;flex-direction:row;gap:9px;min-height:37px}
+[data-layer-design=tiles] .layer-choice[data-kind=starts] .layer-symbol svg{width:17px;height:17px}
+body.layer-studies.mobile-simple .layer-study-bar,body.mobile-simple .layer-popover{display:none}
+body.layer-studies.mobile-simple .workspace{height:100dvh!important}
+@media(max-width:1000px){.layer-study-bar{grid-template-columns:1fr;justify-items:center;padding-inline:8px}.study-label,.layer-study-bar .study-main-link{display:none}}
+@media(prefers-reduced-motion:reduce){.layer-choice input::after{transition:none!important}}
