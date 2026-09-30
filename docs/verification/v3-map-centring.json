@@ -1,0 +1,363 @@
+{
+  "geometries": [
+    {
+      "geometry": "STANDARD",
+      "pixelBounds": [
+        324,
+        265,
+        1020,
+        656
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "WIDE",
+      "pixelBounds": [
+        324,
+        385,
+        1020,
+        536
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "TALL",
+      "pixelBounds": [
+        501,
+        100,
+        843,
+        821
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "SQUARE",
+      "pixelBounds": [
+        324,
+        160,
+        1020,
+        761
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "NEEDLE",
+      "pixelBounds": [
+        635,
+        100,
+        709,
+        821
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "RIBBON",
+      "pixelBounds": [
+        324,
+        434,
+        1020,
+        487
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "PIN",
+      "pixelBounds": [
+        662,
+        101,
+        682,
+        821
+      ],
+      "center": [
+        672.0,
+        461.0
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    },
+    {
+      "geometry": "STRING",
+      "pixelBounds": [
+        324,
+        453,
+        1020,
+        468
+      ],
+      "center": [
+        672.0,
+        460.5
+      ],
+      "expectedCenter": [
+        672.166,
+        460.5
+      ]
+    }
+  ],
+  "interactions": [
+    {
+      "check": "advanced",
+      "pixelsIdentical": true,
+      "passed": true,
+      "region": [
+        610,
+        280,
+        780,
+        780
+      ]
+    },
+    {
+      "check": "refine",
+      "pixelsIdentical": true,
+      "passed": true,
+      "region": [
+        610,
+        280,
+        780,
+        780
+      ]
+    },
+    {
+      "check": "layers",
+      "pixelsIdentical": true,
+      "passed": true,
+      "region": [
+        610,
+        280,
+        780,
+        780
+      ]
+    },
+    {
+      "check": "manual movement",
+      "pixelsIdentical": false,
+      "passed": true,
+      "region": [
+        610,
+        280,
+        780,
+        780
+      ]
+    },
+    {
+      "check": "manual layers",
+      "pixelsIdentical": true,
+      "passed": true,
+      "region": [
+        610,
+        280,
+        780,
+        780
+      ]
+    }
+  ],
+  "responsive": [
+    {
+      "name": "900x600",
+      "height": 600,
+      "overlays": [
+        {
+          "bottom": 511.4595031738281,
+          "left": 16,
+          "right": 268.72979736328125,
+          "top": 16
+        },
+        {
+          "bottom": 563.453125,
+          "left": 16,
+          "right": 268.7265625,
+          "top": 523.453125
+        },
+        {
+          "bottom": 563.453125,
+          "left": 16,
+          "right": 268.7265625,
+          "top": 523.453125
+        },
+        {
+          "bottom": 51,
+          "left": 788,
+          "right": 876,
+          "top": 16
+        },
+        {
+          "bottom": 68,
+          "left": 300.7265625,
+          "right": 348.7734375,
+          "top": 24
+        },
+        {
+          "bottom": 479.453125,
+          "left": 780,
+          "right": 884,
+          "top": 59
+        },
+        {
+          "bottom": 597,
+          "left": 16,
+          "right": 88.703125,
+          "top": 575.5
+        }
+      ],
+      "width": 900,
+      "padding": 32,
+      "frame": {
+        "left": 300.72979736328125,
+        "top": 100,
+        "right": 748,
+        "bottom": 568
+      },
+      "expectedCenter": [
+        524.3648986816406,
+        334
+      ],
+      "pixelCenter": [
+        524.5,
+        333.5
+      ]
+    },
+    {
+      "name": "760x420",
+      "height": 420,
+      "overlays": [
+        {
+          "bottom": 312.9704895019531,
+          "left": 16,
+          "right": 167.48219299316406,
+          "top": 16
+        },
+        {
+          "bottom": 364.96875,
+          "left": 16,
+          "right": 167.4765625,
+          "top": 324.96875
+        },
+        {
+          "bottom": 364.96875,
+          "left": 16,
+          "right": 167.4765625,
+          "top": 324.96875
+        },
+        {
+          "bottom": 51,
+          "left": 648,
+          "right": 736,
+          "top": 16
+        },
+        {
+          "bottom": 68,
+          "left": 199.4765625,
+          "right": 247.5234375,
+          "top": 24
+        },
+        {
+          "bottom": 280.96875,
+          "left": 640,
+          "right": 744,
+          "top": 59
+        },
+        {
+          "bottom": 417,
+          "left": 16,
+          "right": 88.703125,
+          "top": 377
+        }
+      ],
+      "width": 760,
+      "padding": 32,
+      "frame": {
+        "left": 199.48219299316406,
+        "top": 100,
+        "right": 608,
+        "bottom": 388
+      },
+      "expectedCenter": [
+        403.74109649658203,
+        244
+      ],
+      "pixelCenter": [
+        404.0,
+        243.5
+      ]
+    },
+    {
+      "name": "390x844",
+      "height": 844,
+      "overlays": [
+        {
+          "bottom": 49.1171875,
+          "left": 20,
+          "right": 370,
+          "top": 18
+        },
+        {
+          "bottom": 844,
+          "left": 0,
+          "right": 390,
+          "top": 776
+        }
+      ],
+      "width": 390,
+      "padding": 20,
+      "frame": {
+        "left": 20,
+        "top": 69.1171875,
+        "right": 370,
+        "bottom": 756
+      },
+      "expectedCenter": [
+        195,
+        412.55859375
+      ],
+      "pixelCenter": [
+        194.5,
+        412.5
+      ]
+    }
+  ],
+  "closedDetailsIgnored": true,
+  "openDetailsRefits": true
+}

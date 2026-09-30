@@ -64,8 +64,14 @@ const fitSelectors='.panel,.world-header,.view-actions,.shelf,.zoom,.map-meta,.p
 function fittedView(){
   const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return null;
   const sx=viewport.width/bounds.width,sy=viewport.height/bounds.height;
-  const overlays=[...document.querySelectorAll(fitSelectors)].flatMap(el=>{const r=el.getBoundingClientRect();if(!r.width||!r.height||getComputedStyle(el).visibility==='hidden')return [];return [{left:(r.left-bounds.left)*sx,top:(r.top-bounds.top)*sy,right:(r.right-bounds.left)*sx,bottom:(r.bottom-bounds.top)*sy}];});
-  return window.V3MapFit.solve({width:viewport.width,height:viewport.height,mapWidth:(current.map.width+.5)*Math.sqrt(3)*10+10,mapHeight:current.map.height*15+5,overlays,padding:mobileMedia.matches?20:32});
+  const overlays=[...document.querySelectorAll(fitSelectors)].flatMap(el=>{
+    const closed=el.closest('details:not([open])');
+    if(closed&&!closed.querySelector('summary')?.contains(el))return [];
+    const r=el.getBoundingClientRect();if(!r.width||!r.height||getComputedStyle(el).visibility==='hidden')return [];
+    return [{left:(r.left-bounds.left)*sx,top:(r.top-bounds.top)*sy,right:(r.right-bounds.left)*sx,bottom:(r.bottom-bounds.top)*sy}];
+  });
+  const footprint=window.V3MapFit.hexBounds(current.map.width,current.map.height);if(!footprint)return null;
+  return window.V3MapFit.solve({width:viewport.width,height:viewport.height,mapWidth:footprint.width,mapHeight:footprint.height,mapLeft:footprint.left,mapTop:footprint.top,overlays,padding:mobileMedia.matches?20:32});
 }
 function fitMap(report=false){const next=fittedView();if(!next){fitActive=false;if(report)toast('Make the window larger to fit the map between the controls.');return false;}fitActive=true;view={...view,x:next.x,y:next.y,zoom:next.zoom,fit:next.zoom};renderMap();return true;}
 let canvasSized=false,fitRefreshFrame=0;
@@ -78,6 +84,7 @@ new ResizeObserver(([entry])=>{
   view.x+=(viewport.width-old.width)/2;view.y+=(viewport.height-old.height)/2;refreshFitReference();
 }).observe($('map-stage'));
 window.addEventListener('v3:sidebar-fit',scheduleFitRefresh);
+document.querySelector('.prototype-info')?.addEventListener('toggle',scheduleFitRefresh);
 const controlsObserver=new ResizeObserver(scheduleFitRefresh);
 for(const el of document.querySelectorAll(fitSelectors))controlsObserver.observe(el);
 function zoom(factor,anchor={x:viewport.width/2,y:viewport.height/2}){fitActive=false;const next=Math.max(view.fit/32,Math.min(view.fit*32,view.zoom*factor));view.x=anchor.x-(anchor.x-view.x)*next/view.zoom;view.y=anchor.y-(anchor.y-view.y)*next/view.zoom;view.zoom=next;renderMap();}
@@ -108,7 +115,7 @@ function setCurrent(world){current=world;updateGenerationSummary();issues=[];hig
 const thumbnailCache=new WeakMap();
 function paintThumbnail(target,world){
   let cached=thumbnailCache.get(world);
-  if(!cached){cached=document.createElement('canvas');cached.width=192;cached.height=112;const context=cached.getContext('2d'),w=(world.map.width+.5)*Math.sqrt(3)*10+10,h=world.map.height*15+5,z=Math.min(190/w,110/h);context.translate((192-w*z)/2,(112-h*z)/2);context.scale(z,z);drawTiles(context,world.map,{relief:true,vegetation:false,resources:false,grid:false});thumbnailCache.set(world,cached);}
+  if(!cached){cached=document.createElement('canvas');cached.width=192;cached.height=112;const context=cached.getContext('2d'),bounds=window.V3MapFit.hexBounds(world.map.width,world.map.height),fit=window.V3MapFit.solve({width:192,height:112,mapWidth:bounds.width,mapHeight:bounds.height,mapLeft:bounds.left,mapTop:bounds.top,padding:1});context.translate(fit.x,fit.y);context.scale(fit.zoom,fit.zoom);drawTiles(context,world.map,{relief:true,vegetation:false,resources:false,grid:false});thumbnailCache.set(world,cached);}
   target.getContext('2d').drawImage(cached,0,0);
 }
 const thumbnailWorlds=new WeakMap();
