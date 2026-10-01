@@ -3,6 +3,9 @@ import { parseCiv5Map, serializeCiv5Map, updateCiv5Map, inspectCiv5MapStructure,
 import { featurePlacementVerdict, resourcePlacementVerdict, wonderPlacementVerdict, isWaterTerrain } from '../../lib/civ5-rules.ts';
 
 export { parseCiv5Map as parse, isWaterTerrain };
+export { analyseMapLayers, settlementLayerValues, mapResourceCategory } from '../../lib/v3/map-layers.ts';
+export { refineLocal, refineGlobal } from '../../lib/v3/refine.ts';
+export { refineGeometry } from '../../lib/v3/refine-selection.ts';
 export function inspect(map: Civ5Map) {
   const issues: Array<{ id: string; index: number; title: string; detail: string; action: string; changes: Partial<Civ5Tile> }> = [];
   map.tiles.forEach((tile, index) => {

@@ -1,21 +1,14 @@
-/* Approved checklist overlay, shared by Generate and Refine. */
-body[data-layout=two-workspaces] .canvas-layers>button{gap:5px;padding-inline:6px;font-size:11px}
-.canvas-layers .layers-chevron{width:10px;height:10px}
-.canvas-layers>button[aria-expanded=true] .layers-chevron{transform:rotate(180deg)}
-.layer-popover{position:fixed;z-index:40;width:224px;max-width:calc(100vw - 32px);padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:0 7px 24px #252c4020;overflow:auto}
-.layer-popover header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 6px 8px}
-.layer-popover h3{font-size:13px;font-weight:600;color:var(--brand-night)}
-.layer-close{min-height:24px;width:24px;height:24px;padding:4px;color:var(--muted);border-radius:5px}
-.layer-close svg{width:14px;height:14px}
-.layer-list{display:grid;gap:2px}
-.layer-choice{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr) 18px;gap:9px;align-items:center;min-height:36px;padding:7px 8px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--ink)}
-.layer-choice:hover{background:var(--soft)}
-.layer-symbol{color:var(--muted)}
-.layer-symbol svg{width:16px;height:16px}
-.layer-choice.is-on .layer-symbol{color:var(--accent)}
-.layer-choice:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
-.layer-choice input{appearance:none;-webkit-appearance:none;position:relative;display:block;width:16px;height:16px;margin:0;border:1px solid var(--line);border-radius:3px;background:var(--paper);cursor:pointer;justify-self:end}
-.layer-choice input:focus-visible{outline:none}
-.layer-choice input:checked{background:var(--accent);border-color:var(--accent)}
-.layer-choice input:checked::after{content:"";position:absolute;left:4px;top:2px;width:4px;height:7px;border:solid var(--paper);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
-body.mobile-simple .layer-popover{display:none}
+/* Approved 01: a compact menu anchored below Layers, independent of map fitting. */
+body[data-layout=two-workspaces] .canvas-layers>button{gap:5px;padding-inline:6px;font-size:11px;border-radius:7px}
+.canvas-layers>button[aria-expanded=true]{box-shadow:0 0 0 1px var(--brand-night)}
+.layers-chevron{display:block;width:10px;height:10px;background:currentColor;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='black' stroke-width='1.4'/%3E%3C/svg%3E") center/contain no-repeat}.canvas-layers>button[aria-expanded=true] .layers-chevron{transform:rotate(180deg)}
+.layer-popover{position:fixed;z-index:40;display:flex;flex-direction:column;width:264px;max-width:calc(100vw - 24px);padding:6px 0;border:1px solid var(--line);border-radius:7px;background:var(--paper);box-shadow:0 7px 24px #252c4020;overflow:hidden;color:var(--ink);font-size:11px}
+.layer-view-picker{display:flex;align-items:center;gap:10px;padding:4px 12px 9px;color:var(--muted);flex:none}.layer-view-picker>span{white-space:nowrap}.layer-view-picker select{min-width:0;flex:1;height:28px;border-radius:6px;background:var(--paper);font:inherit;color:var(--ink)}
+.layer-sections{padding:0 12px 2px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;min-height:0;flex:1}.layer-section{border-top:1px solid var(--line)}.layer-group-heading{margin:0;padding:7px 0 3px;font-size:10px;font-weight:500;color:var(--muted)}
+.layer-choice{display:grid;grid-template-columns:14px minmax(0,1fr) auto 26px;align-items:center;gap:7px;min-height:25px;padding:3px 0;cursor:pointer;font-size:11px}.layer-choice:last-child{margin-bottom:5px}.layer-label{line-height:1.2}.layer-choice svg{width:14px;height:14px;color:var(--muted)}.layer-count{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}.layer-choice:has(input:disabled){opacity:.45;cursor:default}
+.layer-choice[data-kind=bonus] svg{color:#73825c}.layer-choice[data-kind=luxury] svg{color:#a88139}.layer-choice[data-kind=strategic] svg{color:#657786}
+.layer-choice input{appearance:none;-webkit-appearance:none;position:relative;display:block;width:26px;height:15px;margin:0;border:1px solid #c9c2b7;border-radius:9px;background:var(--soft);cursor:pointer}.layer-choice input::after{content:"";position:absolute;width:9px;height:9px;left:2px;top:2px;border-radius:50%;background:var(--paper);box-shadow:0 1px 2px #252c4030;transition:transform .12s ease}.layer-choice input:checked{background:var(--brand-night);border-color:var(--brand-night)}.layer-choice input:checked::after{transform:translateX(11px)}.layer-choice input:disabled{cursor:default}.layer-choice input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.layer-inspector,.layer-legend{position:fixed;z-index:35;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:8px;box-shadow:0 7px 24px #252c4020;font-size:11px;pointer-events:none}.layer-inspector{width:246px;padding:10px 14px}.tile-position{font-size:10px;color:var(--muted);margin-bottom:6px}.layer-inspector h4{margin:0 0 5px;font-size:12px;font-weight:500;color:var(--brand-night)}.layer-inspector p{font-size:11px;line-height:1.4}.layer-inspector .tile-resource{display:flex;align-items:center;gap:6px;margin-top:6px}.tile-resource svg{width:14px;height:14px}.tile-issues{color:#9a613e;margin-top:6px}
+.layer-legend{padding:9px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;box-shadow:none}.layer-legend strong{font-size:10px;font-weight:500}.layer-legend small{font-size:9px;color:var(--muted)}.legend-scale{display:flex;gap:6px;align-items:center;font-size:9px;color:var(--muted)}.legend-ramp{display:block;width:66px;height:5px;border-radius:4px;background:linear-gradient(90deg,#d1bc9e,#6c8655)}.layer-legend[data-view=movement] .legend-ramp{background:linear-gradient(90deg,#b6c59a,#c9ad79)}.layer-legend[data-view=freshwater] .legend-ramp{background:linear-gradient(90deg,#d3cbb5,#75aaa9)}.start-scores{display:flex;flex-wrap:wrap;gap:8px;font-size:10px;font-variant-numeric:tabular-nums}
+body.mobile-simple :is(.layer-popover,.layer-inspector,.layer-legend){display:none!important}
+@media(prefers-reduced-motion:reduce){.layer-choice input::after{transition:none}}

@@ -45,8 +45,8 @@
 .legacy-group:first-child{border-top:0;margin-top:7px}
 .legacy-group summary{font-size:11px;padding:12px 16px}
 .legacy-group[open] summary{color:var(--accent)}
-.disclosure-mark{color:var(--muted);font-size:12px}
-.legacy-group[open] .disclosure-mark{transform:rotate(180deg)}
+.disclosure-mark{display:block;flex:none;width:12px;height:12px;color:var(--muted);font-size:0;background:currentColor;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='black' stroke-width='1.4'/%3E%3C/svg%3E") center/contain no-repeat;transform:rotate(-90deg)}
+.legacy-group[open]>summary>.disclosure-mark{transform:rotate(0deg)}
 .legacy-fields{padding:0 16px 17px;display:grid;gap:11px}
 .legacy-fields>label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:10px}
 .legacy-fields select,.legacy-fields input:not([type=checkbox]){width:100%;min-width:0;height:33px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:transparent;font-size:11px;color:var(--ink)}
@@ -55,10 +55,11 @@
 /* Advanced adds to Generate; collapsing it does not change active settings. */
 .advanced-expansion{border-top:1px solid var(--line)}
 .advanced-expansion>summary{font-size:11px;padding:13px 16px;gap:8px}
+.advanced-expansion:not([open])>summary>.disclosure-mark{transform:rotate(180deg)}
 .advanced-expansion>summary>:first-child{flex:1}
 .advanced-expansion>summary #advanced-status{font-size:9px;color:var(--accent)}
 .advanced-expansion[open]>summary{color:var(--accent);border-bottom:1px solid var(--line)}
-.advanced-expansion[open]>summary>.disclosure-mark{transform:rotate(180deg)}
+.advanced-expansion[open]>summary>.disclosure-mark{transform:rotate(0deg)}
 .advanced-actions{display:flex;justify-content:flex-end;padding:3px 16px;border-bottom:1px solid var(--line)}
 .advanced-actions .text-button{font-size:10px;min-height:28px;padding:3px 0}
 .standard-fields .advanced-source{grid-column:1/-1;justify-self:end;font-size:9px;color:var(--accent);margin-top:-5px}

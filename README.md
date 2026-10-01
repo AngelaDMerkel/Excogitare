@@ -52,42 +52,59 @@ Use **Reset advanced** to return its choices to Automatic. Standard settings rem
 
 ## Refine
 
-![Refine preview with 33 woodland changes highlighted inside a selected area and Show original, Discard and Apply controls](docs/images/v3-refine.jpg)
+Work on the current map or choose **Import** to open a `.Civ5Map`. You can also drag a map file onto the canvas.
 
-*Preview changes on the map before applying them. Here, woodland is added to suitable tiles within a selected area.*
+### Local refinement
 
-Work on a generated map or choose **Import .Civ5Map** to open an existing one. You can also drag a map file onto the canvas.
+![Refine controls with a connected woodland region selected for thinning](docs/images/v3-refine-controls.png)
 
-1. Enable **Select area** and drag across the map to choose a region. With no selection, the editor chooses a small suitable area.
-2. Choose **Add woodland** or **Lower mountains**. Changed tiles are highlighted.
-3. Use **Show original** to compare, then **Apply** or **Discard**. Applying creates a new snapshot, keeping the previous version in history.
+*The outlined region is the target. Its tile count appears beside Local refinement.*
+
+Choose **Select by**:
+
+| Selection | How to use it |
+|---|---|
+| **Geographic region** | Choose a region type, then click the map. Shift-click adds a region; Alt/Option-click removes one. |
+| **Area** | Drag a rectangle, or click custom-boundary corners and choose **Finish boundary**. Enter finishes; Escape cancels an unfinished boundary. |
+| **Single tile** | Click one hex. |
+
+Choose a **Category**, **Change** and, for larger selections, **Strength**. Available adjustments include adding or thinning woodland, lowering relief, draining marshland, adding suitable oases and relocating resource deposits within the target. **Starts → Review starting balance** opens the existing map view.
+
+Select **Preview local changes**, compare **Original / Proposed**, then **Apply** or **Discard**. The preview reports changed tiles and content removals. Apply creates a history snapshot; **Undo / Redo** steps through accepted edits in the current editing session. Importing or restoring another map starts a new undo sequence.
+
+### Global changes
+
+![A cooler global-climate preview with changed tiles and removals shown before Apply](docs/images/v3-refine-global.png)
+
+Choose relative **Climate**, **Relief**, **Vegetation** or **Resources** adjustments and a strength, then **Preview global changes**. Global and local controls keep separate drafts. These operations adjust the existing map; climate changes follow existing terrain and cold-water margins. They do not simulate a new atmospheric or hydrological system.
+
+Resource redistribution preserves deposit types and quantities where legal destinations are available. Edits mark the original generation assessment as out of date; use Layers to inspect the resulting terrain and starting regions.
 
 ### Check and correct terrain
 
-![Terrain correction preview listing raised water, misplaced forest and wheat on hills, with proposed removals shown before applying](docs/images/v3-corrections.jpg)
+![Grouped terrain, feature and resource findings with corrections in the fixed preview footer](docs/images/v3-refine-repairs.png)
 
-*The built-in repair example contains three deliberate placement problems. The preview shows which tiles change and how many items will be removed.*
+Run **Check map** to group supported terrain, feature, resource and natural-wonder placement problems. Expand a group, select findings and click a finding to highlight its location. **Preview corrections** shows the changes and removals before Apply. Large result sets show the first 100 findings; recheck after correcting them.
 
-Run **Check terrain** to find supported terrain, feature, resource and natural-wonder placement problems. Each finding names the problem, its coordinates and the proposed correction.
-
-Select the findings you want to fix, then choose **Preview corrections**. Corrections can flatten raised water or remove incompatible content. Compare with the original before applying; discard the preview to leave the map unchanged.
-
-To try this workflow, open **Map details → Load repair example**. Placement checks do not cover every mod rule or prove that a map will load correctly in Civ V.
+Try **Map details → Load repair example** for a map with three deliberate problems. Placement checks cover the supported rules; Civ V remains the final check for game compatibility.
 
 ## Layers and history
 
-![Layers checklist over the canvas with Resources and Planned starts enabled, and five snapshots in the right-hand history](docs/images/v3-layers-history.jpg)
+![Layers toggle menu showing grouped terrain, resource and start controls on a generated map](docs/images/v3-layers-palette.png)
 
-*Numbered markers show planned starts. The right-hand thumbnails let you return to generated maps and accepted edits.*
+*Numbered markers show planned player starts; smaller green markers show city-state starts. Counts follow the map you are viewing.*
 
 Drag the canvas to pan and scroll to zoom. The map can move behind the controls. **Layers** overlays the canvas without changing your position or zoom:
 
-- **Relief** and **Vegetation** show terrain detail.
-- **Resources** reveals resource markers.
-- **Hex grid** makes tile boundaries visible.
-- **Planned starts** shows the major starting locations evaluated by the generator.
+- **Landscape** controls relief, woodland and wetland features.
+- **Water** controls rivers, inferred lake highlights and sea ice.
+- **Resources** separates bonus, luxury and strategic deposits, with distinct symbols. Unrecognised resources appear under **Other resources**.
+- **Starts & landmarks** shows planned player starts, city-state starts and natural wonders.
+- **Guides** adds a hex grid, coordinates when zoomed in, and supported placement issues.
 
-Close Layers with its button, **Escape**, or a click outside the checklist.
+Hover over the map for tile details and resource quantities; the popup disappears when you move away. **Map view** offers Movement, Freshwater, Settlement potential and Starting balance views. Movement and settlement are terrain estimates; balance compares reachable opening terrain rather than predicting game outcomes. Small enclosed coastal water bodies are inferred as lakes. Starting balance requires at least two valid player starts.
+
+Close Layers with its button, **Escape**, or a click outside the menu. Display controls do not change the saved map.
 
 History keeps the latest **100 snapshots**, newest first. Click a thumbnail to restore it. Generated maps, imports and accepted edits survive reloads in the same browser and site. Clearing site data removes them; save important maps as files. Draft settings and unaccepted previews are not persistent snapshots.
 
@@ -114,7 +131,7 @@ Choose **Save .Civ5Map** beneath the desktop sidebar, or **Save** on a phone, to
 
 - Exports use Civilization V’s `.Civ5Map` format. Civ VI export and portable project files are not available in V3.
 - Civ V chooses starting positions for generated map exports. These may differ from the planned starts shown in the editor and used for resource checks.
-- **Extreme**, **Colossal**, **Needle**, **Ribbon**, **Pin** and **String** are experimental. Their warning icons explain the risks; Randomise all excludes them.
+- **Extreme**, **Colossal**, **Needle**, **Ribbon**, **Pin** and **String** appear in gold in the dropdowns. These experimental choices may increase memory use or limit starting positions, and Civ V support varies. Randomise all excludes them.
 - Placement checks cover supported rules. Test exported maps in Civ V, especially when using mods or experimental dimensions.
 
 ## Run locally
