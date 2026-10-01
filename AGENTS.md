@@ -7,6 +7,6 @@ Before implementing, extending, auditing, or claiming completion of a feature, r
 - Use **implemented**, **verified**, **partial**, and **groundwork** precisely.
 - Reconcile the register and code before reporting completion.
 - Preserve unrelated working-tree changes.
-- Make semantic commits on the active development branch as coherent changes are completed and checked. Use Conventional Commit messages such as `feat(studio): ...`, `fix(generation): ...` and `docs: ...`.
+- Commit as you go: make a semantic commit on the active development branch after each coherent change has been checked, rather than accumulating completed work. Use Conventional Commit messages such as `feat(studio): ...`, `fix(generation): ...` and `docs: ...`.
 - Stage only work belonging to the change, including its required dependencies. Preserve unrelated pending changes.
 - Do not push unless the user explicitly asks.
