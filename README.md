@@ -106,9 +106,9 @@ Hover over the map for tile details and resource quantities; the popup disappear
 
 Close Layers with its button, **Escape**, or a click outside the menu. Display controls do not change the saved map.
 
-![History thumbnails with direct bookmark and download controls; a saved bookmark is gold](docs/images/v3-history-actions.png)
+![Navy corners mark the selected history thumbnail; gold marks a bookmarked snapshot](docs/images/v3-history-selection.png)
 
-History stores up to **100 snapshots**, newest first. Click a thumbnail to restore it. Hover over a thumbnail, or focus it with the keyboard, to reveal:
+History stores up to **100 snapshots**, newest first. Click a thumbnail to restore it; navy corner marks show the selected map. Hover over a thumbnail, or focus it with the keyboard, to reveal:
 
 - **Bookmark** at the upper right: keeps that snapshot in browser history. Gold means bookmarked; click again to remove the bookmark.
 - **Download** at the lower right: saves that snapshot as a `.Civ5Map` without switching away from the current map or a Refine preview.

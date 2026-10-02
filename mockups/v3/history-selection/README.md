@@ -9,3 +9,5 @@
 Gold still means bookmarked. Navy indicates the map currently being viewed. All three retain the approved hover controls, 88×52px thumbnails and lower fade. The native pressed state and keyboard focus remain available.
 
 These pages use prepared sample maps with session-only history. Production styling and saved history are unchanged.
+
+Approved **01 Corner marks** is integrated in the main application and active aliases. These studies remain available for comparison.

@@ -13,3 +13,7 @@
 .history-action[aria-disabled=true]{cursor:wait}
 .history-snapshot:hover .history-action[aria-disabled=true],.history-snapshot:focus-within .history-action[aria-disabled=true]{opacity:.45}
 @media(prefers-reduced-motion:reduce){.history-action{transition:none}}
+
+/* Approved 01: selection is separate from gold bookmarks and keyboard focus. */
+body[data-snapshot-selection=corners] .world-card.current::before{display:none}
+body[data-snapshot-selection=corners] .world-card.current::after{content:"";position:absolute;inset:-3px;pointer-events:none;background:linear-gradient(#252c40,#252c40) left top/9px 1.5px no-repeat,linear-gradient(#252c40,#252c40) left top/1.5px 9px no-repeat,linear-gradient(#252c40,#252c40) right top/9px 1.5px no-repeat,linear-gradient(#252c40,#252c40) right top/1.5px 9px no-repeat,linear-gradient(#252c40,#252c40) left bottom/9px 1.5px no-repeat,linear-gradient(#252c40,#252c40) left bottom/1.5px 9px no-repeat,linear-gradient(#252c40,#252c40) right bottom/9px 1.5px no-repeat,linear-gradient(#252c40,#252c40) right bottom/1.5px 9px no-repeat}
