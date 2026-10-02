@@ -31,3 +31,7 @@ Produce three interactive mockups for a subtle save/bookmark control on each his
 Verified: 03 now has direct download and bookmark buttons with 14px icons and 24px targets. Download replaces the ellipsis at the lower right; bookmark sits at the upper right. Both reveal on thumbnail hover or keyboard focus. Only an active gold bookmark remains visible at rest.
 
 Browser checks confirmed idle visibility (both hidden on an unmarked row; only the gold bookmark visible on a marked row), both icons visible on hover/focus, pointer and keyboard bookmarking without changing the active map, retained flags after restoring another snapshot, separate Tab targets and no remaining menu. Syntax, scoped ESLint and whitespace checks pass. The comparison text and screenshots are refreshed. The download handler is unchanged; its previously recorded delivery limitation remains.
+
+## Subtle-control revision
+
+Verified: 03 uses 11px muted icons with transparent button backgrounds and unchanged 24px click targets. A 16px translucent highlight appears only on the action under the pointer or keyboard focus; the active bookmark remains gold. Browser computed styles confirm 11px glyphs, 24×24px targets, transparent backgrounds, both icons revealed on focus and a highlight only on the focused action. The 88×52px thumbnail layout and handlers are unchanged. Visual review and whitespace checks pass; screenshots are refreshed. This scoped CSS change does not require new domain tests or production builds.
