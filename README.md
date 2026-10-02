@@ -106,7 +106,14 @@ Hover over the map for tile details and resource quantities; the popup disappear
 
 Close Layers with its button, **Escape**, or a click outside the menu. Display controls do not change the saved map.
 
-History keeps the latest **100 snapshots**, newest first. Click a thumbnail to restore it. Generated maps, imports and accepted edits survive reloads in the same browser and site. Clearing site data removes them; save important maps as files. Draft settings and unaccepted previews are not persistent snapshots.
+![History thumbnails with direct bookmark and download controls; a saved bookmark is gold](docs/images/v3-history-actions.png)
+
+History stores up to **100 snapshots**, newest first. Click a thumbnail to restore it. Hover over a thumbnail, or focus it with the keyboard, to reveal:
+
+- **Bookmark** at the upper right: keeps that snapshot in browser history. Gold means bookmarked; click again to remove the bookmark.
+- **Download** at the lower right: saves that snapshot as a `.Civ5Map` without switching away from the current map or a Refine preview.
+
+Bookmarks count toward the 100-snapshot limit. New snapshots replace the oldest unbookmarked one. If all 100 are bookmarked, remove a bookmark before adding another. Generated maps, imports, accepted edits and bookmarks survive reloads in the same browser and site. Clearing site data removes them; download important maps as files. Draft settings and unaccepted previews are not persistent snapshots.
 
 ## Keyboard shortcuts
 

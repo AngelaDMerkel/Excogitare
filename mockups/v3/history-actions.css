@@ -1,0 +1,15 @@
+/* Approved snapshot actions; the existing carousel dimensions and fade stay intact. */
+.history-snapshot{position:relative;flex:0 0 52px;width:88px;height:52px;scroll-snap-align:start}
+.history-action{position:absolute;z-index:1;right:-2px;top:-2px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;min-height:24px;padding:5.5px;border:0;border-radius:3px;color:#3e4851;background:transparent;opacity:0;transition:opacity .12s;cursor:pointer;text-decoration:none}
+.history-action svg{position:relative;display:block;flex:none;width:13px;height:13px;stroke-width:1.8}
+.history-action::before{content:"";position:absolute;inset:3px;border-radius:3px;pointer-events:none;background:transparent}
+.history-snapshot:hover .history-action,.history-snapshot:focus-within .history-action{opacity:1}
+.history-snapshot:hover .history-action::before,.history-snapshot:focus-within .history-action::before{background:#f8f5ec85}
+.history-snapshot .history-action:hover::before,.history-snapshot .history-action:focus-visible::before{background:#f8f5ecce}
+.history-action:focus-visible{outline:1px solid var(--brand-night);outline-offset:0}
+.history-snapshot.is-bookmarked .history-bookmark{opacity:1;color:#927019}
+.history-snapshot.is-bookmarked .history-bookmark svg{fill:currentColor}
+.history-download{top:auto;bottom:0}
+.history-action[aria-disabled=true]{cursor:wait}
+.history-snapshot:hover .history-action[aria-disabled=true],.history-snapshot:focus-within .history-action[aria-disabled=true]{opacity:.45}
+@media(prefers-reduced-motion:reduce){.history-action{transition:none}}

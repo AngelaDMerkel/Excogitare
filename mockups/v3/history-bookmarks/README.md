@@ -8,4 +8,4 @@ Open [the comparison](index.html) to try three isolated alternatives:
 
 Each action is independent of restoring the snapshot. Thumbnails remain small, borderless and newest-first, with the existing lower fade. The 24px action target is larger than its glyph. Keyboard focus reveals controls; Tab reaches each action independently.
 
-These pages use prepared maps and session-only flags. Bookmark persistence and protection from the 100-snapshot eviction limit are proposals for a later approved implementation. Production history is untouched. The download action uses the existing map writer and placement validation.
+These pages use prepared maps and session-only flags. Approved 03 is now integrated into the main application with persistent bookmarks and protected retention. These historical studies keep session-only flags and do not access production history. The download action uses the existing map writer and placement validation.

@@ -20,6 +20,7 @@ function inflate(sample) {
 let serial=0;
 let historyBusy=false,historyStore=null,historyLoaded=false,generationPending=false;
 const HISTORY_LIMIT=100;
+const snapshotActions=document.body.dataset.snapshotActions==='true';
 function sampleWorld(sample) { return {...sample,map:inflate(sample),uid:++serial,kept:false,source:'sample',change:'Original sample'}; }
 const samples=window.V3_MAP_SAMPLES;
 let current=sampleWorld(samples[0]),history=[current],preview=null,showOriginal=false,mode='generate',issues=[],showKept=false,toastTimer;
@@ -126,6 +127,24 @@ function paintThumbnail(target,world){
 }
 const thumbnailWorlds=new WeakMap();
 const thumbnailObserver=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){const world=thumbnailWorlds.get(entry.target);if(world)paintThumbnail(entry.target,world);thumbnailObserver.unobserve(entry.target);}},{root:$('world-list'),rootMargin:'100px'});
+function snapshotDownloadRecord(world){const bytes=window.V3ExistingRules.save(world.map,world.originalBytes);return {bytes,name:(world.map.name||world.title||'Excogitare map').replace(/[\\/:*?"<>|]/g,'-')+'.Civ5Map'};}
+function syncSnapshotBookmark(row,world){const button=row.querySelector('.history-bookmark');row.classList.toggle('is-bookmarked',!!world.kept);button.setAttribute('aria-pressed',String(!!world.kept));button.title=`${world.kept?'Remove bookmark from':'Bookmark'} ${world.title}`;button.setAttribute('aria-label',button.title);row.querySelector('.world-card').setAttribute('aria-description',world.kept?'Bookmarked in this browser':'');}
+async function toggleSnapshotBookmark(world,row){
+  if(historyBusy||generationPending)return;
+  const kept=!world.kept;busyHistory(true);
+  try{if(!history.includes(world))throw new Error('This snapshot is no longer in history.');if(historyStore){if(!world.historyId)throw new Error('This snapshot has not been stored yet.');await historyStore.setKept(world.historyId,kept);}world.kept=kept;syncSnapshotBookmark(row,world);if(world===current)updateKeep();}
+  catch(error){toast(`Could not ${kept?'bookmark this snapshot':'remove this bookmark'}. ${error.message}`);}
+  finally{busyHistory(false);}
+}
+function snapshotRow(card,world){
+  const row=document.createElement('div');row.className='history-snapshot';row.dataset.snapshotId=world.historyId||String(world.uid);row.append(card);
+  const bookmark=document.createElement('button');bookmark.type='button';bookmark.className='history-action history-bookmark';bookmark.innerHTML='<span data-icon="bookmark"></span>';bookmark.onclick=event=>{event.stopPropagation();toggleSnapshotBookmark(world,row);};
+  const download=document.createElement('a');download.className='history-action history-download';download.href='#';download.setAttribute('role','button');download.title=`Download ${world.title} (.Civ5Map)`;download.setAttribute('aria-label',download.title);download.innerHTML='<span data-icon="download"></span>';
+  download.onclick=event=>{event.stopPropagation();if(historyBusy||generationPending){event.preventDefault();return;}try{const file=snapshotDownloadRecord(world),url=URL.createObjectURL(new Blob([file.bytes],{type:'application/octet-stream'}));download.href=url;download.download=file.name;setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(error){event.preventDefault();toast(error.message);}};
+  download.onkeydown=event=>{if(event.key===' '){event.preventDefault();download.click();}};
+  for(const action of [bookmark,download])action.setAttribute('aria-disabled',String(historyBusy||generationPending));
+  row.append(bookmark,download);icons(row);syncSnapshotBookmark(row,world);return row;
+}
 function renderShelf(){
   thumbnailObserver.disconnect();
   const count=history.filter(w=>w.kept).length;if(!count)showKept=false;
@@ -136,16 +155,16 @@ function renderShelf(){
     const b=document.createElement('button');b.className=`world-card${world===current?' current':''}`;b.setAttribute('aria-label',`Restore ${world.title} — ${world.change}${$('keep-world')&&world.kept?', kept':''}`);b.title=`${world.title} · ${world.change}`;b.setAttribute('aria-pressed',String(world===current));
     const c=document.createElement('canvas');c.width=192;c.height=112;c.setAttribute('aria-hidden','true');b.append(c);thumbnailWorlds.set(c,world);
     if($('keep-world')&&world.kept){const mark=document.createElement('span');mark.className='saved-dot';mark.setAttribute('aria-hidden','true');b.append(mark);}
-    b.onclick=()=>{if(!guardPreview())setCurrent(world);};list.append(b);thumbnailObserver.observe(c);
+    b.onclick=()=>{if(!guardPreview())setCurrent(world);};list.append(snapshotActions?snapshotRow(b,world):b);thumbnailObserver.observe(c);
   }
   if(restoreFocus)list.querySelector('.current')?.focus({preventScroll:true});
 }
-function busyHistory(busy){historyBusy=busy;document.body.setAttribute('aria-busy',String(busy||generationPending));for(const id of ['mobile-save','desktop-save'])if($(id))$(id).setAttribute('aria-disabled',String(busy||generationPending));for(const id of ['surprise','randomise-all','mobile-randomise','accept','discard','keep-world'])if($(id))$(id).disabled=busy||(generationPending&&!['surprise','mobile-randomise'].includes(id));for(const input of document.querySelectorAll('.panel select,.panel input'))input.disabled=busy||generationPending;window.V3Refine?.sync();}
+function busyHistory(busy){historyBusy=busy;document.body.setAttribute('aria-busy',String(busy||generationPending));for(const id of ['mobile-save','desktop-save'])if($(id))$(id).setAttribute('aria-disabled',String(busy||generationPending));for(const action of document.querySelectorAll('.history-action'))action.setAttribute('aria-disabled',String(busy||generationPending));for(const id of ['surprise','randomise-all','mobile-randomise','accept','discard','keep-world'])if($(id))$(id).disabled=busy||(generationPending&&!['surprise','mobile-randomise'].includes(id));for(const input of document.querySelectorAll('.panel select,.panel input'))input.disabled=busy||generationPending;window.V3Refine?.sync();}
 async function addSnapshot(world){
   if(historyBusy)return false;busyHistory(true);
   try{
     if(historyStore){const result=await historyStore.add(world);Object.assign(world,result.world);const retained=new Set(result.keys);history=history.filter(item=>retained.has(item.historyId));history.push(world);}
-    else{if(history.length>=HISTORY_LIMIT){const oldest=$('keep-world')?history.findIndex(item=>!item.kept):0;if(oldest<0){toast('History has 100 kept maps. Unkeep one to add another.');return false;}history.splice(oldest,1);}history.push(world);}
+    else{if(history.length>=HISTORY_LIMIT){const oldest=history.findIndex(item=>!item.kept);if(oldest<0){toast('All 100 history snapshots are bookmarked. Remove a bookmark to add another.');return false;}history.splice(oldest,1);}history.push(world);}
     return true;
   }catch(error){toast(error.code==='HISTORY_FULL'?error.message:'Could not save this snapshot locally. The accepted map is unchanged.');return false;}
   finally{busyHistory(false);}
@@ -200,7 +219,7 @@ setCurrent(current);
 
 window.V3Mobile={
   async randomise(){if(historyBusy)return;if(!generationPending)endPreview();return runGeneration({mode:'RANDOMISE'});},
-  downloadRecord(){const bytes=window.V3ExistingRules.save(current.map,current.originalBytes);return {bytes,name:(current.map.name||'Excogitare map').replace(/[\\/:*?"<>|]/g,'-')+'.Civ5Map'};},
+  downloadRecord(){return snapshotDownloadRecord(current);},
   refresh(){selectMode=false;selection=[];updateSelection();fitMap();}
 };
 
