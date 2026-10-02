@@ -163,5 +163,46 @@
     for(const def of standard)$(`standard-${def.key}`).value=String(parameters[def.key]);
     $('advanced-options').open=false;syncEditor();
   }
-  window.V3GenerationControls={read,applyStandard};
+  function snapshotSettings(request){
+    if(!request||typeof request!=='object')throw new Error('This snapshot has no reusable generation settings.');
+    if(request.mode==='STANDARD'){
+      const parameters=request.parameters;
+      if(!parameters||Object.keys(parameters).some(key=>!standard.some(def=>def.key===key))||!standard.every(def=>def.choices.some(([value])=>String(value)===String(parameters[def.key]))))throw new Error('This snapshot uses unsupported Standard settings.');
+      return {mode:'STANDARD',parameters:{...parameters}};
+    }
+    if(request.mode!=='ADVANCED'||!request.options||typeof request.options!=='object'||Array.isArray(request.options)||!request.recipe||typeof request.recipe!=='object'||Array.isArray(request.recipe))throw new Error('This snapshot has no supported Advanced settings.');
+    const recipeKeys=new Set(['scale','archetype','archetypeIntensity','effort']);
+    if(Object.keys(request.recipe).some(key=>!recipeKeys.has(key))||Object.keys(request.options).some(key=>recipeKeys.has(key)))throw new Error('This snapshot uses unsupported recipe settings.');
+    const values={...request.options,...request.recipe};delete values.seed;
+    const preset=catalogue.presets.find(p=>p.id===values.preset);
+    if(preset){if(values.engine&&values.engine!==preset.engine)throw new Error('The saved map type belongs to a different engine.');values.engine=preset.engine;}
+    const definitions=[...groups.flatMap(([,fields])=>fields),...(engineFields[values.engine]||[])];
+    for(const [key,value] of Object.entries(values)){
+      const def=definitions.find(field=>field.key===key);
+      if(!def||(def.type==='select'&&(!['string','number'].includes(typeof value)||!def.choices.some(([choice])=>String(choice)===String(value))))||(def.type==='checkbox'&&typeof value!=='boolean')||(def.type==='number'&&(!Number.isInteger(value)||value<def.min||value>def.max)))throw new Error(`The saved ${key} setting cannot be displayed in this editor.`);
+    }
+    return {mode:'ADVANCED',values};
+  }
+  function captureDrafts(){
+    for(const input of root.querySelectorAll('input'))input.dispatchEvent(new Event('change',{bubbles:true}));
+    return {parameters:Object.fromEntries(standard.map(def=>[def.key,$(`standard-${def.key}`).value])),advanced:{...advanced},presets:{...presetByEngine},expanded:$('advanced-options').open};
+  }
+  function reflectAdvanced(){
+    updateMapTypes();renderEngineFields();
+    for(const input of root.querySelectorAll('select,input'))input.value=Object.hasOwn(advanced,input.dataset.setting)?String(advanced[input.dataset.setting]):input.tagName==='SELECT'?automaticValue:'';
+    updateStatus();
+  }
+  function restoreDrafts(saved){
+    for(const key of Object.keys(advanced))delete advanced[key];Object.assign(advanced,saved.advanced);
+    for(const key of Object.keys(presetByEngine))delete presetByEngine[key];Object.assign(presetByEngine,saved.presets);
+    for(const def of standard)$(`standard-${def.key}`).value=saved.parameters[def.key];
+    reflectAdvanced();$('advanced-options').open=saved.expanded;syncEditor();
+  }
+  function reuse(request){
+    const source=snapshotSettings(request),previous=captureDrafts();
+    if(source.mode==='STANDARD')applyStandard(source.parameters);
+    else{for(const key of Object.keys(advanced))delete advanced[key];Object.assign(advanced,source.values);for(const key of Object.keys(presetByEngine))delete presetByEngine[key];if(advanced.engine&&advanced.preset)presetByEngine[advanced.engine]=advanced.preset;reflectAdvanced();$('advanced-options').open=true;syncEditor();}
+    return previous;
+  }
+  window.V3GenerationControls={read,applyStandard,reuse,restoreDrafts};
 })();

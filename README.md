@@ -32,7 +32,7 @@ Standard describes how you want the world to play. The generator chooses the und
 
 Standard generation checks planned starting regions and normalizes nearby resource budgets. This helps compare openings; it does not guarantee equal outcomes in Civ V.
 
-**Map details** shows the seed, premise and assessment notes. While a map is being built, **Cancel generation** preserves your current map.
+**Map details** shows the seed, premise and assessment notes. **Use this map’s settings** loads a generated snapshot’s source Standard or Advanced controls for another roll with a fresh seed. **Undo settings change** restores your previous drafts until you edit the controls. Refine edits are separate from those source settings. While a map is being built, **Cancel generation** preserves your current map.
 
 ## Advanced options
 
