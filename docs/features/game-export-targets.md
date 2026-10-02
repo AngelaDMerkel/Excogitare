@@ -84,3 +84,11 @@ Standard Map multiplayer compatibility and Scenario Mod multiplayer compatibilit
 - The installed Tatooine map is marked as multiplayer-capable but contains zero player records despite its description discussing stable slot behavior. This demonstrates why package metadata and prose are not proof of encoded fixed starts.
 - Community reports consistently distinguish ordinary custom-map multiplayer from `Load Scenario` start behavior. These reports guide the risk model but do not replace the required local multiplayer matrix.
 
+
+## Online fixed-start precedents — 2 October 2026
+
+- [Ulter’s True Start Earth](https://forums.civfanatics.com/threads/ulters-true-start-earth.551728/) is a creator-documented Civ V example: a static Earth reconstructed through Lua, fixed civilization locations and normal multiplayer setup after every participant installs the script in `Assets/Maps`. The author describes a special city-state workaround and unresolved compatibility with other mods. His [project page](https://www.thomasjamesslade.com/portfolio/2017/2/10/civilization-v-mod-historic-earth) independently describes the multiplayer implementation.
+- [NOVAL_WAR_ROUTE](https://forums.civfanatics.com/resources/noval_war_route_v9_1en.17913/) documents a multiplayer map script controlling mirrored major starts, city-state starts and team placement; its installation instructions require the same script on all players’ machines.
+- [Isolation](https://www.snakebytestudios.com/projects/mods/isolation/) documents start-first generation and multiplayer use as a map script. Its installation recommendation differs from the other authors, reinforcing the need to verify the exact path for our artifact/platform.
+
+These are documented precedents for a deterministic Lua transport. They do not establish that native WorldBuilder start records survive ordinary multiplayer map loading. The recommended next experiment is a tiny authored map exported as Lua with explicit seat-to-coordinate assignments, verified in a two-client lobby and after save/reload before promising multiplayer support. No exporter or multiplayer game test was implemented during this research.
