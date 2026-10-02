@@ -4,15 +4,13 @@ body.bookmark-study[data-history-layout=right]:not(.mobile-simple) .shelf,body.b
 body.bookmark-study[data-history-layout=right]:not(.mobile-simple) .world-list{padding-inline:8px}
 .snapshot-row{position:relative;flex:0 0 52px;width:112px;height:52px;scroll-snap-align:start}.snapshot-row>.world-card{margin-left:24px}
 .snapshot-action{position:absolute;z-index:1;right:-2px;top:-2px;width:24px;height:24px;min-height:24px;padding:5px;border:0;border-radius:5px;color:var(--brand-night);background:var(--paper);opacity:0;transition:opacity .12s,background .12s;cursor:pointer}
-.snapshot-action svg{width:14px;height:14px;display:block;flex:none}.snapshot-row:hover .snapshot-action,.snapshot-row:focus-within .snapshot-action,.snapshot-action[aria-expanded=true]{opacity:1}.snapshot-action:hover{background:#f5efdf}.snapshot-action:focus-visible{outline:2px solid var(--brand-night);outline-offset:2px}
-.snapshot-row.is-bookmarked .snapshot-action{opacity:1;color:#927019;background:transparent}.snapshot-row.is-bookmarked .snapshot-action .bookmark-shape{fill:currentColor}.snapshot-row.is-bookmarked .snapshot-action:hover,.snapshot-row.is-bookmarked .snapshot-action:focus-visible{background:var(--paper)}
+.snapshot-action svg{width:14px;height:14px;display:block;flex:none}.snapshot-row:hover .snapshot-action,.snapshot-row:focus-within .snapshot-action{opacity:1}.snapshot-action:hover{background:#f5efdf}.snapshot-action:focus-visible{outline:2px solid var(--brand-night);outline-offset:2px}
+.snapshot-row.is-bookmarked .snapshot-bookmark{opacity:1;color:#927019;background:transparent}.snapshot-row.is-bookmarked .snapshot-bookmark .bookmark-shape{fill:currentColor}.snapshot-row.is-bookmarked .snapshot-bookmark:hover,.snapshot-row.is-bookmarked .snapshot-bookmark:focus-visible{background:var(--paper)}
 body[data-bookmark-study=pin] .snapshot-action{right:auto;left:0;top:14px;background:transparent;opacity:.42;color:var(--brand-night)}
 body[data-bookmark-study=pin] .snapshot-row:hover .snapshot-action,body[data-bookmark-study=pin] .snapshot-row:focus-within .snapshot-action{opacity:1}
-body[data-bookmark-study=pin] .snapshot-row.is-bookmarked .snapshot-action{opacity:1;color:#927019}
+body[data-bookmark-study=pin] .snapshot-row.is-bookmarked .snapshot-bookmark{opacity:1;color:#927019}
 body[data-bookmark-study=pin] .snapshot-row.is-bookmarked .pin-head{fill:currentColor}
-body[data-bookmark-study=actions] .snapshot-action{top:auto;bottom:0}
-.snapshot-bookmark-mark{position:absolute;right:4px;top:2px;width:11px;height:14px;color:#927019;pointer-events:none}.snapshot-bookmark-mark svg{width:11px;height:14px;fill:currentColor}
-.snapshot-menu{position:fixed;z-index:50;width:180px;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:0 5px 20px #252c4018}.snapshot-menu[hidden]{display:none}.snapshot-menu button{width:100%;padding:9px 8px;gap:9px;justify-content:flex-start;font-size:11px;min-height:34px;border-radius:4px;color:var(--ink);font-weight:400}.snapshot-menu button:hover,.snapshot-menu button:focus-visible{background:var(--soft);outline:none}.snapshot-menu button svg{width:14px;height:14px;flex:none}.snapshot-menu button[aria-checked=true]{color:#927019}.snapshot-menu button[aria-checked=true] .bookmark-shape{fill:currentColor}
+body[data-bookmark-study=actions] .snapshot-download{top:auto;bottom:0}
 .bookmark-study-note{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted);pointer-events:none;white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.snapshot-action{transition:none}}
 @media(max-width:1000px){.bookmark-study-nav>span{display:none}.bookmark-study-nav{justify-content:center;padding-inline:4px}.bookmark-study-nav a{padding-inline:8px}}
