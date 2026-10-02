@@ -11,10 +11,11 @@ body[data-bookmark-study=pin] .snapshot-row:hover .snapshot-action,body[data-boo
 body[data-bookmark-study=pin] .snapshot-row.is-bookmarked .snapshot-bookmark{opacity:1;color:#927019}
 body[data-bookmark-study=pin] .snapshot-row.is-bookmarked .pin-head{fill:currentColor}
 body[data-bookmark-study=actions] .snapshot-download{top:auto;bottom:0}
-body[data-bookmark-study=actions] .snapshot-action{padding:6.5px;background:transparent;color:#626660;border-radius:3px}
-body[data-bookmark-study=actions] .snapshot-action svg{position:relative;width:11px;height:11px;stroke-width:1.6}
-body[data-bookmark-study=actions] .snapshot-action::before{content:"";position:absolute;inset:4px;border-radius:3px;pointer-events:none;background:transparent}
-body[data-bookmark-study=actions] .snapshot-action:hover::before,body[data-bookmark-study=actions] .snapshot-action:focus-visible::before{background:#f8f5ec80}
+body[data-bookmark-study=actions] .snapshot-action{padding:5.5px;background:transparent;color:#3e4851;border-radius:3px}
+body[data-bookmark-study=actions] .snapshot-action svg{position:relative;width:13px;height:13px;stroke-width:1.8}
+body[data-bookmark-study=actions] .snapshot-action::before{content:"";position:absolute;inset:3px;border-radius:3px;pointer-events:none;background:transparent}
+body[data-bookmark-study=actions] .snapshot-row:hover .snapshot-action::before,body[data-bookmark-study=actions] .snapshot-row:focus-within .snapshot-action::before{background:#f8f5ec85}
+body[data-bookmark-study=actions] .snapshot-row .snapshot-action:hover::before,body[data-bookmark-study=actions] .snapshot-row .snapshot-action:focus-visible::before{background:#f8f5ecce}
 body[data-bookmark-study=actions] .snapshot-row.is-bookmarked .snapshot-bookmark{color:#927019;background:transparent}
 body[data-bookmark-study=actions] .snapshot-action:focus-visible{outline:1px solid var(--brand-night);outline-offset:0}
 .bookmark-study-note{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted);pointer-events:none;white-space:nowrap}

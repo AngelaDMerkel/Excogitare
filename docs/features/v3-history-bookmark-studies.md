@@ -35,3 +35,7 @@ Browser checks confirmed idle visibility (both hidden on an unmarked row; only t
 ## Subtle-control revision
 
 Verified: 03 uses 11px muted icons with transparent button backgrounds and unchanged 24px click targets. A 16px translucent highlight appears only on the action under the pointer or keyboard focus; the active bookmark remains gold. Browser computed styles confirm 11px glyphs, 24×24px targets, transparent backgrounds, both icons revealed on focus and a highlight only on the focused action. The 88×52px thumbnail layout and handlers are unchanged. Visual review and whitespace checks pass; screenshots are refreshed. This scoped CSS change does not require new domain tests or production builds.
+
+## Contrast adjustment
+
+Verified: 03 now uses 13px navy icons with a slightly stronger 1.8 stroke and an 18px translucent backing on row hover/focus. The individual action becomes more opaque when hovered or keyboard-focused. Browser styles confirm the icon sizes, 24px targets and separate 52%/81% backing opacities. Visual review and whitespace checks pass; previews are refreshed. This CSS-only adjustment retains the existing handlers and gold bookmark state.
